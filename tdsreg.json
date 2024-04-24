@@ -1,0 +1,103 @@
+{
+  "datasetname": ["subcpposdata"],
+  "datadir": "cleaneddatasets",
+  "niterations": 50000,
+  "evalEverySteps": 100,
+    "mini_batch_size": 64,
+  "useNoise": 1,
+  "nruns": 5,
+  "agent_names":["TDGLM"],
+  "TDGLM": {
+    "learning_rate": [0.003, 0.01],
+    "gamma": [0.9],
+    "noiselevel": [0.0],
+      "noise_rho": [0.0],
+	"lam": [0.0],
+    "Ptype": ["UnifConst"],
+    "epsilon": [0.01, 0.1],
+    "Optimizer": ["Adam"],
+    "expt_ytp":[0],
+    "deltatype": [0],
+    "mini_batch_size": [128]
+   },
+  "RegNN-WP": {
+    "learning_rate": [0.001, 0.003, 0.01],
+      "noiselevel": [0.5, 2.0],
+      "noise_rho": [0.0],
+    "Ptype": ["DSMYsim", "DSMYdist", "UnifConst"],
+    "epsilon": [0.01, 0.1],
+      "n_h1": [256],
+        "Optimizer": ["Adam"],
+    "deltatype": [0],
+    "mini_batch_size": [128]
+   },
+  "TDRegNN": {
+    "learning_rate": [0.003, 0.01],
+    "gamma": [0.1, 0.2, 0.4, 0.9],
+    "woconv":[1],
+    "noiselevel": [0.5, 2.0],
+      "noise_rho": [0.0],
+	"lam": [0.0],
+    "Ptype": ["UnifConst"],
+    "epsilon": [0.01, 0.1],
+    "n_h1": [256],
+    "tau": [0.01, 0.1],
+    "Optimizer": ["Adam"],
+    "expt_ytp":[0],
+    "deltatype": [0],
+    "mini_batch_size": [128]
+   },
+  "TDPoissonNN": {
+    "learning_rate": [0.0003, 0.001, 0.003, 0.01],
+      "noiselevel": [0.0],
+     "Ptype": ["DSMYsim"],
+    "lam": [0.0],
+    "n_h1": [256],
+    "deltatype": [0],
+        "Optimizer": ["Adam"],
+    "mini_batch_size": [128]
+   },
+  "PoissonNN": {
+    "learning_rate": [0.0003, 0.001, 0.003, 0.01],
+      "noiselevel": [0.0],
+    "lam": [0.0],
+    "n_h1": [256],
+        "Optimizer": ["Adam"],
+    "deltatype": [0],
+    "mini_batch_size": [128]
+   },
+  "RegNN": {
+    "learning_rate": [0.001, 0.003, 0.01],
+    "noiselevel": [0.5, 2.0],
+      "noise_rho": [0.0],
+    "n_h1": [256],
+    "Optimizer": ["Adam"],
+    "mini_batch_size": [128]
+   },
+  "TDLinearReg": {
+    "learning_rate": [0.0003, 0.001, 0.003],
+    "noiselevel": [0.0],
+    "Ptype": ["DSMXsim", "DSMYsim", "DSMYdist", "UnifConst"],
+    "gamma": [0.01, 0.1, 0.3, 0.5],
+    "lam": [0.0],
+    "epsilon": [0.1, 2.0],
+    "deltatype": [0],
+    "mini_batch_size": [1]
+   },
+  "LinearPoissonReg": {
+    "learning_rate": [0.000025, 0.0002, 0.0008, 0.0016],
+      "noiselevel": [5.0],
+     "lam": [0.9, 0.99],
+     "gamma": [0.999, 0.99],
+    "Optimizer": ["SGD", "Adam"],
+    "mini_batch_size": [1]
+  },
+  "LinearReg": {
+    "learning_rate": [0.003],
+      "noiselevel": [4.0],
+    "Optimizer": ["SGD"],
+     "lam": [0.9, 0.99],
+     "gamma": [0.999, 0.99],
+    "mini_batch_size": [1]
+  }
+}

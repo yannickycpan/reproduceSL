@@ -1,0 +1,54 @@
+{
+  "datasetname": ["bikesharedata","mnistfashion", "mnist"],
+  "datadir": "cleaneddatasets",
+  "niterations": 20000,
+  "evalEverySteps": 200,
+    "mini_batch_size": 64,
+  "useNoise": 1,
+  "nruns": 5,
+  "agent_names":["TDGLM", "LinearReg", "LinearPoissonReg"],
+   "linearclassify": {
+    "learning_rate": [0.001, 0.003, 0.01],
+     "noiselevel": [0.01, 0.2, 0.4],
+    "mini_batch_size": [1]
+   },
+  "TDGLM": {
+    "learning_rate": [0.001, 0.003, 0.01],
+      "gamma": [0.01, 0.1, 0.3],
+      "noiselevel": [0.01, 0.2, 0.4],
+     "Ptype": ["UnifConst"],
+     "lam": [0.0, 0.1, 0.5, 0.9],
+    "mini_batch_size": [1]
+   },
+  "LinearReg": {
+    "learning_rate": [0.001, 0.003, 0.01],
+     "noiselevel": [0.01, 0.2, 0.4],
+    "mini_batch_size": [1]
+  },
+  "LinearPoissonReg": {
+    "learning_rate": [0.001, 0.003, 0.01],
+     "noiselevel": [0.01, 0.2, 0.4],
+    "mini_batch_size": [1]
+  },
+  "TDClassifier": {
+    "learning_rate": [0.01],
+     "gamma": [0.5],
+     "lam": [0.0],
+    "n_tilings": [1],
+    "n_tiles": [20],
+    "lta_input_min": [-1.0],
+    "lta_input_max": [1.0],
+    "lta_eta": [0.2],
+    "l2reg": [0.0],
+    "similarity": ["IPlusEta"],
+    "dynamic_tiling": [false],
+    "mini_batch_size": [256]
+   },
+  "LeNet5": {
+    "learning_rate": [0.0003],
+    "mini_batch_size": [32],
+        "l2reg": [0.0],
+    "n_h1":[128],
+    "n_h2":[128]
+  }
+}

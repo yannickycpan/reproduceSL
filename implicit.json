@@ -1,0 +1,73 @@
+{
+    "datasetname": ["toy_dataset"],
+    "datadir": "cleaneddatasets",
+    "niterations": 500000,
+    "evalEverySteps": 500,
+    "mini_batch_size": 128,
+    "useNoise": 0,
+    "nruns": 10,
+    "agent_names":["Implicit"],
+    "L2": {
+      "learning_rate": [0.001],
+      "actfunctype": ["tanh"],
+      "outputactfunctype": ["tanh"],
+      "n_h2":[32],
+      "n_h1":[128]
+    },
+    "HuberRegression": {
+      "learning_rate": [0.0001],
+      "huber_delta": [0.1],
+      "n_h2":[64],
+      "n_h1":[64]
+    },
+    "LinearPoissonReg": {
+      "learning_rate": [0.0001]
+    },
+     "MDN": {
+      "learning_rate": [0.0001],
+       "n_h2":[64],
+      "n_h1":[64],
+      "discretization": [200],
+       "n_mdncomponents": [6]
+    },
+    "KDE": {
+      "learning_rate": [0.0001],
+      "discretization": [200],
+      "low":[-1.0],
+      "high":[1.0]
+    },
+    "Implicit": {
+      "learning_rate": [0.0001],
+      "discretization": [100],
+      "actfunctype": ["tanh"],
+       "n_h2":[64],
+      "n_h1":[64]
+    },
+    "Implicit-Dot": {
+      "learning_rate": [0.001],
+      "discretization": [200],
+      "actfunctype": ["relu"],
+      "eta":[1.0],
+      "n_h2":[128],
+      "n_h1":[128]
+    },
+     "Implicit-hierarchy": {
+      "learning_rate": [0.0001],
+      "discretization": [200],
+      "actfunctype": ["tanh"],
+      "eta":[1.0],
+      "low":[-1.0],
+      "high":[1.0],
+       "n_h2":[64],
+      "n_h1":[64]
+    },
+    "NNPoissonRegression": {
+      "learning_rate": [0.0001],
+       "n_h2":[64],
+      "n_h1":[64]
+    },
+    "LinearReg": {
+      "learning_rate": [0.0001]
+    }
+  }
+  

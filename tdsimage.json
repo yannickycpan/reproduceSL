@@ -1,0 +1,66 @@
+{
+  "datasetname": ["cifar10"],
+  "datadir": "cleaneddatasets",
+  "niterations": 100000,
+  "evalEverySteps": 200,
+  "useNoise": 1,
+  "nruns": 3,
+  "agent_names":["Res20"],
+  "TDMiniCNN": {
+    "learning_rate": [0.01],
+      "gamma": [0.0],
+      "noiselevel": [0.0],
+    "tau": [1.0],
+     "Ptype": ["DSMYsim"],
+     "deltatype":[0],
+        "epsilon": [0.99],
+     "lam": [0.0],
+    "mini_batch_size": [32]
+   },
+  "MiniCNN": {
+    "learning_rate": [0.01],
+      "gamma": [0.0],
+      "noiselevel": [0.0],
+     "deltatype":[0],
+        "epsilon": [0.1],
+     "lam": [0.0],
+    "mini_batch_size": [32]
+   },
+  "Res20": {
+    "learning_rate": [0.001],
+      "gamma": [0.0],
+      "noiselevel": [0.0],
+     "deltatype":[0],
+     "lam": [0.0],
+     "Optimizer": ["Adam"],
+    "mini_batch_size": [64]
+   },
+  "TDRes20": {
+    "learning_rate": [0.001],
+      "gamma": [0.0],
+      "noiselevel": [0.0],
+     "Ptype": ["DSMYsim"],
+     "deltatype":[0],
+        "tau": [0.1, 0.2],
+        "epsilon": [0.1],
+     "lam": [0.0],
+    "mini_batch_size": [64]
+   },
+  "linearclassify": {
+    "learning_rate": [0.0001, 0.0003, 0.001, 0.003],
+      "noiselevel": [0.0, 0.1, 0.2],
+     "lam": [0.9, 0.99],
+     "gamma": [0.999, 0.99],
+    "Optimizer": ["SGD", "Adam"],
+    "mini_batch_size": [1]
+   },
+  "LinearReg": {
+    "learning_rate": [0.0001, 0.0003, 0.001, 0.003],
+      "noiselevel": [0.0, 0.1, 0.2],
+      "deltatype": [0, 1],
+    "lam": [0.9, 0.99],
+     "gamma": [0.999, 0.99],
+    "Optimizer": ["SGD", "Adam"],
+    "mini_batch_size": [1]
+  }
+}
