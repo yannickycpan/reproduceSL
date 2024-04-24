@@ -1,4 +1,5 @@
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 import numpy as np
 from networks.networks import create_implicit_nn, create_mdn_nn
 from agents.baselearner import baselearner
