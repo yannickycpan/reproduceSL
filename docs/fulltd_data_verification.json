@@ -1,0 +1,618 @@
+{
+  "data_code_sha256": "bb2483707b1643a9e0ed9204e4a89379f0939f93d772c699d841e147b3e9f610",
+  "datasets": {
+    "electricity": {
+      "acquisition": [
+        {
+          "file": "electricityloaddiagrams20112014.zip",
+          "provenance": "UCI original 370-customer matrix; doi:10.24432/C58C86; CC BY 4.0",
+          "retrieved_utc": "2026-10-29T09:49:46.668701+00:00",
+          "sha256": "f6c4d0e0df12ecdb9ea008dd6eef3518adb52c559d04a9bac2e1b81dcfc8d4e1",
+          "size_bytes": 261335609,
+          "source_url": "https://archive.ics.uci.edu/static/public/321/electricityloaddiagrams20112014.zip"
+        },
+        {
+          "archive_member": "LD2011_2014.txt",
+          "archive_sha256": "f6c4d0e0df12ecdb9ea008dd6eef3518adb52c559d04a9bac2e1b81dcfc8d4e1",
+          "file": "LD2011_2014.txt",
+          "provenance": "UCI original 370-customer matrix; doi:10.24432/C58C86; CC BY 4.0",
+          "retrieved_utc": "2026-10-29T09:49:50.021433+00:00",
+          "sha256": "d51565f2cb5a6b768d06ba1bbd3c084c6e2f3aab07f00c6f2dcb80e90175124b",
+          "size_bytes": 710998915,
+          "source_url": "https://archive.ics.uci.edu/static/public/321/electricityloaddiagrams20112014.zip"
+        }
+      ],
+      "actual_updates_note": "Opportunities, not executed training; masked empty batches may skip steps for METR-LA",
+      "available_direction_histogram": {
+        "2": 696,
+        "3": 16008,
+        "4": 6561563
+      },
+      "checks": {
+        "deterministic_source_partner_replay": true,
+        "electricity_replacement_and_full_partner_universe": true,
+        "exact_native_offsets": true,
+        "exhaustive_conditional_probability_rows": true,
+        "full_pass_exactly_once": false,
+        "horizon_sensor_tensor_alignment": true,
+        "no_cross_entity": true,
+        "same_sequences_at_batch_128_and_256": true
+      },
+      "common_training_sources": 6578267,
+      "draws_per_candidate": 27409500,
+      "draws_per_unit": 274095,
+      "effective_original_passes": 4.166674900851547,
+      "excluded_customers": [
+        {
+          "id": "MT_106",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_107",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_108",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_109",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_110",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_111",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_112",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_113",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_115",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_116",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_117",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_120",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_121",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_122",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_133",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_160",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_178",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_179",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_181",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_289",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_305",
+          "reason": "no_nonzero_training_reading"
+        },
+        {
+          "id": "MT_337",
+          "reason": "no_nonzero_training_reading"
+        }
+      ],
+      "first_unit_distinct_sources": 268425,
+      "first_unit_mask_counts_by_logical_batch": {
+        "128": {
+          "pair_valid_scalar_components": 6578280,
+          "source_valid_scalar_targets": 6578280,
+          "zero_pair_mask_batches": 0,
+          "zero_source_mask_batches": 0
+        },
+        "256": {
+          "pair_valid_scalar_components": 6578280,
+          "source_valid_scalar_targets": 6578280,
+          "zero_pair_mask_batches": 0,
+          "zero_source_mask_batches": 0
+        }
+      },
+      "first_unit_partner_draws_outside_sampled_sources": 262833,
+      "first_unit_partner_hash": "895829b3adb800c3ff885b16ad429ea85127d2305b3ab97ae055462c7a983cc9",
+      "first_unit_source_hash": "018ed80de8b8f2de521ff30d140a9da205b69565bb6b1f3907ac07d4f542965a",
+      "first_unit_type_counts": {
+        "type_1": 137006,
+        "type_2": 137089
+      },
+      "first_unit_type_fractions": [
+        0.49984859264123754,
+        0.5001514073587625
+      ],
+      "first_unit_type_hash": "c3e477be77459f49129900ed00ebc308b820c20546f633685ce3db72698d4e4f",
+      "hourly_grid_gaps": 0,
+      "hourly_shape": [
+        35064,
+        348
+      ],
+      "incomplete_hours": [],
+      "isolated_source_ids": [],
+      "isolated_sources_excluded": 0,
+      "lags_native_units": [
+        1,
+        24
+      ],
+      "license": "CC BY 4.0; Artur Trindade (2015), doi:10.24432/C58C86",
+      "optimizer_opportunities_per_candidate": {
+        "128": 214200,
+        "256": 107100
+      },
+      "optimizer_opportunities_per_unit": {
+        "128": 2142,
+        "256": 1071
+      },
+      "prepared_fingerprint": "b51af6de09bc165bc9a5583eea1060aec60ba7a9ef3bf8bd1f8852227994ba65",
+      "processed_files_checked": 15,
+      "raw_sha256": "d51565f2cb5a6b768d06ba1bbd3c084c6e2f3aab07f00c6f2dcb80e90175124b",
+      "raw_shapes": [
+        140256,
+        370
+      ],
+      "retained_training_entity_count": 348,
+      "source": "https://archive.ics.uci.edu/dataset/321/electricityloaddiagrams20112014",
+      "sources_with_one_available_type": 0,
+      "sources_with_two_available_types": 6578267,
+      "split_boundaries": [
+        0,
+        24544,
+        28051,
+        35064
+      ],
+      "split_counts": {
+        "test": 2432520,
+        "train": 6578267,
+        "val": 1212432
+      },
+      "split_target_spans": {
+        "test": [
+          "2014-03-14 20:00:00",
+          "2015-01-01 00:00:00"
+        ],
+        "train": [
+          "2011-01-01 01:00:00",
+          "2013-10-19 16:00:00"
+        ],
+        "val": [
+          "2013-10-19 17:00:00",
+          "2014-03-14 19:00:00"
+        ]
+      },
+      "training_unit": "stochastic_round",
+      "uniform_source_exact_type_probabilities": [
+        0.5,
+        0.5
+      ],
+      "units_per_candidate": 100,
+      "verification_runtime_seconds": 11.836343499831855
+    },
+    "fd001": {
+      "acquisition": [
+        {
+          "file": "CMAPSSData.zip",
+          "provenance": "NASA Open Data official CMAPSS resource; catalog license unspecified",
+          "retrieved_utc": "2026-10-29T09:43:54.857530+00:00",
+          "sha256": "74bef434a34db25c7bf72e668ea4cd52afe5f2cf8e44367c55a82bfd91a5a34f",
+          "size_bytes": 12425978,
+          "source_url": "https://data.nasa.gov/docs/legacy/CMAPSSData.zip"
+        },
+        {
+          "archive_member": "readme.txt",
+          "archive_sha256": "74bef434a34db25c7bf72e668ea4cd52afe5f2cf8e44367c55a82bfd91a5a34f",
+          "file": "readme.txt",
+          "provenance": "NASA Open Data official CMAPSS resource; catalog license unspecified",
+          "retrieved_utc": "2026-10-29T09:43:55.057357+00:00",
+          "sha256": "4f5270554b775c67e73aff383c5436fd329d6e4cc3d3a116913276fae511269b",
+          "size_bytes": 2442,
+          "source_url": "https://data.nasa.gov/docs/legacy/CMAPSSData.zip"
+        },
+        {
+          "archive_member": "RUL_FD001.txt",
+          "archive_sha256": "74bef434a34db25c7bf72e668ea4cd52afe5f2cf8e44367c55a82bfd91a5a34f",
+          "file": "RUL_FD001.txt",
+          "provenance": "NASA Open Data official CMAPSS resource; catalog license unspecified",
+          "retrieved_utc": "2026-10-29T09:43:55.053304+00:00",
+          "sha256": "a19c8ec94931949d0485bdc35118206e9c81c4547b422efb9cf86f4ceddbceca",
+          "size_bytes": 429,
+          "source_url": "https://data.nasa.gov/docs/legacy/CMAPSSData.zip"
+        },
+        {
+          "archive_member": "test_FD001.txt",
+          "archive_sha256": "74bef434a34db25c7bf72e668ea4cd52afe5f2cf8e44367c55a82bfd91a5a34f",
+          "file": "test_FD001.txt",
+          "provenance": "NASA Open Data official CMAPSS resource; catalog license unspecified",
+          "retrieved_utc": "2026-10-29T09:43:54.981750+00:00",
+          "sha256": "3cda7109ce17bafb5443f2ac926cfcf88154b941b8c4cf95eb55d1ddd6f52851",
+          "size_bytes": 2228855,
+          "source_url": "https://data.nasa.gov/docs/legacy/CMAPSSData.zip"
+        },
+        {
+          "archive_member": "train_FD001.txt",
+          "archive_sha256": "74bef434a34db25c7bf72e668ea4cd52afe5f2cf8e44367c55a82bfd91a5a34f",
+          "file": "train_FD001.txt",
+          "provenance": "NASA Open Data official CMAPSS resource; catalog license unspecified",
+          "retrieved_utc": "2026-10-29T09:43:54.892667+00:00",
+          "sha256": "963b5e22825b34d8b21c69e1aeb4af3e647050eb672ee8834ba4b5d91d2de0f8",
+          "size_bytes": 3515356,
+          "source_url": "https://data.nasa.gov/docs/legacy/CMAPSSData.zip"
+        }
+      ],
+      "actual_updates_note": "Opportunities, not executed training; masked empty batches may skip steps for METR-LA",
+      "available_direction_histogram": {
+        "2": 160,
+        "3": 640,
+        "4": 13189
+      },
+      "checks": {
+        "deterministic_source_partner_replay": true,
+        "electricity_replacement_and_full_partner_universe": false,
+        "exact_native_offsets": true,
+        "exhaustive_conditional_probability_rows": true,
+        "full_pass_exactly_once": true,
+        "horizon_sensor_tensor_alignment": true,
+        "no_cross_entity": true,
+        "same_sequences_at_batch_128_and_256": true
+      },
+      "common_training_sources": 13989,
+      "draws_per_candidate": 1398900,
+      "draws_per_unit": 13989,
+      "effective_original_passes": 100.0,
+      "first_unit_distinct_sources": 13989,
+      "first_unit_mask_counts_by_logical_batch": {
+        "128": {
+          "pair_valid_scalar_components": 13989,
+          "source_valid_scalar_targets": 13989,
+          "zero_pair_mask_batches": 0,
+          "zero_source_mask_batches": 0
+        },
+        "256": {
+          "pair_valid_scalar_components": 13989,
+          "source_valid_scalar_targets": 13989,
+          "zero_pair_mask_batches": 0,
+          "zero_source_mask_batches": 0
+        }
+      },
+      "first_unit_partner_draws_outside_sampled_sources": 0,
+      "first_unit_partner_hash": "40cb36bbca5d008bebf86ff07faba91e9616392708e6f23e7d2220cd5320198d",
+      "first_unit_source_hash": "b2c4a7a5fcb6b9d48513148428732d363fcf1e65ac2341050d3facd43f6cd4ff",
+      "first_unit_type_counts": {
+        "type_1": 7081,
+        "type_2": 6908
+      },
+      "first_unit_type_fractions": [
+        0.5061834298377297,
+        0.4938165701622704
+      ],
+      "first_unit_type_hash": "a5ea19dda1dee61ecfe0c551a234e8550e60595bc79fd684fa7c53fb2107429f",
+      "fit_engine_ids": [
+        33,
+        7,
+        98,
+        85,
+        1,
+        45,
+        35,
+        61,
+        93,
+        20,
+        94,
+        74,
+        52,
+        48,
+        15,
+        60,
+        87,
+        84,
+        4,
+        59,
+        42,
+        55,
+        71,
+        70,
+        34,
+        8,
+        96,
+        31,
+        49,
+        13,
+        64,
+        24,
+        83,
+        73,
+        63,
+        29,
+        54,
+        88,
+        18,
+        81,
+        58,
+        27,
+        77,
+        32,
+        39,
+        2,
+        53,
+        97,
+        21,
+        82,
+        72,
+        12,
+        9,
+        75,
+        92,
+        44,
+        28,
+        78,
+        89,
+        41,
+        25,
+        57,
+        37,
+        86,
+        66,
+        36,
+        6,
+        10,
+        62,
+        56,
+        65,
+        51,
+        43,
+        79,
+        67,
+        91,
+        80,
+        23,
+        19,
+        5
+      ],
+      "isolated_source_ids": [],
+      "isolated_sources_excluded": 0,
+      "lags_native_units": [
+        1,
+        5
+      ],
+      "license": "NASA public dataset; catalog does not specify a license",
+      "optimizer_opportunities_per_candidate": {
+        "128": 11000,
+        "256": 5500
+      },
+      "optimizer_opportunities_per_unit": {
+        "128": 110,
+        "256": 55
+      },
+      "prepared_fingerprint": "ee62d440a8f544810960a0cb2affc00a9c8ff917564f18ff41112096b263ae97",
+      "processed_files_checked": 18,
+      "raw_sha256": {
+        "RUL_FD001.txt": "a19c8ec94931949d0485bdc35118206e9c81c4547b422efb9cf86f4ceddbceca",
+        "test_FD001.txt": "3cda7109ce17bafb5443f2ac926cfcf88154b941b8c4cf95eb55d1ddd6f52851",
+        "train_FD001.txt": "963b5e22825b34d8b21c69e1aeb4af3e647050eb672ee8834ba4b5d91d2de0f8"
+      },
+      "raw_shapes": {
+        "rul": [
+          100
+        ],
+        "test": [
+          13096,
+          26
+        ],
+        "train": [
+          20631,
+          26
+        ]
+      },
+      "retained_training_entity_count": 80,
+      "source": "https://data.nasa.gov/dataset/cmapss-jet-engine-simulated-data",
+      "sources_with_one_available_type": 0,
+      "sources_with_two_available_types": 13989,
+      "split_counts": {
+        "test": 100,
+        "train": 13989,
+        "val": 100
+      },
+      "test_padded_engines": 0,
+      "training_unit": "full_epoch",
+      "uniform_source_exact_type_probabilities": [
+        0.5,
+        0.5
+      ],
+      "units_per_candidate": 100,
+      "val_engine_ids": [
+        38,
+        76,
+        11,
+        16,
+        26,
+        46,
+        69,
+        50,
+        100,
+        40,
+        68,
+        99,
+        47,
+        17,
+        3,
+        90,
+        22,
+        95,
+        14,
+        30
+      ],
+      "verification_runtime_seconds": 0.07632320001721382
+    },
+    "metr_la": {
+      "acquisition": [
+        {
+          "file": "adj_mx.pkl",
+          "provenance": "DCRNN supplied sensor graph, commit 602afd9d767d3aa1c9b3eac51710d6aeee12c227",
+          "retrieved_utc": "2026-10-29T09:45:18.793240+00:00",
+          "sha256": "a35687c6e15aa228dc45027b0ed2a0ea0f4ec78f573deb992c595092d12f61b3",
+          "size_bytes": 680459,
+          "source_url": "https://raw.githubusercontent.com/liyaguang/DCRNN/602afd9d767d3aa1c9b3eac51710d6aeee12c227/data/sensor_graph/adj_mx.pkl"
+        },
+        {
+          "file": "metr-la.h5",
+          "folder_url": "https://drive.google.com/drive/folders/10FOTa6HXPqX8Pf5WRoRwcFnW9BrNZEIX",
+          "provenance": "DCRNN author-linked Google Drive folder",
+          "reference_commit": "602afd9d767d3aa1c9b3eac51710d6aeee12c227",
+          "retrieved_utc": "2026-10-29T09:45:18.050133+00:00",
+          "sha256": "64784b76d6fb8ec9bff4b6decafb354da2bb37840468fdccee5044e511277c05",
+          "size_bytes": 57038056,
+          "source_url": "https://drive.google.com/uc?id=1pAGRfzMx6K9WWsfDcD1NMbIif0T0saFC"
+        }
+      ],
+      "actual_updates_note": "Opportunities, not executed training; masked empty batches may skip steps for METR-LA",
+      "available_direction_histogram": {
+        "2": 2,
+        "3": 4,
+        "4": 23961
+      },
+      "checks": {
+        "deterministic_source_partner_replay": true,
+        "electricity_replacement_and_full_partner_universe": false,
+        "exact_native_offsets": true,
+        "exhaustive_conditional_probability_rows": true,
+        "full_pass_exactly_once": true,
+        "horizon_sensor_tensor_alignment": true,
+        "no_cross_entity": true,
+        "same_sequences_at_batch_128_and_256": true
+      },
+      "common_training_sources": 23967,
+      "draws_per_candidate": 2396700,
+      "draws_per_unit": 23967,
+      "effective_original_passes": 100.0,
+      "first_unit_distinct_sources": 23967,
+      "first_unit_mask_counts_by_logical_batch": {
+        "128": {
+          "pair_valid_scalar_components": 54969682,
+          "source_valid_scalar_targets": 55289280,
+          "zero_pair_mask_batches": 0,
+          "zero_source_mask_batches": 0
+        },
+        "256": {
+          "pair_valid_scalar_components": 54969682,
+          "source_valid_scalar_targets": 55289280,
+          "zero_pair_mask_batches": 0,
+          "zero_source_mask_batches": 0
+        }
+      },
+      "first_unit_partner_draws_outside_sampled_sources": 0,
+      "first_unit_partner_hash": "24457b85236695e73f26aae09b6e910c7c17b53aeb6c47c47cc186be61cee405",
+      "first_unit_source_hash": "3e19e2ced144ea7816f5b6ef5a3c60e006daa4bb9aa3c25187568cfd638e54c8",
+      "first_unit_type_counts": {
+        "type_1": 11977,
+        "type_2": 11990
+      },
+      "first_unit_type_fractions": [
+        0.49972879375808404,
+        0.500271206241916
+      ],
+      "first_unit_type_hash": "a5224d92ff9eb3642cc9f6a76dde74440e00d3888dee8332d57e880abee259f1",
+      "isolated_source_ids": [],
+      "isolated_sources_excluded": 0,
+      "lags_native_units": [
+        1,
+        3
+      ],
+      "license": "See DCRNN author dataset attribution; dataset license not separately specified",
+      "optimizer_opportunities_per_candidate": {
+        "128": 18800,
+        "256": 9400
+      },
+      "optimizer_opportunities_per_unit": {
+        "128": 188,
+        "256": 94
+      },
+      "prepared_fingerprint": "6b978f77d83015d272f22eff1ddd9c403e1017135f7e9e50881443948a0e5e5c",
+      "processed_files_checked": 22,
+      "raw_sha256": {
+        "adj_mx.pkl": "a35687c6e15aa228dc45027b0ed2a0ea0f4ec78f573deb992c595092d12f61b3",
+        "metr-la.h5": "64784b76d6fb8ec9bff4b6decafb354da2bb37840468fdccee5044e511277c05"
+      },
+      "raw_shapes": [
+        34272,
+        207
+      ],
+      "retained_training_entity_count": 1,
+      "source": "https://github.com/liyaguang/DCRNN",
+      "sources_with_one_available_type": 0,
+      "sources_with_two_available_types": 23967,
+      "split_boundaries": [
+        0,
+        23990,
+        27417,
+        34272
+      ],
+      "split_counts": {
+        "test": 6844,
+        "train": 23967,
+        "val": 3416
+      },
+      "split_target_spans": {
+        "test": [
+          "2012-06-04 04:45:00",
+          "2012-06-27 23:55:00"
+        ],
+        "train": [
+          "2012-03-01 00:00:00",
+          "2012-05-23 07:05:00"
+        ],
+        "val": [
+          "2012-05-23 07:10:00",
+          "2012-06-04 04:40:00"
+        ]
+      },
+      "training_unit": "full_epoch",
+      "uniform_source_exact_type_probabilities": [
+        0.5,
+        0.5
+      ],
+      "units_per_candidate": 100,
+      "verification_runtime_seconds": 0.2681212997995317
+    }
+  },
+  "purpose": "Data preparation and sampler correctness only; no candidate training, validation prediction, or test prediction executed",
+  "round_or_epoch": 1,
+  "sampling_code_sha256": "6e1a62c38c592ebbe466a5da272518fadc0ade97eee5072db6b49f9c83d1d16e",
+  "seed": 0,
+  "unbiased_sampling_argument": "Electricity draws each source iid with probability 1/N. The exact conditional sampler uses P over the complete training universe. Consequently, for fixed parameters the mean complete-target sampled pair loss has expectation (1/N) sum_i sum_j P_ij loss_ij. The mask-normalized traffic batch ratio has no such unbiasedness claim."
+}

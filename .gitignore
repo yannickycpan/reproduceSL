@@ -1,0 +1,10 @@
+# New neural campaign artifacts; existing tracked legacy files are unchanged.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv-fulltd/
+data/fulltd/
+results/fulltd/
+outputs/fulltd/
+logs/fulltd/
+*.tmp
