@@ -13,7 +13,7 @@ import warnings
 
 import numpy as np
 
-DATA_VERSION = "td-v7-data-1"
+DATA_VERSION = "td-v7-data-2"
 NAMES = ("electricity", "metr_la", "fd001")
 
 
@@ -31,7 +31,10 @@ def sha256(path):
 
 
 def _save_json(path, obj):
-    Path(path).write_text(json.dumps(obj, indent=2, sort_keys=True) + "\n")
+    # Split sidecars participate in the content identity; use the same bytes on
+    # Windows verification hosts and Linux HPC nodes.
+    Path(path).write_text(json.dumps(obj, indent=2, sort_keys=True) + "\n",
+                          encoding="utf-8", newline="\n")
 
 
 def _save_split(base, split, arrays, details):
@@ -355,21 +358,44 @@ def _finish_metadata(base, metadata):
     # Content identity includes preprocessing outputs, not file modification times.
     raw_dir = Path(base).parent.parent / "raw" / metadata["dataset"]
     metadata["acquisition"] = [json.loads(p.read_text()) for p in sorted(raw_dir.glob("*.source.json"))]
-    files = sorted(Path(base).glob("*/*.npy")) + sorted(Path(base).glob("*.npy"))
+    files = (sorted(Path(base).glob("*/*.npy")) + sorted(Path(base).glob("*.npy"))
+             + sorted(Path(base).glob("*/split.json")))
     metadata["processed_sha256"] = {str(p.relative_to(base)).replace("\\", "/"): sha256(p) for p in files}
-    identity = dict(metadata)
+    metadata["fingerprint"] = metadata_fingerprint(metadata)
+    _save_json(Path(base)/"metadata.json", metadata)
+
+
+def metadata_fingerprint(metadata):
+    """Identify scalers, splits and payload hashes, excluding retrieval dates.
+
+    The stored digest is not itself an input. Recomputing this digest on reads
+    prevents an edited scaler from being accepted under an old checkpoint's
+    unchanged identity field.
+    """
+    identity = {key: value for key, value in metadata.items() if key != "fingerprint"}
     # Reacquiring identical public bytes on another machine must not invalidate
     # a compatible checkpoint solely because its download date differs.
     identity["acquisition"] = [{k:v for k,v in entry.items() if k != "retrieved_utc"}
                                for entry in metadata["acquisition"]]
-    metadata["fingerprint"] = hashlib.sha256(json.dumps(identity,sort_keys=True).encode()).hexdigest()
-    _save_json(Path(base)/"metadata.json", metadata)
+    return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+
+
+def _read_metadata(base):
+    metadata = json.loads((Path(base)/"metadata.json").read_text())
+    if metadata.get("version") != DATA_VERSION:
+        raise ValueError("Incompatible preprocessing version; rerun prepare (raw data are reusable)")
+    if metadata.get("fingerprint") != metadata_fingerprint(metadata):
+        raise ValueError("Processed metadata fingerprint mismatch: scaler/split/provenance metadata changed")
+    expected_splits = {f"{split}/split.json" for split in ("train", "val", "test")}
+    if not expected_splits.issubset(metadata.get("processed_sha256", {})):
+        raise ValueError("Processed metadata lacks split-file integrity records; rerun prepare")
+    return metadata
 
 
 def verify_dataset(dataset, data_dir):
     """Verify processed bytes once before launching the campaign."""
     base = Path(data_dir)/"processed"/canonical_name(dataset)
-    metadata = json.loads((base/"metadata.json").read_text())
+    metadata = _read_metadata(base)
     for relative, expected in metadata["processed_sha256"].items():
         path = base/relative
         if not path.is_file() or sha256(path) != expected:
@@ -384,11 +410,12 @@ class LazyDataset:
         if self.dataset not in NAMES or self.split not in ("train", "val", "test"):
             raise ValueError("Unknown dataset or split")
         self.base = Path(data_dir)/"processed"/self.dataset
-        self.metadata = json.loads((self.base/"metadata.json").read_text())
-        if self.metadata["version"] != DATA_VERSION:
-            raise ValueError("Incompatible preprocessing version; rerun prepare")
+        self.metadata = _read_metadata(self.base)
         self.directory = self.base/self.split
-        self.split_metadata = json.loads((self.directory/"split.json").read_text())
+        split_path = self.directory/"split.json"
+        if sha256(split_path) != self.metadata["processed_sha256"][f"{self.split}/split.json"]:
+            raise ValueError(f"Processed split metadata missing or modified: {split_path}")
+        self.split_metadata = json.loads(split_path.read_text())
         def load(name):
             return np.load(self.directory/(name+".npy"), mmap_mode="r", allow_pickle=False)
         self.values, self.rows = load("values"), load("rows")

@@ -25,14 +25,20 @@ def atomic_json(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".tmp")
-    temp.write_text(json.dumps(value, indent=2, allow_nan=True) + "\n")
+    with temp.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(json.dumps(value, indent=2, allow_nan=True) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
     replace_file(temp, path)
 
 
 def atomic_save(path, value):
     path = Path(path)
     temp = path.with_suffix(path.suffix + ".tmp")
-    torch.save(value, temp)
+    with temp.open("wb") as stream:
+        torch.save(value, stream)
+        stream.flush()
+        os.fsync(stream.fileno())
     replace_file(temp, path)
 
 
@@ -51,7 +57,11 @@ def replace_file(source, destination):
 
 def code_hash():
     root = Path(__file__).resolve().parents[1]
-    files = sorted((root / "fulltd").glob("*.py")) + sorted((root / "agents").glob("fulltd_*.py"))
+    # Plotting, submission and download receipts do not change a trained state.
+    # Keep the scientific implementation identity separate from the Git revision.
+    files = [root / "fulltd" / name for name in
+             ("__init__.py", "data.py", "metrics.py", "models.py", "protocol.py", "sampling.py", "train.py")]
+    files += sorted((root / "agents").glob("fulltd_*.py"))
     h = hashlib.sha256()
     for file in files:
         h.update(str(file.relative_to(root)).replace("\\", "/").encode())
@@ -128,9 +138,12 @@ def make_objective_for(config, train_data):
 
 
 def train_candidate(config, train_data, val_data, result_root, device="cpu", microbatch=None,
-                    recovery_every=100, stop_after_batches=None):
+                    recovery_every=100, stop_after_batches=None, stop_requested=None):
     """stop_after_batches is solely a test interruption hook; absent from CLI."""
     validate_config(config)
+    if microbatch is not None and microbatch < 1 or recovery_every < 1:
+        raise ValueError("Microbatch and recovery interval must be positive")
+    stop_requested = stop_requested or (lambda: False)
     seed_runtime(config["seed"])
     device = torch.device(device)
     if device.type == "cuda":
@@ -161,6 +174,7 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
     counters = dict(optimizer_steps=0, source_draws=0, partner_draws=0, source_valid_count=0,
                     pair_valid_count=0, empty_mask_batches=0, update_opportunities=0, oom_retries=0)
     validation, round_records = [], []
+    validation_progress = None
     epoch, cursor, elapsed = 1, 0, 0.
     recovery = run_dir / "recovery.pt"
     final = run_dir / "final.pt"
@@ -175,6 +189,7 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
         optimizer.load_state_dict(checkpoint["optimizer"])
         counters = checkpoint["counters"]
         validation, round_records = checkpoint["validation"], checkpoint["round_records"]
+        validation_progress = checkpoint.get("validation_progress")
         epoch, cursor, elapsed = checkpoint["next_epoch"], checkpoint["cursor"], checkpoint["runtime_seconds"]
         physical = min(physical, checkpoint["physical_microbatch"])
         random.setstate(checkpoint["python_rng"])
@@ -226,6 +241,7 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
         return dict(identity=identity, config=config, objective=objective.state_dict(),
                     optimizer=optimizer.state_dict(), next_epoch=epoch, cursor=cursor,
                     counters=counters.copy(), validation=list(validation), round_records=list(round_records),
+                    validation_progress=validation_progress,
                     runtime_seconds=runtime(), physical_microbatch=physical,
                     python_rng=random.getstate(), numpy_rng=np.random.get_state(), torch_rng=torch.get_rng_state(),
                     cuda_rng=torch.cuda.get_rng_state_all() if device.type == "cuda" else None,
@@ -236,6 +252,7 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
     def write_status(state, error=None):
         atomic_json(run_dir / "status.json", dict(state=state, protocol_id=PROTOCOL_ID, config=config,
                     identity=identity, epochs_completed=epoch-1, next_epoch=epoch, cursor=cursor,
+                    validation_cursor=0 if validation_progress is None else validation_progress["cursor"],
                     **counters, runtime_seconds=runtime(),
                     effective_original_passes=counters["source_draws"] / n, n_sources=n,
                     training_unit=config["training_unit"], physical_microbatch=physical,
@@ -252,13 +269,26 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
         print(f"Already complete and compatible: {config['run_id']}")
         return completed_checkpoint
     write_status("running")
+
+    def pause_for_allocation():
+        saved = snapshot()
+        atomic_save(recovery, saved)
+        atomic_json(run_dir / "validation.json", validation)
+        atomic_json(run_dir / "rounds.json", round_records)
+        write_status("checkpointed")
+        return dict(saved, state="checkpointed")
+
     try:
         while epoch <= 100:
+            if stop_requested():
+                return pause_for_allocation()
             sources = sources_for_round(config["dataset"], n, config["seed"], epoch)
             partners, types = pair_law.sample(sources, rng_for(config["dataset"], config["seed"], epoch, 22)) if td else (None, None)
             source_sha = sequence_hash(sources)
             objective.train()
             while cursor < len(sources):
+                if stop_requested():
+                    return pause_for_allocation()
                 end = min(cursor + config["batch_size"], len(sources))
                 batch = train_data.get_batch(sources[cursor:end])
                 partner = train_data.get_batch(partners[cursor:end]) if td else None
@@ -300,12 +330,31 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
                     atomic_save(recovery, snapshot())
                     write_status("interrupted_test_only")
                     return snapshot()
+            if stop_requested():
+                return pause_for_allocation()
             if epoch in EVALUATIONS:
-                mse = validation_mse(objective.model, val_data, physical, device)
+                if validation_progress is None:
+                    validation_progress = {"epoch": epoch, "cursor": 0, "sums": {}}
+                if validation_progress["epoch"] != epoch:
+                    raise ValueError("Validation checkpoint belongs to another epoch/round")
+
+                def after_validation_batch():
+                    if stop_requested():
+                        return True
+                    if math.ceil(validation_progress["cursor"] / physical) % recovery_every == 0:
+                        atomic_save(recovery, snapshot())
+                        write_status("running")
+                    return False
+
+                mse = validation_mse(objective.model, val_data, physical, device,
+                                     validation_progress, after_validation_batch)
+                if mse is None:
+                    return pause_for_allocation()
                 if not math.isfinite(mse):
                     raise FloatingPointError("Nonfinite validation MSE")
                 validation.append(dict(epoch=epoch, mse=mse, optimizer_steps=counters["optimizer_steps"],
                                        theta=objective.theta.detach().cpu().tolist() if td else None))
+                validation_progress = None
                 atomic_json(run_dir / "validation.json", validation)
             round_records.append(dict(epoch=epoch, source_draws=len(sources), source_sha256=source_sha,
                 partner_sha256=sequence_hash(partners) if td else None,
@@ -330,6 +379,26 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
         raise
 
 
+def run_index(manifest_path, index, data_dir, results_dir, device="cuda", microbatch=None,
+              recovery_every=100, threads=4, stop_requested=None):
+    manifest = load_manifest(manifest_path)
+    if type(index) is not int or not 0 <= index < len(manifest):
+        raise ValueError(f"Index must be in 0..{len(manifest)-1}")
+    if threads < 1:
+        raise ValueError("threads must be positive")
+    torch.set_num_threads(threads)
+    config = manifest[index]
+    from .data import load_dataset
+    from filelock import FileLock
+    lock_dir = Path(results_dir) / config["run_id"]
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    with FileLock(str(lock_dir / ".run.lock"), timeout=0):
+        train = load_dataset(config["dataset"], data_dir, "train")
+        val = load_dataset(config["dataset"], data_dir, "validation")
+        return train_candidate(config, train, val, results_dir, device, microbatch,
+                               recovery_every, stop_requested=stop_requested)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", default="configs/fulltd/manifest.json")
@@ -343,16 +412,8 @@ def main():
     args = parser.parse_args()
     if args.microbatch is not None and args.microbatch < 1 or args.recovery_every < 1:
         parser.error("Microbatch and checkpoint interval must be positive")
-    torch.set_num_threads(args.threads)
-    config = load_manifest(args.manifest)[args.index]
-    from .data import load_dataset
-    train = load_dataset(config["dataset"], args.data_dir, "train")
-    val = load_dataset(config["dataset"], args.data_dir, "validation")
-    from filelock import FileLock
-    lock_dir = Path(args.results_dir) / config["run_id"]
-    lock_dir.mkdir(parents=True, exist_ok=True)
-    with FileLock(str(lock_dir / ".run.lock"), timeout=0):
-        train_candidate(config, train, val, args.results_dir, args.device, args.microbatch, args.recovery_every)
+    run_index(args.manifest, args.index, args.data_dir, args.results_dir, args.device,
+              args.microbatch, args.recovery_every, args.threads)
 
 
 if __name__ == "__main__":

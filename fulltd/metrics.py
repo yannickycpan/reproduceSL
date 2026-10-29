@@ -11,8 +11,9 @@ def rul_score(prediction, target):
 
 
 class MetricSums:
-    def __init__(self, equal_entity=False):
+    def __init__(self, equal_entity=False, allow_nonfinite=False):
         self.equal_entity = equal_entity
+        self.allow_nonfinite = allow_nonfinite
         self.sums = {}
 
     def add(self, prediction, target, mask, entities):
@@ -20,7 +21,7 @@ class MetricSums:
         mask = np.asarray(mask, bool)
         if error.shape != mask.shape:
             raise ValueError("Metric mask shape mismatch")
-        if not np.isfinite(error[mask]).all():
+        if not self.allow_nonfinite and not np.isfinite(error[mask]).all():
             raise FloatingPointError("Nonfinite point predictions")
         # Record all horizons and the all-horizon aggregate without averaging RMSEs.
         for horizon in range(error.shape[-1]):
@@ -57,7 +58,8 @@ class MetricSums:
 
 
 @torch.no_grad()
-def evaluate(model, dataset, batch_size=256, device="cpu", persistence=False, include_raw=True):
+def evaluate(model, dataset, batch_size=256, device="cpu", persistence=False, include_raw=True,
+             allow_nonfinite=False):
     """Return records and per-engine endpoints. Never called with test inside training."""
     if model is not None:
         model.eval()
@@ -65,8 +67,8 @@ def evaluate(model, dataset, batch_size=256, device="cpu", persistence=False, in
     # Electricity uses equal customers for every split. FD training uses source weights.
     if dataset.dataset == "electricity":
         equal_entity = True
-    standardized = MetricSums(equal_entity)
-    raw = MetricSums(equal_entity)
+    standardized = MetricSums(equal_entity, allow_nonfinite)
+    raw = MetricSums(equal_entity, allow_nonfinite)
     endpoints = []
     score = 0.
     for start in range(0, len(dataset), batch_size):
@@ -100,6 +102,32 @@ def evaluate(model, dataset, batch_size=256, device="cpu", persistence=False, in
     return records, endpoints
 
 
-def validation_mse(model, dataset, batch_size=256, device="cpu"):
-    records, _ = evaluate(model, dataset, batch_size, device, include_raw=False)
-    return next(r["value"] for r in records if r["metric"] == "mse" and r["horizon"] == "all")
+@torch.no_grad()
+def validation_mse(model, dataset, batch_size=256, device="cpu", progress=None, after_batch=None):
+    """Complete fixed-set score, resumable at a batch boundary.
+
+    ``progress`` contains only a cursor and float64 sufficient metric sums. A
+    requested pause returns None; it never records a partial validation score.
+    ``after_batch`` may persist that progress along with the unchanged model.
+    """
+    if batch_size < 1 or len(dataset) < 1:
+        raise ValueError("Positive validation batch and nonempty dataset required")
+    model.eval()
+    progress = {} if progress is None else progress
+    cursor = progress.setdefault("cursor", 0)
+    if not 0 <= cursor <= len(dataset):
+        raise ValueError("Invalid validation recovery cursor")
+    sums = MetricSums(dataset.dataset in ("electricity", "fd001"))
+    sums.sums = progress.setdefault("sums", {})
+    for start in range(cursor, len(dataset), batch_size):
+        end = min(start + batch_size, len(dataset))
+        ids = np.arange(start, end)
+        batch = dataset.get_batch(ids)
+        x = torch.as_tensor(batch["x"], dtype=torch.float32, device=device)
+        prediction = model(x).detach().cpu().numpy()
+        sums.add(prediction, batch["y"], batch["mask"], dataset.entity_ids[ids])
+        progress["cursor"] = end
+        if after_batch is not None and after_batch():
+            return None
+    return next(r["value"] for r in sums.records("standardized")
+                if r["metric"] == "mse" and r["horizon"] == "all")

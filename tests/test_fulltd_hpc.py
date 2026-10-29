@@ -3,14 +3,14 @@ import argparse
 import contextlib
 import io
 import json
-import os
 import shlex
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from fulltd.hpc import submit, worker
+from fulltd.hpc import submit
 from fulltd.protocol import make_manifest
 
 
@@ -19,7 +19,8 @@ def arguments(root, manifest, **overrides):
                   results_dir=str(root / "results with spaces"), log_dir=str(root / "logs with spaces"),
                   partition="test_partition", gres="gpu:1", cpus=4, memory="32G", time="24:00:00",
                   account="test_account", qos=None, constraint=None, dry_run=False,
-                  array_chunk=97, concurrency=3, microbatch=32)
+                  array_chunk=97, concurrency=3, microbatch=32,
+                  no_auto_requeue=False, signal_seconds=180)
     values.update(overrides)
     return argparse.Namespace(**values)
 
@@ -46,9 +47,16 @@ class SubmissionTests(unittest.TestCase):
             self.assertEqual(sbatch.call_count, 8)  # one preflight and seven arrays
             self.assertEqual(receipt["preflight_job"], "100")
             self.assertIn("fulltd.preflight", wrapped(receipt["commands"][0]))
+            for command in receipt["commands"]:
+                self.assertIn("--nodes=1", command)
+                self.assertIn("--ntasks=1", command)
             seen = []
             for chunk, command in enumerate(receipt["commands"][1:]):
                 argv = wrapped(command)
+                self.assertEqual(argv[0], "exec")
+                self.assertIn("--requeue", command)
+                self.assertIn("--signal=B:USR1@180", command)
+                self.assertEqual(option(argv, "--expected-code-hash"), receipt["scientific_code_sha256"])
                 mapping = json.loads(Path(option(argv, "--mapping")).read_text())
                 offset = int(option(argv, "--offset"))
                 array = option(command, "--array")
@@ -86,18 +94,50 @@ class SubmissionTests(unittest.TestCase):
             index = json.loads(old_map)[0]
             self.assertEqual(frozen[index]["dataset"], "fd001")
 
-    def test_worker_uses_array_task_id_plus_chunk_offset(self):
+    def test_changed_frozen_mapping_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "mapping.json"
-            path.write_text(json.dumps([90, 91, 92, 93, 94]))
-            args = argparse.Namespace(mapping=str(path), offset=2, manifest="frozen.json", data_dir="data",
-                                      results_dir="results", threads=4, microbatch=16)
-            with patch.dict(os.environ, {"SLURM_ARRAY_TASK_ID": "1"}), patch("fulltd.hpc.subprocess.run") as run:
-                worker(args)
-            command = run.call_args.args[0]
-            self.assertEqual(option(command, "--index"), "93")
-            self.assertEqual(option(command, "--microbatch"), "16")
-            self.assertTrue(run.call_args.kwargs["check"])
+            root = Path(tmp)
+            path = root / "manifest.json"
+            path.write_text(json.dumps(make_manifest()[:2]))
+            args = arguments(root, path, dry_run=True)
+            with contextlib.redirect_stdout(io.StringIO()):
+                receipt = submit(args)
+            mapping = Path(option(wrapped(receipt["commands"][1]), "--mapping"))
+            mapping.write_text("[1, 0]")
+            with self.assertRaisesRegex(ValueError, "Immutable submission"):
+                submit(args)
+
+    def test_partial_submission_receipt_survives_sbatch_errors(self):
+        failures = [subprocess.CalledProcessError(1, ["sbatch"]), "not-a-job-id\n"]
+        for failure in failures:
+            with self.subTest(failure=type(failure).__name__), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                path = root / "manifest.json"
+                path.write_text(json.dumps(make_manifest()[:3]))
+                args = arguments(root, path, array_chunk=1)
+                with patch("fulltd.hpc.subprocess.check_output", side_effect=["100\n", "101\n", failure]):
+                    with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(RuntimeError):
+                        submit(args)
+                receipts = list(Path(args.results_dir).glob("submission_all_*.json"))
+                self.assertEqual(len(receipts), 1)
+                receipt = json.loads(receipts[0].read_text())
+                self.assertEqual(receipt["preflight_job"], "100")
+                self.assertEqual(receipt["candidate_array_jobs"], ["101"])
+                self.assertEqual(receipt["state"], "submission_failed")
+                self.assertIn("error", receipt)
+                self.assertEqual(len(receipt["commands"]), 3)
+
+    def test_manual_recovery_option_reaches_every_worker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "manifest.json"
+            path.write_text(json.dumps(make_manifest()[:3]))
+            args = arguments(root, path, dry_run=True, array_chunk=2, no_auto_requeue=True, signal_seconds=300)
+            with contextlib.redirect_stdout(io.StringIO()):
+                receipt = submit(args)
+            for command in receipt["commands"][1:]:
+                self.assertIn("--signal=B:USR1@300", command)
+                self.assertIn("--no-auto-requeue", wrapped(command))
 
 
 if __name__ == "__main__":

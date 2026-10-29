@@ -1,5 +1,5 @@
 {
-  "data_code_sha256": "bb2483707b1643a9e0ed9204e4a89379f0939f93d772c699d841e147b3e9f610",
+  "data_code_sha256": "9705d5d15bc8cfe32773d20c9781ae3ceb0c87512fa56e7ff14544413dace564",
   "datasets": {
     "electricity": {
       "acquisition": [
@@ -39,6 +39,7 @@
         "same_sequences_at_batch_128_and_256": true
       },
       "common_training_sources": 6578267,
+      "data_version": "td-v7-data-2",
       "draws_per_candidate": 27409500,
       "draws_per_unit": 274095,
       "effective_original_passes": 4.166674900851547,
@@ -165,6 +166,12 @@
         348
       ],
       "incomplete_hours": [],
+      "integrity_v2_review": {
+        "metadata_and_split_sidecars_verified": true,
+        "numerical_arrays_byte_identical_to_v1": true,
+        "portable_utf8_lf_split_sidecars": true,
+        "split_counts_unchanged": true
+      },
       "isolated_source_ids": [],
       "isolated_sources_excluded": 0,
       "lags_native_units": [
@@ -180,8 +187,9 @@
         "128": 2142,
         "256": 1071
       },
-      "prepared_fingerprint": "b51af6de09bc165bc9a5583eea1060aec60ba7a9ef3bf8bd1f8852227994ba65",
-      "processed_files_checked": 15,
+      "prepared_fingerprint": "1fd7d65baf914f1307cd3072d212319aa16b12cb53afb273930d89c8ff170aa9",
+      "prior_prepared_fingerprint_v1": "b51af6de09bc165bc9a5583eea1060aec60ba7a9ef3bf8bd1f8852227994ba65",
+      "processed_files_checked": 18,
       "raw_sha256": "d51565f2cb5a6b768d06ba1bbd3c084c6e2f3aab07f00c6f2dcb80e90175124b",
       "raw_shapes": [
         140256,
@@ -292,6 +300,7 @@
         "same_sequences_at_batch_128_and_256": true
       },
       "common_training_sources": 13989,
+      "data_version": "td-v7-data-2",
       "draws_per_candidate": 1398900,
       "draws_per_unit": 13989,
       "effective_original_passes": 100.0,
@@ -404,6 +413,12 @@
         19,
         5
       ],
+      "integrity_v2_review": {
+        "metadata_and_split_sidecars_verified": true,
+        "numerical_arrays_byte_identical_to_v1": true,
+        "portable_utf8_lf_split_sidecars": true,
+        "split_counts_unchanged": true
+      },
       "isolated_source_ids": [],
       "isolated_sources_excluded": 0,
       "lags_native_units": [
@@ -419,8 +434,9 @@
         "128": 110,
         "256": 55
       },
-      "prepared_fingerprint": "ee62d440a8f544810960a0cb2affc00a9c8ff917564f18ff41112096b263ae97",
-      "processed_files_checked": 18,
+      "prepared_fingerprint": "394674e7c58d87cbd0423cd6c8f7ed7e2cd7707f8e6ba0043c86066c0dc15a11",
+      "prior_prepared_fingerprint_v1": "ee62d440a8f544810960a0cb2affc00a9c8ff917564f18ff41112096b263ae97",
+      "processed_files_checked": 21,
       "raw_sha256": {
         "RUL_FD001.txt": "a19c8ec94931949d0485bdc35118206e9c81c4547b422efb9cf86f4ceddbceca",
         "test_FD001.txt": "3cda7109ce17bafb5443f2ac926cfcf88154b941b8c4cf95eb55d1ddd6f52851",
@@ -517,6 +533,7 @@
         "same_sequences_at_batch_128_and_256": true
       },
       "common_training_sources": 23967,
+      "data_version": "td-v7-data-2",
       "draws_per_candidate": 2396700,
       "draws_per_unit": 23967,
       "effective_original_passes": 100.0,
@@ -547,6 +564,12 @@
         0.500271206241916
       ],
       "first_unit_type_hash": "a5224d92ff9eb3642cc9f6a76dde74440e00d3888dee8332d57e880abee259f1",
+      "integrity_v2_review": {
+        "metadata_and_split_sidecars_verified": true,
+        "numerical_arrays_byte_identical_to_v1": true,
+        "portable_utf8_lf_split_sidecars": true,
+        "split_counts_unchanged": true
+      },
       "isolated_source_ids": [],
       "isolated_sources_excluded": 0,
       "lags_native_units": [
@@ -562,8 +585,9 @@
         "128": 188,
         "256": 94
       },
-      "prepared_fingerprint": "6b978f77d83015d272f22eff1ddd9c403e1017135f7e9e50881443948a0e5e5c",
-      "processed_files_checked": 22,
+      "prepared_fingerprint": "d3739bb42e8bcfc4355030bcd5a2fc55afefa8e33a38f0d75cdbf9b034a62d89",
+      "prior_prepared_fingerprint_v1": "6b978f77d83015d272f22eff1ddd9c403e1017135f7e9e50881443948a0e5e5c",
+      "processed_files_checked": 25,
       "raw_sha256": {
         "adj_mx.pkl": "a35687c6e15aa228dc45027b0ed2a0ea0f4ec78f573deb992c595092d12f61b3",
         "metr-la.h5": "64784b76d6fb8ec9bff4b6decafb354da2bb37840468fdccee5044e511277c05"
@@ -610,6 +634,7 @@
       "verification_runtime_seconds": 0.2681212997995317
     }
   },
+  "integrity_review": "Version2 adds checked scaler/split metadata fingerprints and split.json integrity; every numerical array is byte-identical to version1.",
   "purpose": "Data preparation and sampler correctness only; no candidate training, validation prediction, or test prediction executed",
   "round_or_epoch": 1,
   "sampling_code_sha256": "6e1a62c38c592ebbe466a5da272518fadc0ade97eee5072db6b49f9c83d1d16e",

@@ -9,9 +9,13 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import io
 import json
 import math
+import os
 import statistics
+import time
+import uuid
 from collections import defaultdict
 from pathlib import Path
 
@@ -44,6 +48,29 @@ def read_json(path):
         return json.load(stream)
 
 
+def _atomic_text(path, text):
+    """Publish a complete sidecar only after its bytes have been flushed."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with temporary.open("w", encoding="utf-8", newline="") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        # Indexers may briefly hold a Windows file open after publication.
+        for attempt in range(6):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError:
+                if attempt == 5:
+                    raise
+                time.sleep(.02 * 2 ** attempt)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def write_json(path, value):
     """Strict JSON: nonfinite values are explicit strings, never invalid JSON."""
     def clean(x):
@@ -56,21 +83,18 @@ def write_json(path, value):
         if isinstance(x, np.generic):
             return x.item()
         return x
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(clean(value), indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    _atomic_text(path, json.dumps(clean(value), indent=2, allow_nan=False) + "\n")
 
 
 def write_csv(path, rows, fields=None):
     rows = list(rows)
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
     if fields is None:
         fields = list(dict.fromkeys(k for row in rows for k in row))
-    with path.open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(rows)
+    stream = io.StringIO(newline="")
+    writer = csv.DictWriter(stream, fieldnames=fields)
+    writer.writeheader()
+    writer.writerows(rows)
+    _atomic_text(path, stream.getvalue())
 
 
 def read_csv(path):
@@ -136,7 +160,13 @@ def _validate_candidate(config, root):
         raise ValueError(f"Checkpoint/status configuration mismatch: {config['run_id']}")
     state = status.get("state")
     if state == "numerical_failure":
-        return math.inf, [], status
+        record_path = root / config["run_id"] / "validation.json"
+        records = read_json(record_path) if record_path.exists() else []
+        if (not isinstance(records, list) or len(records) > len(VALIDATION_EPOCHS)
+                or tuple(r.get("epoch") for r in records) != VALIDATION_EPOCHS[:len(records)]
+                or any(not math.isfinite(float(r["mse"])) for r in records)):
+            raise ValueError(f"Malformed partial validation evidence for failed candidate: {config['run_id']}")
+        return math.inf, records, status
     if state != "complete":
         raise ValueError(f"Operationally incomplete candidate {config['run_id']}: {state}")
     if status.get("epochs_completed") != 100:
@@ -241,13 +271,15 @@ def select_candidates(manifest, results_dir, output_dir, dataset="all", write_ou
     if dataset not in ("all", "electricity", "metr_la", "fd001"):
         raise ValueError("Unknown dataset scope")
     root, out = Path(results_dir), Path(output_dir)
-    grouped = defaultdict(list)
+    grouped, group_evidence = defaultdict(list), defaultdict(list)
     validation_rows, candidate_rows = [], []
     for config in manifest:
         if dataset != "all" and config["dataset"] != dataset:
             continue
         score, records, status = _validate_candidate(config, root)
         grouped[group_id(config)].append((config, score, status))
+        group_evidence[group_id(config)].append(dict(config=config, state=status["state"],
+            validation=records, identity=status.get("identity"), initial_mean_sha256=status.get("initial_mean_sha256")))
         for record in records:
             row = {k: config[k] for k in CONFIG_KEYS}
             row.update(record)
@@ -279,7 +311,7 @@ def select_candidates(manifest, results_dir, output_dir, dataset="all", write_ou
         best = min(group_scores, key=lambda x: x[:3])
         config = best[4][0][0]
         choice = {k: config[k] for k in ("dataset", "backbone", "method", "batch_size")}
-        choice.update(group_id=name)
+        choice.update(group_id=name, selection_evidence_sha256=_manifest_hash(group_evidence[name]))
         if not math.isfinite(best[0]):
             choice.update(state="all_configurations_failed", score="Infinity", run_ids=[])
         else:
@@ -591,18 +623,28 @@ def verify_numerical_tables(table_dir):
         values = by_key.pop(key)
         if int(row["n"]) != len(values):
             raise ValueError("Summary count does not match per-seed records")
+        finite_count = sum(math.isfinite(v) for v in values)
+        if int(row["finite_seeds"]) != finite_count:
+            raise ValueError("Summary finite-seed count does not match per-seed records")
         if all(math.isfinite(v) for v in values):
             mean = statistics.mean(values)
             sd = statistics.stdev(values) if len(values) > 1 else math.nan
-            expected = {"mean": mean, "sample_sd": sd, "standard_error": sd / math.sqrt(len(values))}
-            for field, value in expected.items():
-                saved = float(row[field]) if row[field] else math.nan
-                if math.isnan(value) and math.isnan(saved):
-                    continue
-                if not math.isclose(value, saved, rel_tol=1e-11, abs_tol=1e-12):
-                    raise ValueError(f"Independent recomputation mismatch in {key}: {field}")
-        elif int(row["finite_seeds"]) != sum(math.isfinite(v) for v in values):
-            raise ValueError("Nonfinite evidence was lost from the summary")
+        else:
+            # Independent IEEE arithmetic rules: any NaN or both signs of
+            # infinity make the mean undefined. A single infinity sign is
+            # retained. Seed variability with any nonfinite value is undefined.
+            positive_inf = any(v == math.inf for v in values)
+            negative_inf = any(v == -math.inf for v in values)
+            mean = (math.nan if any(math.isnan(v) for v in values) or (positive_inf and negative_inf)
+                    else math.inf if positive_inf else -math.inf)
+            sd = math.nan
+        expected = {"mean": mean, "sample_sd": sd, "standard_error": sd / math.sqrt(len(values))}
+        for field, value in expected.items():
+            saved = float(row[field]) if row[field] else math.nan
+            if math.isnan(value) and math.isnan(saved):
+                continue
+            if not math.isclose(value, saved, rel_tol=1e-11, abs_tol=1e-12):
+                raise ValueError(f"Independent recomputation mismatch in {key}: {field}")
         checked += 1
     if by_key:
         raise ValueError("A per-seed metric group was omitted from the summary")

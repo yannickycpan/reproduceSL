@@ -1,8 +1,9 @@
 # reproduceSL
 
-The TD v7 neural application campaign on branch `fullTD` has its own
-[HPC instructions](README_fullTD.md), PyTorch objectives, and frozen protocol.
-Use those entry points for Electricity, METR-LA and FD001.
+The TD v7 neural application campaign on branch `fullTD` has separate PyTorch
+objectives and a [frozen protocol](docs/fulltd_protocol.md) for Electricity,
+METR-LA and FD001. Each explicit JSON manifest index identifies one candidate
+run. HPC operating instructions are provided directly in the accompanying chat.
 
 Example to run: python main.py tdsreg.json 0 
 

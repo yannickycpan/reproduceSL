@@ -1,7 +1,7 @@
 # Verification before release
 
 Checked on 29 October 2026 with Python 3.12.14, PyTorch 2.5.1 CPU and the core
-versions in `requirements-fulltd.txt`. **56 focused tests passed.** The three
+versions in `requirements-fulltd.txt`. **112 focused tests passed.** The three
 shell scripts pass `sh -n`; Python compilation and Git whitespace checks pass.
 Slurm submission was exercised with mocked receipts/dry runs; no HPC jobs were
 submitted from this workstation. CUDA and the actual CityU resource settings
@@ -29,6 +29,14 @@ must pass the supplied compute-node preflight.
   exactly 100 training units and the actual last model. A crash after final.pt but
   before sidecars is repaired. Original execution hardware/runtime provenance is
   retained, and failed logical batches/Adam steps are counted.
+- Wall-time recovery also resumes partial validation from float64 sufficient
+  sums, including interruption at its final batch; it never selects on a partial
+  score. Mocked Slurm tests verify that only the interrupted array element is
+  requeued, and cancellation/numerical failure cannot cause a retry loop. Site
+  requeue permission and actual delivery of the warning remain untested here.
+- Preprocessing identities now verify scaler and split metadata as well as
+  array bytes. Re-preparation of all three actual datasets produced identical
+  numerical arrays and counts; the integrity format is `td-v7-data-2`.
 - Selection pools 80/90/100 across all five seeds; any failed seed invalidates its
   configuration. Missing/incompatible records block selection. Source-stream
   tampering is detected. All-failed methods remain explicit. Readout tests verify
@@ -38,6 +46,11 @@ must pass the supplied compute-node preflight.
   CSV records. PDF/SVG figure generation and CSV sources pass. Persistence remains
   one deterministic result without invented seed uncertainty. Slurm tests check
   all 630 tasks exactly once, dependencies, immutable run maps and quoted paths.
+- Endpoint caches bind to complete group selection evidence, final checkpoints,
+  data and evaluation code while permitting the same selected group to be
+  analyzed alone or with other datasets. Nonfinite predictions, overflowing RUL
+  scores and numerical readout failures remain explicit in the five-seed tables.
+  Independent summary checks cover finite values, infinities and NaNs.
 
 ## Actual data verification (no application results)
 
@@ -73,6 +86,9 @@ The Windows CPU tests disable the host's faulty oneDNN convolution backend; the
 ordinary PyTorch CPU implementation is used for those checks. Scientific CUDA
 training is unchanged. Exact deterministic replay presumes the same software,
 device and numerical backend; cross-device bitwise equivalence is not asserted.
+Recorded runtime covers persisted execution segments. A hard kill can lose time
+spent since the last recovery save; Slurm accounting/logs retain the corresponding
+allocation evidence. Graceful wall-time continuation saves the current segment.
 
 ## Completion boundary and prior runs
 
