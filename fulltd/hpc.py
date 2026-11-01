@@ -86,8 +86,8 @@ def submit(args):
             raise ValueError("Immutable submission record changed")
         if not destination.exists():
             atomic_json(destination, payload)
-    common = ["sbatch", "--parsable", "--partition", args.partition, "--cpus-per-task=1",
-              "--ntasks-per-core=1", "--open-mode=append", "--time", args.time,
+    common = ["sbatch", "--parsable", "--cpus-per-task=1",
+              "--ntasks-per-core=1", "--open-mode=append",
               "--chdir", str(root), "--output", str(logs / "%x_%j.out"),
               "--error", str(logs / "%x_%j.err"), "--export=ALL"]
     for name in ("account", "qos", "constraint"):
@@ -121,7 +121,10 @@ def submit(args):
     preflight = [sys.executable, "-m", "fulltd.preflight", "--dataset", args.dataset,
                  "--data-dir", str(data), "--output", str(results / f"preflight_{args.dataset}.json"),
                  "--device", "cpu", "--threads", "1"]
-    receipt["preflight_job"] = send(common + ["--nodes=1", "--ntasks=1", "--ntasks-per-node=1",
+    # CityU rejects the 1-CPU/32G preflight in batch. Its partition and wall time
+    # must be independent of the much larger candidate allocations.
+    receipt["preflight_job"] = send(common + ["--partition", args.preflight_partition,
+        "--time", args.preflight_time, "--nodes=1", "--ntasks=1", "--ntasks-per-node=1",
         "--mem", args.preflight_memory, "--job-name=fulltd_preflight_" + args.dataset,
         "--wrap", allocation_command(preflight, root)])
     atomic_json(receipt_path, receipt)
@@ -132,7 +135,8 @@ def submit(args):
                   "--tasks-per-node", str(args.tasks_per_node), "--microbatch", str(args.microbatch)]
     if args.no_auto_requeue:
         supervisor.append("--no-auto-requeue")
-    receipt["campaign_job"] = send(common + ["--nodes=1", f"--ntasks={args.tasks_per_node}",
+    receipt["campaign_job"] = send(common + ["--partition", args.partition, "--time", args.time,
+        "--nodes=1", f"--ntasks={args.tasks_per_node}",
         f"--ntasks-per-node={args.tasks_per_node}", "--mem", args.memory, "--job-name=fulltd_cpu_" + args.dataset,
         "--array", f"0-{array_count - 1}%{args.concurrency}",
         "--requeue", f"--signal=B:USR1@{args.signal_seconds}",
@@ -327,6 +331,8 @@ def main():
     parser.add_argument("--log-dir", help="Defaults to RESULTS_DIR/logs")
     parser.add_argument("--memory", default="400G", help="Total RAM PER NODE, shared by up to 90 independent processes")
     parser.add_argument("--preflight-memory", default="32G")
+    parser.add_argument("--preflight-partition", default="tiny", help="Partition for the one-CPU preflight only")
+    parser.add_argument("--preflight-time", default="01:00:00", help="Preflight allocation limit, independent of training")
     parser.add_argument("--time", default="3-00:00:00")
     parser.add_argument("--microbatch", type=int, default=256)
     parser.add_argument("--signal-seconds", type=int, default=180)

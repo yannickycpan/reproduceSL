@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from fulltd.hpc import THREAD_VARIABLES, allocation_command, load_submission, submit
+from fulltd.hpc import THREAD_VARIABLES, allocation_command, load_submission, main, submit
 from fulltd.protocol import make_manifest
 
 
@@ -19,6 +19,7 @@ def arguments(root, manifest, **overrides):
     values = dict(manifest=str(manifest), dataset="all", data_dir=str(root / "data with spaces"),
                   results_dir=str(root / "results with spaces"), log_dir=str(root / "logs with spaces"),
                   partition="batch", memory="400G", preflight_memory="32G", time="3-00:00:00",
+                  preflight_partition="tiny", preflight_time="01:00:00",
                   account=None, qos=None, constraint=None, dry_run=False, concurrency=7,
                   tasks_per_node=90, microbatch=256, no_auto_requeue=False, signal_seconds=180)
     values.update(overrides)
@@ -38,6 +39,78 @@ def option(command, name):
 
 
 class SubmissionTests(unittest.TestCase):
+    def test_cli_stage_defaults_avoid_reported_cityu_small_batch_rejection(self):
+        for scope, duration, concurrency in (("electricity", "3-00:00:00", "3"),
+                                              ("metr_la_fd001", "12:00:00", "4")):
+            with self.subTest(scope=scope), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                path = root / "manifest.json"
+                path.write_text(json.dumps(make_manifest()))
+                commands = []
+
+                def cityu_sbatch(command, **kwargs):
+                    commands.append(command)
+                    # Reproduce the precise rejected request in the user's log;
+                    # do not infer other site thresholds from that observation.
+                    if (option(command, "--partition") == "batch" and "--ntasks=1" in command
+                            and option(command, "--mem") == "32G"):
+                        raise subprocess.CalledProcessError(1, command, stderr="1 CPUs-per-node and 32768 MB are too small")
+                    return str(100 + len(commands)) + "\n"
+
+                argv = ["fulltd.hpc", "--manifest", str(path), "--dataset", scope,
+                        "--time", duration, "--concurrency", concurrency,
+                        "--data-dir", str(root / "data"), "--results-dir", str(root / "results")]
+                with patch("sys.argv", argv), patch("fulltd.hpc.subprocess.check_output", side_effect=cityu_sbatch), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    main()
+                self.assertEqual(len(commands), 2)
+                preflight, campaign = commands
+                self.assertEqual(option(preflight, "--partition"), "tiny")
+                self.assertEqual(option(preflight, "--time"), "01:00:00")
+                self.assertEqual(option(preflight, "--mem"), "32G")
+                self.assertIn("--ntasks=1", preflight)
+                self.assertEqual(option(campaign, "--partition"), "batch")
+                self.assertEqual(option(campaign, "--time"), duration)
+                self.assertEqual(option(campaign, "--mem"), "400G")
+                self.assertEqual(option(campaign, "--array"), f"0-3%{concurrency}")
+                self.assertIn("--ntasks=90", campaign)
+                self.assertIn("--dependency=afterok:101", campaign)
+                for command in commands:
+                    self.assertEqual(command.count("--partition"), 1)
+                    self.assertEqual(command.count("--time"), 1)
+
+    def test_preflight_overrides_do_not_change_campaign_resources(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
+            root = Path(tmp)
+            path = root / "manifest.json"
+            path.write_text(json.dumps(make_manifest()[:2]))
+            receipt = submit(arguments(root, path, dry_run=True, preflight_partition="custom_small",
+                                       preflight_time="02:00:00", preflight_memory="48G"))
+            preflight, campaign = receipt["commands"]
+            self.assertEqual(option(preflight, "--partition"), "custom_small")
+            self.assertEqual(option(preflight, "--time"), "02:00:00")
+            self.assertEqual(option(preflight, "--mem"), "48G")
+            self.assertEqual(option(campaign, "--partition"), "batch")
+            self.assertEqual(option(campaign, "--time"), "3-00:00:00")
+            self.assertEqual(option(campaign, "--mem"), "400G")
+
+    def test_preflight_rejection_does_not_submit_any_training_job(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
+            root = Path(tmp)
+            path = root / "manifest.json"
+            path.write_text(json.dumps(make_manifest()[:2]))
+            args = arguments(root, path)
+            with patch("fulltd.hpc.subprocess.check_output", side_effect=subprocess.CalledProcessError(1, ["sbatch"])) as sbatch:
+                with self.assertRaises(RuntimeError):
+                    submit(args)
+            self.assertEqual(sbatch.call_count, 1)
+            receipts = list(Path(args.results_dir).glob("submission_all_*.json"))
+            self.assertEqual(len(receipts), 1)
+            receipt = json.loads(receipts[0].read_text())
+            self.assertIsNone(receipt["preflight_job"])
+            self.assertIsNone(receipt["campaign_job"])
+            self.assertEqual(receipt["state"], "submission_failed")
+
     def test_allocation_environment_and_python_arguments_are_shell_quoted(self):
         command = ["/venv with spaces/bin/python", "-m", "fulltd.hpc", "--data-dir", "/data/it's $(not code)"]
         outer = shlex.split(allocation_command(command, "/repo with spaces"))

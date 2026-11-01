@@ -9,6 +9,15 @@ submitted from this workstation. The actual CityU CPU resource settings must
 pass the supplied compute-node preflight. No cluster speedup is claimed from
 local correctness tests.
 
+After CityU rejected the one-CPU/32G preflight on `batch`, its submission was
+separated from the training allocation: `tiny` with an independent one-hour
+budget. The two training groups retain `batch`, 90 CPUs, 400G and their original
+time limits. All 33 scheduler/requeue/checkpoint-identity tests passed, including
+CLI-default regression checks for the reported rejection and confirmation that
+a failed preflight submission never queues training. Scientific and evaluation
+hashes remain unchanged. The one-hour preflight budget is an operational default,
+not a verified cluster limit; no live CityU submission was performed here.
+
 The branch cleanup removed 75 unused legacy source/data/cache files and the
 obsolete generic submission entry. All active imports, six objective factories,
 630 manifest records, source licenses and correctness tests remain. Training,
