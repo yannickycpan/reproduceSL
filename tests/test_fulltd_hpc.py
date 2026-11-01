@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from fulltd.hpc import THREAD_VARIABLES, load_submission, submit
+from fulltd.hpc import THREAD_VARIABLES, allocation_command, load_submission, submit
 from fulltd.protocol import make_manifest
 
 
@@ -26,7 +26,11 @@ def arguments(root, manifest, **overrides):
 
 
 def wrapped(command):
-    return shlex.split(command[command.index("--wrap") + 1])
+    outer = shlex.split(command[command.index("--wrap") + 1])
+    assert outer[:3] == ["exec", "bash", "-c"]
+    assert outer[3].startswith("set -euo pipefail; source ")
+    assert "scripts" in outer[3] and "fulltd_environment.sh" in outer[3]
+    return ["exec"] + shlex.split(outer[3].rsplit("; exec ", 1)[1])
 
 
 def option(command, name):
@@ -34,6 +38,29 @@ def option(command, name):
 
 
 class SubmissionTests(unittest.TestCase):
+    def test_allocation_environment_and_python_arguments_are_shell_quoted(self):
+        command = ["/venv with spaces/bin/python", "-m", "fulltd.hpc", "--data-dir", "/data/it's $(not code)"]
+        outer = shlex.split(allocation_command(command, "/repo with spaces"))
+        self.assertEqual(outer[:3], ["exec", "bash", "-c"])
+        setup, executable = outer[3].rsplit("; exec ", 1)
+        self.assertEqual(shlex.split(setup.removeprefix("set -euo pipefail; source ")),
+                         [str(Path("/repo with spaces") / "scripts" / "fulltd_environment.sh")])
+        self.assertEqual(shlex.split(executable), command)
+
+    def test_group_entrypoints_are_self_contained_and_keep_resource_defaults(self):
+        root = Path(__file__).resolve().parents[1]
+        self.assertFalse((root / "scripts" / "submit_fulltd.sh").exists())
+        environment = (root / "scripts" / "fulltd_environment.sh").read_text()
+        self.assertIn("module load Python/3.12.3-GCCcore-13.3.0", environment)
+        self.assertIn("/etc/profile.d/modules.sh", environment)
+        for group, duration, concurrency in (("electricity", "3-00:00:00", 3),
+                                              ("metr_fd001", "12:00:00", 4)):
+            entrypoint = (root / "scripts" / f"submit_fulltd_{group}.sh").read_text()
+            self.assertIn('source "$ROOT/scripts/fulltd_environment.sh"', entrypoint)
+            self.assertIn('exec "$FULLTD_ENV/bin/python" -m fulltd.hpc', entrypoint)
+            self.assertIn(f"--time {duration} --concurrency {concurrency}", entrypoint)
+            self.assertNotIn("submit_fulltd.sh", entrypoint)
+
     def test_split_submissions_partition_canonical_630_indices_without_overlap(self):
         with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
             root = Path(tmp)

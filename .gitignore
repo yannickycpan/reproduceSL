@@ -1,4 +1,4 @@
-# New neural campaign artifacts; existing tracked legacy files are unchanged.
+# Generated campaign artifacts and local Python caches.
 __pycache__/
 *.py[cod]
 .pytest_cache/

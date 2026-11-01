@@ -22,6 +22,14 @@ def cpu_environment():
         os.environ[name] = "1"
 
 
+def allocation_command(command, root):
+    # Slurm --wrap uses /bin/sh; explicitly enter Bash for the module setup.
+    # Both execs preserve the batch PID for --signal=B:USR1 on the coordinator.
+    environment = Path(root) / "scripts" / "fulltd_environment.sh"
+    body = "set -euo pipefail; source " + shlex.quote(str(environment)) + "; exec " + shlex.join(command)
+    return "exec bash -c " + shlex.quote(body)
+
+
 def load_submission(args):
     manifest = load_manifest(args.manifest)
     mapping = json.loads(Path(args.mapping).read_text())
@@ -115,7 +123,7 @@ def submit(args):
                  "--device", "cpu", "--threads", "1"]
     receipt["preflight_job"] = send(common + ["--nodes=1", "--ntasks=1", "--ntasks-per-node=1",
         "--mem", args.preflight_memory, "--job-name=fulltd_preflight_" + args.dataset,
-        "--wrap", shlex.join(preflight)])
+        "--wrap", allocation_command(preflight, root)])
     atomic_json(receipt_path, receipt)
     supervisor = [sys.executable, "-m", "fulltd.hpc", "supervise", "--manifest", str(manifest_path),
                   "--mapping", str(mapping), "--submission-digest", submission_digest,
@@ -128,7 +136,7 @@ def submit(args):
         f"--ntasks-per-node={args.tasks_per_node}", "--mem", args.memory, "--job-name=fulltd_cpu_" + args.dataset,
         "--array", f"0-{array_count - 1}%{args.concurrency}",
         "--requeue", f"--signal=B:USR1@{args.signal_seconds}",
-        "--dependency=afterok:" + receipt["preflight_job"], "--wrap", "exec " + shlex.join(supervisor)])
+        "--dependency=afterok:" + receipt["preflight_job"], "--wrap", allocation_command(supervisor, root)])
     receipt["state"] = "dry_run" if args.dry_run else "submitted"
     atomic_json(receipt_path, receipt)
     print(f"Submission receipt: {receipt_path}")

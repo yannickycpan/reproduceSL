@@ -131,14 +131,14 @@ discarded computation. `runtime_seconds` measures the retained trajectory;
 replayed; `total_execution_seconds` includes both. Hard kills can still lose
 unrecorded runtime, for which scheduler accounting is the external evidence.
 
-CPU execution uses seven Slurm array elements, one node per element and 90
+CPU execution uses Slurm arrays, one node per element and up to 90
 independent one-CPU/one-thread candidate processes per node. This is not
 distributed training of a model. It does not change logical batch sizes,
 gradients, sampling, rates or update counts. CPU/GPU bitwise equality is not
 asserted. Legacy results retain their old protocol identity and are not converted
 or mixed into this restart campaign.
 
-The campaign may also be submitted independently as Electricity (300 candidates)
+The two submission entries cover Electricity (300 candidates)
 and METR-LA plus FD001 (330 candidates). Both use the same original manifest indices
 and run IDs. Default array concurrency is three and four nodes respectively, so
 both submissions together use at most seven candidate nodes. The respective

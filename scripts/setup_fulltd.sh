@@ -2,10 +2,10 @@
 # Download public raw data and install the tested Python/PyTorch environment.
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/fulltd_environment.sh"
 cd "$ROOT"
-: "${FULLTD_DATA_DIR:?Set FULLTD_DATA_DIR to your approved project storage directory}"
 PYTHON="${FULLTD_PYTHON:-python3.12}"
-VENV="${FULLTD_ENV:-$HOME/scratch/fulltd/.venv-fulltd}"
+VENV="$FULLTD_ENV"
 TORCH_INDEX="${FULLTD_TORCH_INDEX:-https://download.pytorch.org/whl/cpu}"
 "$PYTHON" -c 'import sys; assert sys.version_info[:2] == (3,12), "Use Python 3.12 (tested 3.12.14)"'
 "$PYTHON" -m venv "$VENV"
@@ -14,4 +14,4 @@ TORCH_INDEX="${FULLTD_TORCH_INDEX:-https://download.pytorch.org/whl/cpu}"
 mkdir -p "$FULLTD_DATA_DIR"
 "$VENV/bin/python" -m pip freeze > "$FULLTD_DATA_DIR/environment-freeze.txt"
 "$VENV/bin/python" -m fulltd.download --dataset "${FULLTD_DATASET:-all}" --data-dir "$FULLTD_DATA_DIR"
-printf 'Environment and raw data ready. Preprocessing and GPU checks run in the submission preflight job.\n'
+printf 'Environment and raw data ready. Preprocessing and CPU checks run in the submission preflight job.\n'

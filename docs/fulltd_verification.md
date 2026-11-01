@@ -1,12 +1,20 @@
 # Verification before release
 
 Checked on 1 November 2026 with Python 3.12.14, PyTorch 2.5.1 CPU and the core
-versions in `requirements-fulltd.txt`. **174 focused tests passed.** The five
+versions in `requirements-fulltd.txt`. **176 focused tests passed** in a clean
+source export containing no legacy files or pre-existing Python caches. The five
 shell scripts pass `sh -n`; Python compilation and Git whitespace checks pass.
 Slurm submission was exercised with mocked receipts/dry runs; no HPC jobs were
 submitted from this workstation. The actual CityU CPU resource settings must
 pass the supplied compute-node preflight. No cluster speedup is claimed from
 local correctness tests.
+
+The branch cleanup removed 75 unused legacy source/data/cache files and the
+obsolete generic submission entry. All active imports, six objective factories,
+630 manifest records, source licenses and correctness tests remain. Training,
+evaluation and manifest hashes are identical before and after cleanup, preserving
+compatibility with checkpoints from the preceding release. Temporary validation
+fixtures, shell mocks, logs and generated test outputs are excluded from Git.
 
 ## Mathematical and protocol checks
 
