@@ -103,31 +103,24 @@ def evaluate(model, dataset, batch_size=256, device="cpu", persistence=False, in
 
 
 @torch.no_grad()
-def validation_mse(model, dataset, batch_size=256, device="cpu", progress=None, after_batch=None):
-    """Complete fixed-set score, resumable at a batch boundary.
+def validation_mse(model, dataset, batch_size=256, device="cpu", stop_requested=None):
+    """Score the supplied full set or stratified view, never a partial score.
 
-    ``progress`` contains only a cursor and float64 sufficient metric sums. A
-    requested pause returns None; it never records a partial validation score.
-    ``after_batch`` may persist that progress along with the unchanged model.
+    An interruption returns None; validation restarts from its beginning after
+    recovery from the last durable training boundary. No cursor/sums are saved.
     """
     if batch_size < 1 or len(dataset) < 1:
         raise ValueError("Positive validation batch and nonempty dataset required")
     model.eval()
-    progress = {} if progress is None else progress
-    cursor = progress.setdefault("cursor", 0)
-    if not 0 <= cursor <= len(dataset):
-        raise ValueError("Invalid validation recovery cursor")
     sums = MetricSums(dataset.dataset in ("electricity", "fd001"))
-    sums.sums = progress.setdefault("sums", {})
-    for start in range(cursor, len(dataset), batch_size):
+    for start in range(0, len(dataset), batch_size):
+        if stop_requested is not None and stop_requested():
+            return None
         end = min(start + batch_size, len(dataset))
         ids = np.arange(start, end)
         batch = dataset.get_batch(ids)
         x = torch.as_tensor(batch["x"], dtype=torch.float32, device=device)
         prediction = model(x).detach().cpu().numpy()
         sums.add(prediction, batch["y"], batch["mask"], dataset.entity_ids[ids])
-        progress["cursor"] = end
-        if after_batch is not None and after_batch():
-            return None
     return next(r["value"] for r in sums.records("standardized")
                 if r["metric"] == "mse" and r["horizon"] == "all")

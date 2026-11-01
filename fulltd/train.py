@@ -1,4 +1,4 @@
-"""Train a single prespecified candidate with deterministic rolling recovery."""
+"""Train a prespecified candidate; persist weights only at completed epochs."""
 import os
 os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 import argparse
@@ -19,6 +19,7 @@ from . import PROTOCOL_ID
 from .protocol import EVALUATIONS, LAGS, digest, load_manifest, validate_config
 from .sampling import rng_for, sources_for_round, sequence_hash, training_universe
 from .metrics import validation_mse
+from .validation import validation_view
 
 
 def atomic_json(path, value):
@@ -60,7 +61,7 @@ def code_hash():
     # Plotting, submission and download receipts do not change a trained state.
     # Keep the scientific implementation identity separate from the Git revision.
     files = [root / "fulltd" / name for name in
-             ("__init__.py", "data.py", "metrics.py", "models.py", "protocol.py", "sampling.py", "train.py")]
+             ("__init__.py", "data.py", "metrics.py", "models.py", "protocol.py", "sampling.py", "train.py", "validation.py")]
     files += sorted((root / "agents").glob("fulltd_*.py"))
     h = hashlib.sha256()
     for file in files:
@@ -138,11 +139,11 @@ def make_objective_for(config, train_data):
 
 
 def train_candidate(config, train_data, val_data, result_root, device="cpu", microbatch=None,
-                    recovery_every=100, stop_after_batches=None, stop_requested=None):
+                    stop_after_batches=None, stop_requested=None):
     """stop_after_batches is solely a test interruption hook; absent from CLI."""
     validate_config(config)
-    if microbatch is not None and microbatch < 1 or recovery_every < 1:
-        raise ValueError("Microbatch and recovery interval must be positive")
+    if microbatch is not None and microbatch < 1:
+        raise ValueError("Microbatch must be positive")
     stop_requested = stop_requested or (lambda: False)
     seed_runtime(config["seed"])
     device = torch.device(device)
@@ -174,10 +175,12 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
     counters = dict(optimizer_steps=0, source_draws=0, partner_draws=0, source_valid_count=0,
                     pair_valid_count=0, empty_mask_batches=0, update_opportunities=0, oom_retries=0)
     validation, round_records = [], []
-    validation_progress = None
     epoch, cursor, elapsed = 1, 0, 0.
     recovery = run_dir / "recovery.pt"
     final = run_dir / "final.pt"
+    interruptions_path = run_dir / "interruptions.json"
+    prior_interruptions = json.loads(interruptions_path.read_text()) if interruptions_path.exists() else []
+    discarded_runtime = sum(r["uncheckpointed_runtime_seconds"] for r in prior_interruptions)
     existing = final if final.exists() else recovery
     completed_checkpoint = None
     checkpoint = None
@@ -189,8 +192,9 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
         optimizer.load_state_dict(checkpoint["optimizer"])
         counters = checkpoint["counters"]
         validation, round_records = checkpoint["validation"], checkpoint["round_records"]
-        validation_progress = checkpoint.get("validation_progress")
         epoch, cursor, elapsed = checkpoint["next_epoch"], checkpoint["cursor"], checkpoint["runtime_seconds"]
+        if cursor != 0 or checkpoint.get("validation_progress") is not None:
+            raise ValueError("This protocol only resumes complete epoch-boundary checkpoints; preserve legacy states separately")
         physical = min(physical, checkpoint["physical_microbatch"])
         random.setstate(checkpoint["python_rng"])
         np.random.set_state(checkpoint["numpy_rng"])
@@ -241,25 +245,30 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
         return dict(identity=identity, config=config, objective=objective.state_dict(),
                     optimizer=optimizer.state_dict(), next_epoch=epoch, cursor=cursor,
                     counters=counters.copy(), validation=list(validation), round_records=list(round_records),
-                    validation_progress=validation_progress,
-                    runtime_seconds=runtime(), physical_microbatch=physical,
+                    runtime_seconds=runtime(), total_execution_seconds=runtime()+discarded_runtime,
+                    discarded_runtime_seconds=discarded_runtime, physical_microbatch=physical,
                     python_rng=random.getstate(), numpy_rng=np.random.get_state(), torch_rng=torch.get_rng_state(),
                     cuda_rng=torch.cuda.get_rng_state_all() if device.type == "cuda" else None,
                     initial_mean_sha256=initial_hash, hardware=original_hardware,
                     code_revision=original_revision, execution_segments=segments(),
                     peak_accelerator_memory_bytes=peak_memory())
 
-    def write_status(state, error=None):
-        atomic_json(run_dir / "status.json", dict(state=state, protocol_id=PROTOCOL_ID, config=config,
+    def write_status(state, error=None, durable=None):
+        record = dict(state=state, protocol_id=PROTOCOL_ID, config=config,
                     identity=identity, epochs_completed=epoch-1, next_epoch=epoch, cursor=cursor,
-                    validation_cursor=0 if validation_progress is None else validation_progress["cursor"],
-                    **counters, runtime_seconds=runtime(),
+                    **counters, runtime_seconds=runtime(), total_execution_seconds=runtime()+discarded_runtime,
+                    discarded_runtime_seconds=discarded_runtime,
                     effective_original_passes=counters["source_draws"] / n, n_sources=n,
                     training_unit=config["training_unit"], physical_microbatch=physical,
                     initial_mean_sha256=initial_hash, mean_parameter_count=sum(p.numel() for p in objective.model.parameters()),
                     total_parameter_count=sum(p.numel() for p in objective.parameters()), hardware=original_hardware,
                     code_revision=original_revision, execution_segments=segments(), error=error,
-                    peak_accelerator_memory_bytes=peak_memory()))
+                    peak_accelerator_memory_bytes=peak_memory())
+        if durable is not None:
+            record.update(durable["counters"], next_epoch=durable["next_epoch"], cursor=0,
+                          epochs_completed=durable["next_epoch"]-1,
+                          effective_original_passes=durable["counters"]["source_draws"] / n)
+        atomic_json(run_dir / "status.json", record)
     if completed_checkpoint is not None:
         # A preemption can occur after atomic final.pt but before its sidecars.
         # Repair those records from the authoritative complete checkpoint.
@@ -267,16 +276,25 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
         atomic_json(run_dir / "rounds.json", round_records)
         write_status("complete")
         print(f"Already complete and compatible: {config['run_id']}")
-        return completed_checkpoint
+        return dict(completed_checkpoint, state="complete")
     write_status("running")
 
     def pause_for_allocation():
-        saved = snapshot()
-        atomic_save(recovery, saved)
-        atomic_json(run_dir / "validation.json", validation)
-        atomic_json(run_dir / "rounds.json", round_records)
-        write_status("checkpointed")
-        return dict(saved, state="checkpointed")
+        # A warning is not permission to write a mid-epoch model. Resume the
+        # previous complete epoch, replaying all work after that durable state.
+        saved = (torch.load(recovery, map_location="cpu", weights_only=False) if recovery.exists()
+                 else dict(next_epoch=1, cursor=0, counters={key: 0 for key in counters},
+                           validation=[], round_records=[], runtime_seconds=0.,
+                           initial_mean_sha256=initial_hash))
+        state = "checkpointed" if recovery.exists() else "stopped_no_checkpoint"
+        interruption = dict(epoch_interrupted=epoch, source_cursor_interrupted=cursor,
+                            resume_epoch=saved["next_epoch"],
+                            discarded_counters={key: value-saved["counters"][key] for key, value in counters.items()},
+                            uncheckpointed_runtime_seconds=max(0., runtime()-saved["runtime_seconds"]),
+                            slurm_job_id=os.environ.get("SLURM_JOB_ID"))
+        atomic_json(interruptions_path, prior_interruptions + [interruption])
+        write_status(state, durable=saved)
+        return dict(saved, state=state, discarded_counters=interruption["discarded_counters"])
 
     try:
         while epoch <= 100:
@@ -323,39 +341,21 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
                 else:
                     counters["empty_mask_batches"] += 1
                 cursor = end
-                if counters["update_opportunities"] % recovery_every == 0:
-                    atomic_save(recovery, snapshot())
-                    write_status("running")
                 if stop_after_batches is not None and counters["update_opportunities"] >= stop_after_batches:
-                    atomic_save(recovery, snapshot())
-                    write_status("interrupted_test_only")
-                    return snapshot()
+                    return pause_for_allocation()
             if stop_requested():
                 return pause_for_allocation()
             if epoch in EVALUATIONS:
-                if validation_progress is None:
-                    validation_progress = {"epoch": epoch, "cursor": 0, "sums": {}}
-                if validation_progress["epoch"] != epoch:
-                    raise ValueError("Validation checkpoint belongs to another epoch/round")
-
-                def after_validation_batch():
-                    if stop_requested():
-                        return True
-                    if math.ceil(validation_progress["cursor"] / physical) % recovery_every == 0:
-                        atomic_save(recovery, snapshot())
-                        write_status("running")
-                    return False
-
-                mse = validation_mse(objective.model, val_data, physical, device,
-                                     validation_progress, after_validation_batch)
+                validation_data, validation_subset = validation_view(val_data, epoch, config["run_id"])
+                mse = validation_mse(objective.model, validation_data, physical, device,
+                                     stop_requested=stop_requested)
                 if mse is None:
                     return pause_for_allocation()
                 if not math.isfinite(mse):
                     raise FloatingPointError("Nonfinite validation MSE")
                 validation.append(dict(epoch=epoch, mse=mse, optimizer_steps=counters["optimizer_steps"],
+                                       validation_subset=validation_subset,
                                        theta=objective.theta.detach().cpu().tolist() if td else None))
-                validation_progress = None
-                atomic_json(run_dir / "validation.json", validation)
             round_records.append(dict(epoch=epoch, source_draws=len(sources), source_sha256=source_sha,
                 partner_sha256=sequence_hash(partners) if td else None,
                 type_counts=np.bincount(types, minlength=2).tolist() if td else None,
@@ -363,12 +363,14 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
                 runtime_seconds_cumulative=elapsed + time.perf_counter() - start_clock))
             epoch += 1
             cursor = 0
-            atomic_save(recovery, snapshot())
+            # Exactly one weight/optimizer checkpoint per completed epoch,
+            # after any scheduled validation. Epoch100 writes final.pt once.
+            atomic_save(final if epoch == 101 else recovery, snapshot())
+            atomic_json(run_dir / "validation.json", validation)
             atomic_json(run_dir / "rounds.json", round_records)
             write_status("running")
-        atomic_save(final, snapshot())
         write_status("complete")
-        return snapshot()
+        return dict(snapshot(), state="complete")
     except FloatingPointError as error:
         write_status("numerical_failure", str(error))
         # Keep all validation evidence and the previous finite recovery checkpoint.
@@ -380,7 +382,7 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
 
 
 def run_index(manifest_path, index, data_dir, results_dir, device="cuda", microbatch=None,
-              recovery_every=100, threads=4, stop_requested=None):
+              threads=4, stop_requested=None):
     manifest = load_manifest(manifest_path)
     if type(index) is not int or not 0 <= index < len(manifest):
         raise ValueError(f"Index must be in 0..{len(manifest)-1}")
@@ -396,7 +398,7 @@ def run_index(manifest_path, index, data_dir, results_dir, device="cuda", microb
         train = load_dataset(config["dataset"], data_dir, "train")
         val = load_dataset(config["dataset"], data_dir, "validation")
         return train_candidate(config, train, val, results_dir, device, microbatch,
-                               recovery_every, stop_requested=stop_requested)
+                               stop_requested=stop_requested)
 
 
 def main():
@@ -407,13 +409,12 @@ def main():
     parser.add_argument("--results-dir", required=True)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--microbatch", type=int)
-    parser.add_argument("--recovery-every", type=int, default=100)
     parser.add_argument("--threads", type=int, default=4)
     args = parser.parse_args()
-    if args.microbatch is not None and args.microbatch < 1 or args.recovery_every < 1:
-        parser.error("Microbatch and checkpoint interval must be positive")
+    if args.microbatch is not None and args.microbatch < 1:
+        parser.error("Microbatch must be positive")
     run_index(args.manifest, args.index, args.data_dir, args.results_dir, args.device,
-              args.microbatch, args.recovery_every, args.threads)
+              args.microbatch, args.threads)
 
 
 if __name__ == "__main__":

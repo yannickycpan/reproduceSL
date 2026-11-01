@@ -5,6 +5,9 @@ import shutil
 import time
 from pathlib import Path
 
+from .hpc import cpu_environment
+cpu_environment()
+
 import numpy as np
 import torch
 
@@ -19,15 +22,15 @@ def main():
     parser.add_argument("--dataset", default="all", choices=("all", *LAGS))
     parser.add_argument("--data-dir", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--device", default="cuda")
-    parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--device", choices=("cpu",), default="cpu")
+    parser.add_argument("--threads", type=int, choices=(1,), default=1)
     args = parser.parse_args()
     torch.set_num_threads(args.threads)
-    if args.device == "cuda" and not torch.cuda.is_available():
-        raise RuntimeError("No usable GPU in allocated job; candidate arrays must not start")
+    if torch.get_num_interop_threads() != 1:
+        torch.set_num_interop_threads(1)
     from . import data as preparation
     report = dict(hardware=dict(torch=torch.__version__, cuda=torch.version.cuda,
-                               device=torch.cuda.get_device_name() if args.device == "cuda" else "cpu"),
+                               device="cpu", threads_per_process=1),
                   storage_free_bytes=shutil.disk_usage(args.data_dir).free, datasets={}, throughput=[])
     for name in LAGS if args.dataset == "all" else [args.dataset]:
         metadata_path = Path(args.data_dir) / "processed" / name / "metadata.json"
@@ -52,8 +55,6 @@ def main():
             td = config["method"] == "td_full"
             optimizer = torch.optim.Adam(obj.parameter_groups(config["alpha"], config["beta"]),
                                          betas=(.9,.999),eps=1e-8,weight_decay=0,amsgrad=False)
-            if args.device == "cuda":
-                torch.cuda.synchronize()
             start = time.perf_counter()
             for _ in range(3):
                 optimizer.zero_grad(set_to_none=True)
@@ -63,8 +64,6 @@ def main():
                 optimizer.step()
                 if not all(bool(torch.isfinite(p).all()) for p in obj.parameters()):
                     raise FloatingPointError("Preflight parameter is nonfinite")
-            if args.device == "cuda":
-                torch.cuda.synchronize()
             report["throughput"].append(dict(dataset=name,backbone=config["backbone"],method=config["method"],
                 source_windows=len(ids),microbatch=32,throwaway_steps=3,seconds=time.perf_counter()-start))
             del obj, optimizer

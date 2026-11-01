@@ -21,20 +21,11 @@ from pathlib import Path
 
 import numpy as np
 
-PROTOCOL_ID = "td-v7-neural-e24-v10-final3-v1"
-VALIDATION_EPOCHS = tuple(range(10, 101, 10))
-SELECTION_EPOCHS = (80, 90, 100)
-SEEDS = (0, 1, 2, 3, 4)
-TD_RATES = ((1e-4, 1e-4), (1e-4, 1e-3), (3e-4, 3e-4),
-            (3e-4, 3e-3), (1e-3, 1e-3), (1e-3, 1e-2))
-OTHER_RATES = (1e-4, 2e-4, 3e-4, 5e-4, 7e-4, 1e-3)
-MATRIX = {
-    ("electricity", "tcn"): ("mse", "td_full", "td_scalar", "gaussian_nll"),
-    ("electricity", "patchtst"): ("mse", "td_full"),
-    ("electricity", "dlinear"): ("dlinear_mse",),
-    ("metr_la", "graph_wavenet"): ("mse", "td_full", "td_scalar", "gaussian_nll", "mae"),
-    ("fd001", "tcn"): ("mse", "td_full", "gaussian_nll"),
-}
+from .protocol import (PROTOCOL_ID, EVALUATIONS as VALIDATION_EPOCHS, SELECTION_EPOCHS,
+                       SEEDS, TD_RATES, RATES as OTHER_RATES, MATRIX as CAMPAIGN_MATRIX)
+from .validation import validate_sampling_record
+
+MATRIX = {(dataset, backbone): methods for dataset, backbone, methods in CAMPAIGN_MATRIX}
 CONFIG_KEYS = ("run_id", "dataset", "backbone", "method", "batch_size", "alpha",
                "beta", "seed", "configuration", "protocol_id")
 METRIC_KEYS = ("dataset", "backbone", "method", "batch_size", "split", "units",
@@ -204,6 +195,15 @@ def audit_campaign(manifest, results_dir, dataset="all"):
         if status["state"] not in ("complete", "numerical_failure"):
             raise ValueError("All candidates must be complete or declared numerical failures")
         name, seed = config["dataset"], config["seed"]
+        validation_path = root / "validation.json"
+        validations = read_json(validation_path) if validation_path.exists() else []
+        for record in validations:
+            subset = record.get("validation_subset")
+            if name == "electricity" or subset is not None:
+                validate_sampling_record(name, record["epoch"], subset, config["run_id"])
+                match((name, "validation_population"), subset["population_size"])
+                if name == "electricity":
+                    match((name, "validation_customer_counts"), subset["per_customer"])
         identity = status["identity"]
         if identity["config_sha256"] != digest(config) or identity["protocol_id"] != PROTOCOL_ID:
             raise ValueError("Configuration identity differs from the frozen manifest")
@@ -283,13 +283,15 @@ def select_candidates(manifest, results_dir, output_dir, dataset="all", write_ou
         for record in records:
             row = {k: config[k] for k in CONFIG_KEYS}
             row.update(record)
-            if isinstance(row.get("theta"), list):
-                row["theta"] = json.dumps(row["theta"])
+            for key in ("theta", "validation_subset"):
+                if isinstance(row.get(key), (list, dict)):
+                    row[key] = json.dumps(row[key], sort_keys=True)
             validation_rows.append(row)
         candidate_rows.append({**{k: config[k] for k in CONFIG_KEYS}, "state": status["state"],
                                "late_validation_mse": score,
                                **{k: status.get(k) for k in ("epochs_completed", "optimizer_steps", "source_draws",
-                                                            "runtime_seconds", "peak_accelerator_memory_bytes")}})
+                                                            "runtime_seconds", "discarded_runtime_seconds", "total_execution_seconds",
+                                                            "peak_accelerator_memory_bytes")}})
     scores, choices, selected_rows = [], [], []
     for name, entries in sorted(grouped.items()):
         configurations = defaultdict(list)
@@ -328,6 +330,7 @@ def select_candidates(manifest, results_dir, output_dir, dataset="all", write_ou
                 for key in ("training_unit", "epochs_completed", "n_sources", "source_draws", "partner_draws",
                             "optimizer_steps", "update_opportunities", "empty_mask_batches", "effective_original_passes",
                             "source_valid_count", "pair_valid_count", "physical_microbatch", "runtime_seconds",
+                            "discarded_runtime_seconds", "total_execution_seconds",
                             "mean_parameter_count", "total_parameter_count", "peak_accelerator_memory_bytes", "code_revision",
                             "initial_mean_sha256"):
                     record[key] = run_status.get(key)
@@ -604,6 +607,7 @@ def analyze_results(metrics_file, table_dir, figures_dir=None):
         "point_predictions": "Actual epoch/round-100 model; no test-residual correction or best-checkpoint substitution.",
         "theory_scope": "Neural networks, Adam, non-balanced application pairs and dependent inputs are empirical extensions; the manuscript's linear guarantees do not establish their performance.",
         "electricity_budget": "100 stochastic rounds of ceil(N/24) independent uniform source draws with replacement; this is not the exhaustive-training optimization trajectory.",
+        "electricity_validation": "At each round 10,20,...,100, independently sample ceil(n_customer/5) origins without replacement within every customer using a reproducible run-specific stream; compute equal-customer MSE. Each candidate has its own sample. Endpoint and readout validation for that candidate use its same round-100 sample. Training endpoint and test evaluation remain complete.",
     })
     if figures_dir is not None:
         create_figures(out, figures_dir)

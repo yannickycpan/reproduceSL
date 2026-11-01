@@ -8,7 +8,7 @@ def test_scientific_hash_compatibility_boundary(tmp_path, monkeypatch):
     agents = tmp_path / "agents"
     agents.mkdir()
     for name in ("__init__.py", "data.py", "metrics.py", "models.py", "protocol.py",
-                 "sampling.py", "train.py", "hpc.py", "analysis.py"):
+                 "sampling.py", "train.py", "validation.py", "hpc.py", "analysis.py"):
         (package / name).write_bytes(b"original\n")
     objective = agents / "fulltd_mse.py"
     objective.write_bytes(b"objective\n")

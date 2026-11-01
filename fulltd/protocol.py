@@ -43,6 +43,9 @@ def make_manifest():
                             training_unit="stochastic_round" if dataset == "electricity" else "full_epoch",
                             source_sampling="iid_uniform_with_replacement" if dataset == "electricity" else "random_reshuffling",
                             source_divisor=24 if dataset == "electricity" else 1,
+                            checkpoint_policy="epoch_end_only",
+                            validation_sampling="customer_stratified_without_replacement" if dataset == "electricity" else "full",
+                            validation_fraction=0.2 if dataset == "electricity" else 1.0,
                             validation_epochs=list(EVALUATIONS), selection_epochs=list(SELECTION_EPOCHS)))
     assert len(runs) == 630
     return runs

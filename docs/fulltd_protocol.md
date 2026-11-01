@@ -1,7 +1,10 @@
 # Frozen scientific protocol
 
-Identifier: `td-v7-neural-e24-v10-final3-v1`. The user's Electricity and validation
-amendments supersede the original exhaustive-Electricity and five-point selector.
+Identifier: `td-v7-neural-e24-v10-final3-ev20-epochckpt-v2`. The user's amendments
+supersede exhaustive Electricity training, the five-point selector, full
+Electricity validation, and mid-epoch checkpoints. The 1 November 2026 revision
+changes only the authorized validation sampling, checkpoint cadence and CPU
+execution layout; all 630 candidates and training objectives/budgets remain.
 The authoritative theory is *Learning Statistically Efficient TD Operators:
 Prediction with Sampled Neighbors and Simultaneous Full Gradients*, v7, 25 October
 2026. Its setup, full-gradient objective/updates, main results, scope and notation
@@ -81,12 +84,52 @@ score infinity. No hyperparameter pruning or grid expansion.
 
 ## Validation, endpoint metrics and diagnostics
 
-Exactly ten complete fixed validation evaluations: 10,20,...,100. For each fixed
+Exactly ten validation evaluations: 10,20,...,100. METR-LA and FD001 use their
+complete fixed validation sets. Electricity independently samples each customer's
+eligible validation windows uniformly without replacement at every evaluation,
+using `ceil(n_customer/5)` windows. The score averages the sampled MSE within each
+customer, then equally across customers. For a fixed predictor this estimates the
+original equal-customer validation MSE without bias; it has sampling variability
+and need not select the same configuration as full validation. No such unbiasedness
+claim is made for the selected minimum score.
+
+Electricity's PCG64 stream uses a fixed validation seed, stable SHA-256 run ID,
+evaluation round and customer ID. Different candidates/seeds have independently
+reproducible samples, as authorized by the user's latest correction. These streams
+never consume training/source/partner RNG state. Each record retains the parent
+index hash and per-customer population/sample counts. On the verified data this
+means 697 of 3,484 windows for each of 348 customers: 242,556 of 1,212,432 windows
+per evaluation (20.0057%, due only to integer rounding).
+
+For each fixed
 dataset/backbone/method/batch, `Score(h) = mean_{s=0..4} mean_{e in {80,90,100}}
 ValMSE(s,h,e)`. Exact ties use smaller alpha, then beta. The common selected h
 reports all five actual final models without restart, averaging or refit. All
 dataset selections must be fixed before the separate endpoint command opens test
 targets. No best-checkpoint selection or early stopping.
+
+Endpoint Electricity validation and its two frozen-readout diagnostics reuse the
+selected run's round-100 validation sample; persistence has its own reproducible
+validation sample. Every test target and the full final training evaluation set
+remain unchanged. METR-LA/FD001 endpoint validation remains complete.
+
+Weights and Adam state are saved only after an entire epoch/round and any scheduled
+validation finish: one rolling recovery checkpoint for epochs/rounds 1--99 and
+one final checkpoint at 100. No weights, optimizer state or validation partial
+sums are saved inside training or validation, including on a time-limit warning.
+An interruption resumes at the previous complete epoch and replays the incomplete
+work with the same sequences. Small interruption receipts separately record
+discarded computation. `runtime_seconds` measures the retained trajectory;
+`discarded_runtime_seconds` records graceful-interruption work that must be
+replayed; `total_execution_seconds` includes both. Hard kills can still lose
+unrecorded runtime, for which scheduler accounting is the external evidence.
+
+CPU execution uses seven Slurm array elements, one node per element and 90
+independent one-CPU/one-thread candidate processes per node. This is not
+distributed training of a model. It does not change logical batch sizes,
+gradients, sampling, rates or update counts. CPU/GPU bitwise equality is not
+asserted. Legacy results retain their old protocol identity and are not converted
+or mixed into this restart campaign.
 
 Electricity validation and reported aggregates give each retained customer equal
 weight over its available origins. Horizon1, horizon24 and all24 are retained in

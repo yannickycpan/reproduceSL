@@ -1,11 +1,12 @@
 # Verification before release
 
-Checked on 29 October 2026 with Python 3.12.14, PyTorch 2.5.1 CPU and the core
-versions in `requirements-fulltd.txt`. **112 focused tests passed.** The three
+Checked on 1 November 2026 with Python 3.12.14, PyTorch 2.5.1 CPU and the core
+versions in `requirements-fulltd.txt`. **132 focused tests passed.** The three
 shell scripts pass `sh -n`; Python compilation and Git whitespace checks pass.
 Slurm submission was exercised with mocked receipts/dry runs; no HPC jobs were
-submitted from this workstation. CUDA and the actual CityU resource settings
-must pass the supplied compute-node preflight.
+submitted from this workstation. The actual CityU CPU resource settings must
+pass the supplied compute-node preflight. No cluster speedup is claimed from
+local correctness tests.
 
 ## Mathematical and protocol checks
 
@@ -29,11 +30,24 @@ must pass the supplied compute-node preflight.
   exactly 100 training units and the actual last model. A crash after final.pt but
   before sidecars is repaired. Original execution hardware/runtime provenance is
   retained, and failed logical batches/Adam steps are counted.
-- Wall-time recovery also resumes partial validation from float64 sufficient
-  sums, including interruption at its final batch; it never selects on a partial
-  score. Mocked Slurm tests verify that only the interrupted array element is
-  requeued, and cancellation/numerical failure cannot cause a retry loop. Site
-  requeue permission and actual delivery of the warning remain untested here.
+- Checkpoint tests verify exactly 99 epoch-end recovery writes and one final
+  write for all three datasets, with no model writes inside training/validation
+  or on a warning. Interrupted work replays from the previous complete epoch;
+  weights, Adam state, counters and validation scores equal uninterrupted runs
+  on a deterministic fixture. Completing the final validation batch permits its
+  completed epoch checkpoint. A warning before epoch1 completes creates no state.
+- CPU submission tests verify array `0-6%7`, 90 single-thread/single-CPU ranks on
+  each node, all 630 indices exactly once, and a single coordinator per element.
+  Only warning-interrupted elements with durable progress requeue. Cancellation,
+  operational errors and lack of progress cannot cause retry loops. A real tiny
+  worker/trainer integration completes 100 epochs and ten validations. Live CityU
+  requeue permission, signal delivery, memory use and throughput remain untested.
+- Electricity validation tests verify per-customer ceil20% counts, sampling
+  without replacement, independent reproducible run/round streams, no mutation
+  of training RNG state, and correct equal-customer MSE. The original model and
+  readouts use the same round100 subset. Full train/test and METR-LA/FD001
+  validation sets are preserved. Forged subset records are rejected before test
+  access. The selector remains five seeds pooled over 80/90/100.
 - Preprocessing identities now verify scaler and split metadata as well as
   array bytes. Re-preparation of all three actual datasets produced identical
   numerical arrays and counts; the integrity format is `td-v7-data-2`.
@@ -86,9 +100,11 @@ The Windows CPU tests disable the host's faulty oneDNN convolution backend; the
 ordinary PyTorch CPU implementation is used for those checks. Scientific CUDA
 training is unchanged. Exact deterministic replay presumes the same software,
 device and numerical backend; cross-device bitwise equivalence is not asserted.
-Recorded runtime covers persisted execution segments. A hard kill can lose time
-spent since the last recovery save; Slurm accounting/logs retain the corresponding
-allocation evidence. Graceful wall-time continuation saves the current segment.
+`runtime_seconds` covers the retained trajectory. Graceful interruptions record
+discarded epoch work separately; `total_execution_seconds` includes retained and
+discarded time. A hard kill can lose time since the last durable save or receipt;
+Slurm accounting/logs retain allocation evidence. No partial checkpoint is written
+to avoid that loss under the user's epoch-end-only policy.
 
 ## Completion boundary and prior runs
 
@@ -97,6 +113,9 @@ acquisition, complete manifests, selection/evaluation/refit/plot pipeline and
 correctness checks are ready for the requested HPC execution. No result numbers,
 selected scientific rates, learned final theta, or superiority claims are supplied.
 The user deferred manuscript/LaTeX generation until HPC results are returned.
+The user subsequently chose to restart the HPC campaign under the 1 November
+protocol. This update neither deletes existing HPC data/results nor migrates old
+full-validation checkpoint records into the sampled-validation protocol.
 
 The four earlier FD001 runs were not present in the repository or this workspace.
 They have not been deleted, modified, counted, or imported. Compatibility cannot

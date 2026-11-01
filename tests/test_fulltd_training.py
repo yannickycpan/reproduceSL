@@ -106,14 +106,16 @@ def test_actual_100_full_epochs_and_ten_complete_validations(tmp_path):
     assert status["effective_original_passes"] == 100
 
 
-def test_mid_epoch_recovery_matches_uninterrupted_weights_optimizer_and_sequences(tmp_path, monkeypatch):
+def test_mid_epoch_interruption_replays_from_last_epoch_without_changing_updates(tmp_path, monkeypatch):
     monkeypatch.setattr(train.platform, "processor", lambda: "original-test-host")
     config = config_for()
     fitting, validation = SyntheticData(), SyntheticData(8, split="validation")
     complete = train.train_candidate(config, fitting, validation, tmp_path / "full", microbatch=128)
     stopped = train.train_candidate(config, fitting, validation, tmp_path / "resume", microbatch=128,
                                      stop_after_batches=3)
-    assert stopped["next_epoch"] == 2 and stopped["cursor"] == 256
+    assert stopped["next_epoch"] == 2 and stopped["cursor"] == 0
+    assert stopped["discarded_counters"]["source_draws"] == 256
+    assert stopped["discarded_counters"]["optimizer_steps"] == 1
     monkeypatch.setattr(train.platform, "processor", lambda: "resumed-test-host")
     resumed = train.train_candidate(config, fitting, validation, tmp_path / "resume", microbatch=128)
     assert complete["counters"] == resumed["counters"]
@@ -129,6 +131,9 @@ def test_mid_epoch_recovery_matches_uninterrupted_weights_optimizer_and_sequence
             assert original[key] == recovered[key]
     assert (tmp_path / "resume" / config["run_id"] / "final.pt").exists()
     assert resumed["hardware"]["accelerator"] == "original-test-host"
+    receipts = json.loads((tmp_path / "resume" / config["run_id"] / "interruptions.json").read_text())
+    assert resumed["discarded_runtime_seconds"] == receipts[0]["uncheckpointed_runtime_seconds"]
+    assert resumed["total_execution_seconds"] >= resumed["runtime_seconds"]
     assert [segment["hardware"]["accelerator"] for segment in resumed["execution_segments"]] == [
         "original-test-host", "resumed-test-host"]
 
@@ -142,14 +147,14 @@ def test_electricity_round_sequence_and_partners_shared_across_batch_and_config(
                                    validation, tmp_path / "b128", stop_after_batches=3)
     # stop occurs just after the last batch, before round record finalization;
     # source/partner consumption itself must be identical, including final 5.
-    assert first["counters"]["source_draws"] == second["counters"]["source_draws"] == 261
-    assert first["counters"]["partner_draws"] == second["counters"]["partner_draws"] == 261
+    assert first["discarded_counters"]["source_draws"] == second["discarded_counters"]["source_draws"] == 261
+    assert first["discarded_counters"]["partner_draws"] == second["discarded_counters"]["partner_draws"] == 261
     # Each run reads source then partner for each logical batch. The first has
     # four reads, the second six; compare full ordered source/partner streams.
     np.testing.assert_array_equal(np.concatenate(fitting.reads[0:4:2]), np.concatenate(fitting.reads[4:10:2]))
     np.testing.assert_array_equal(np.concatenate(fitting.reads[1:4:2]), np.concatenate(fitting.reads[5:10:2]))
-    assert first["counters"]["optimizer_steps"] == 2
-    assert second["counters"]["optimizer_steps"] == 3
+    assert first["discarded_counters"]["optimizer_steps"] == 2
+    assert second["discarded_counters"]["optimizer_steps"] == 3
     assert first["initial_mean_sha256"] == second["initial_mean_sha256"]
     ordinary = train.train_candidate(config_for("electricity", method="mse"), fitting, validation,
                                      tmp_path / "mse", stop_after_batches=2)
@@ -219,7 +224,7 @@ def test_nonfinite_post_adam_parameter_counts_the_actual_step(tmp_path, monkeypa
 def test_checkpoint_data_compatibility_rejects_changed_preprocessing(tmp_path):
     fitting, validation = SyntheticData(8), SyntheticData(4, split="validation")
     config = config_for()
-    train.train_candidate(config, fitting, validation, tmp_path, stop_after_batches=1)
+    train.train_candidate(config, fitting, validation, tmp_path, stop_after_batches=2)
     validation.metadata["scaler_changed"] = True
     with pytest.raises(ValueError, match="Incompatible checkpoint"):
         train.train_candidate(config, fitting, validation, tmp_path)

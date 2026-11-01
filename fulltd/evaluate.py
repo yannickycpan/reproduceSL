@@ -11,31 +11,33 @@ import torch
 from .analysis import select_candidates, write_csv, write_json
 from .data import load_dataset, sha256
 from .metrics import evaluate
-from .protocol import LAGS, digest, load_manifest
+from .protocol import LAGS, EVALUATIONS, digest, load_manifest
 from .sampling import training_universe
 from .train import make_objective_for, code_hash, seed_runtime, data_identity
+from .validation import validation_view
 
-EVALUATION_VERSION = "td-v7-endpoints-v2"
+EVALUATION_VERSION = "td-v7-endpoints-v3-e20-validation"
 
 
 def evaluation_code_hash():
     """Keep cached predictions bound to their numerical evaluation code."""
     h = hashlib.sha256()
-    for name in ("evaluate.py", "metrics.py", "refit.py"):
+    for name in ("evaluate.py", "metrics.py", "refit.py", "validation.py"):
         path = Path(__file__).with_name(name)
         h.update(name.encode())
         h.update(path.read_bytes().replace(b"\r\n", b"\n"))
     return h.hexdigest()
 
 
-def endpoint_cache_identity(config, selected_group, checkpoint_sha256, train, val, test):
+def endpoint_cache_identity(config, selected_group, checkpoint_sha256, train, val, test, validation_subset=None):
     # A later all-dataset analysis must reuse a dataset's already selected
     # models. Unrelated selections and output-directory scopes are immaterial.
     return dict(version=EVALUATION_VERSION, config_sha256=digest(config),
                 selected_group_sha256=digest(selected_group),
                 checkpoint_sha256=checkpoint_sha256,
                 training_data_sha256=data_identity(train), validation_data_sha256=data_identity(val),
-                test_data_sha256=data_identity(test), evaluation_code_sha256=evaluation_code_hash())
+                test_data_sha256=data_identity(test), validation_subset=validation_subset,
+                evaluation_code_sha256=evaluation_code_hash())
 
 
 def validate_final_checkpoint(checkpoint, config, status, train, val):
@@ -72,7 +74,18 @@ def failure_metrics(dataset, reason, status="nonfinite_prediction"):
             rows.append(dict(units="score", horizon="all", metric=metric, value=math.inf,
                              valid_count=None, aggregation="unavailable_due_to_failure",
                              metric_status=status, failure_reason=reason))
+    for row in rows:
+        row.update(validation_fields(dataset))
     return rows
+
+
+def validation_fields(dataset):
+    if not hasattr(dataset, "validation_metadata"):
+        return {}
+    subset = dataset.validation_metadata
+    return dict(validation_policy=subset["policy"], validation_epoch=subset["epoch"],
+                validation_population_size=subset["population_size"], validation_sampled_size=subset["sampled_size"],
+                validation_indices_sha256=subset["indices_sha256"], validation_run_id=subset["run_id"])
 
 
 def evaluate_endpoint(model, dataset, batch_size, device, failures, context, persistence=False):
@@ -84,6 +97,7 @@ def evaluate_endpoint(model, dataset, batch_size, device, failures, context, per
         metrics, endpoints = failure_metrics(dataset, str(error)), []
     affected = []
     for metric in metrics:
+        metric.update(validation_fields(dataset))
         if not math.isfinite(float(metric["value"])):
             if metric["metric"].startswith("rul_score"):
                 metric.setdefault("metric_status", "nonfinite_rul_score")
@@ -108,7 +122,7 @@ def evaluate_selected(manifest_path, results_dir, selection_dir, data_dir, devic
     checked = select_candidates(manifest, root, out, dataset=locked["dataset_scope"], write_outputs=False)
     if digest(checked) != digest(locked):
         raise ValueError("Selection evidence changed; review the regenerated selection before test evaluation")
-    rows, datasets = [], {}
+    rows, datasets, validation_views = [], {}, {}
     checkpoint_hashes = {}
     for group in checked["groups"]:
         if group["state"] != "selected":
@@ -120,6 +134,11 @@ def evaluate_selected(manifest_path, results_dir, selection_dir, data_dir, devic
         train, val, test, law = datasets[name]
         for run_id in group["run_ids"]:
             config = by_id[run_id]
+            endpoint_validation, subset = validation_view(val, 100, run_id)
+            validation_views[run_id] = subset
+            # Reproduce the candidate's index hashes before opening test targets.
+            expected_subsets = ({epoch: validation_view(val, epoch, run_id)[1] for epoch in EVALUATIONS}
+                                if name == "electricity" else {})
             seed_runtime(config["seed"])
             checkpoint_path = root / run_id / "final.pt"
             checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
@@ -129,6 +148,10 @@ def evaluate_selected(manifest_path, results_dir, selection_dir, data_dir, devic
                 raise ValueError("Final checkpoint validation records differ from the records used for selection")
             if checkpoint["round_records"] != json.loads((root / run_id / "rounds.json").read_text()):
                 raise ValueError("Final checkpoint source-round records differ from the campaign audit")
+            if name == "electricity":
+                for record in checkpoint["validation"]:
+                    if record.get("validation_subset") != expected_subsets.get(record["epoch"]):
+                        raise ValueError("Electricity validation subset does not reproduce from the original validation universe")
             if test is None:
                 test = load_dataset(name, data_dir, "test")
                 datasets[name] = (train, val, test, law)
@@ -136,7 +159,7 @@ def evaluate_selected(manifest_path, results_dir, selection_dir, data_dir, devic
             objective.load_state_dict(checkpoint["objective"])
             checksum = sha256(checkpoint_path)
             checkpoint_hashes[run_id] = checksum
-            cache_identity = endpoint_cache_identity(config, group, checksum, train, val, test)
+            cache_identity = endpoint_cache_identity(config, group, checksum, train, val, test, subset)
             metadata = {key: config[key] for key in ("run_id", "dataset", "backbone", "method", "batch_size", "seed", "alpha", "beta")}
             result_file = root / run_id / "endpoint_metrics.json"
             if result_file.exists():
@@ -146,7 +169,7 @@ def evaluate_selected(manifest_path, results_dir, selection_dir, data_dir, devic
                 rows.extend(saved["rows"])
                 continue
             run_rows, failures = [], []
-            for split, data in (("train", train), ("validation", val), ("test", test)):
+            for split, data in (("train", train), ("validation", endpoint_validation), ("test", test)):
                 metrics, endpoints = evaluate_endpoint(objective.model, data, batch_size, device, failures,
                                                        dict(run_id=run_id, split=split, variant="trained"))
                 run_rows.extend(dict(**metadata, split=split, variant="trained", **metric) for metric in metrics)
@@ -163,14 +186,14 @@ def evaluate_selected(manifest_path, results_dir, selection_dir, data_dir, devic
                                          reason=reason, note="No finite result is substituted for the failed diagnostic."))
                     write_json(root / run_id / "refits" / "failures.json", failures[-1])
                     for label in ("ols", "td"):
-                        for split, data in (("validation", val), ("test", test)):
+                        for split, data in (("validation", endpoint_validation), ("test", test)):
                             run_rows.extend(dict(**metadata, split=split, variant="refit_" + label, **metric)
                                             for metric in failure_metrics(data, reason, "readout_numerical_failure"))
                 if fits:
                     save_readouts(root / run_id / "refits", fits, config, checksum)
                 for label, fit in fits.items():
                     predictor = RefittedPredictor(objective.model, fit).to(device)
-                    for split, data in (("validation", val), ("test", test)):
+                    for split, data in (("validation", endpoint_validation), ("test", test)):
                         metrics, endpoints = evaluate_endpoint(predictor, data, batch_size, device, failures,
                                                                dict(run_id=run_id, split=split, variant="refit_" + label))
                         run_rows.extend(dict(**metadata, split=split, variant="refit_" + label, **metric) for metric in metrics)
@@ -187,6 +210,9 @@ def evaluate_selected(manifest_path, results_dir, selection_dir, data_dir, devic
             continue
         for split in ("val", "test"):
             data = load_dataset(name, data_dir, split)
+            if split == "val":
+                data, persistence_subset = validation_view(data, 100, name + "_persistence")
+                validation_views[name + "_persistence"] = persistence_subset
             failures = []
             metrics, _ = evaluate_endpoint(None, data, batch_size, device, failures,
                                            dict(run_id=name + "_persistence", split=split, variant="trained"), persistence=True)
@@ -198,6 +224,7 @@ def evaluate_selected(manifest_path, results_dir, selection_dir, data_dir, devic
     write_csv(out / "metrics.csv", rows)
     write_json(out / "evaluation_manifest.json", dict(selection_sha256=digest(checked), checkpoint_hashes=checkpoint_hashes,
                protocol_id=checked["protocol_id"], data_fingerprints={k: v[0].metadata for k, v in datasets.items()},
+               endpoint_validation_subsets=validation_views,
                point_prediction="actual final mean network only", refit_scope="primary TD-full TCN Electricity/FD001 only"))
     return rows
 
