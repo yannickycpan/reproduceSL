@@ -2,21 +2,23 @@
 
 Checked on 1 November 2026 with Python 3.12.14, PyTorch 2.5.1 CPU and the core
 versions in `requirements-fulltd.txt`. **176 focused tests passed** in a clean
-source export containing no legacy files or pre-existing Python caches. The five
+source export containing no legacy files or pre-existing Python caches. The
 shell scripts pass `sh -n`; Python compilation and Git whitespace checks pass.
 Slurm submission was exercised with mocked receipts/dry runs; no HPC jobs were
-submitted from this workstation. The actual CityU CPU resource settings must
-pass the supplied compute-node preflight. No cluster speedup is claimed from
+submitted from this workstation. An optional independent compute-node preflight
+is available. No cluster speedup is claimed from
 local correctness tests.
 
-After CityU rejected the one-CPU/32G preflight on `batch`, its submission was
-separated from the training allocation: `tiny` with an independent one-hour
-budget. The two training groups retain `batch`, 90 CPUs, 400G and their original
-time limits. All 33 scheduler/requeue/checkpoint-identity tests passed, including
-CLI-default regression checks for the reported rejection and confirmation that
-a failed preflight submission never queues training. Scientific and evaluation
-hashes remain unchanged. The one-hour preflight budget is an operational default,
-not a verified cluster limit; no live CityU submission was performed here.
+The two training entries submit only their requested array, with no automatic
+preflight or dependency on a preflight report/job. Data preparation and CPU checks
+are available through a separate manual submission entry, using `tiny`, one CPU,
+32G and a one-hour allocation by default. It never submits training. The two
+training groups retain `batch`, 90 CPUs, 400G and their original time limits.
+All 34 targeted scheduler/requeue/checkpoint-identity tests passed for this split,
+including direct training without any existing preflight report.
+Scientific and evaluation hashes remain unchanged. The one-hour preflight budget
+is an operational default, not a verified cluster limit; no live CityU submission
+was performed here.
 
 The branch cleanup removed 75 unused legacy source/data/cache files and the
 obsolete generic submission entry. All active imports, six objective factories,
@@ -87,7 +89,8 @@ fixtures, shell mocks, logs and generated test outputs are excluded from Git.
 - Summaries and descriptive paired comparisons are independently recomputed from
   CSV records. PDF/SVG figure generation and CSV sources pass. Persistence remains
   one deterministic result without invented seed uncertainty. Slurm tests check
-  all 630 tasks exactly once, dependencies, immutable run maps and quoted paths.
+  all 630 tasks exactly once, independent submissions without automatic preflight
+  dependencies, immutable run maps and quoted paths.
 - Endpoint caches bind to complete group selection evidence, final checkpoints,
   data and evaluation code while permitting the same selected group to be
   analyzed alone or with other datasets. Nonfinite predictions, overflowing RUL

@@ -30,6 +30,49 @@ def allocation_command(command, root):
     return "exec bash -c " + shlex.quote(body)
 
 
+def sbatch_base(args, root, logs):
+    command = ["sbatch", "--parsable", "--cpus-per-task=1", "--ntasks-per-core=1",
+               "--open-mode=append", "--chdir", str(root),
+               "--output", str(logs / "%x_%j.out"), "--error", str(logs / "%x_%j.err"), "--export=ALL"]
+    for name in ("account", "qos", "constraint"):
+        if getattr(args, name):
+            command += ["--" + name, getattr(args, name)]
+    return command
+
+
+def submit_preflight(args):
+    """Submit only the explicitly requested, independent preparation/check job."""
+    cpu_environment()
+    from .train import atomic_json
+    root = Path(__file__).resolve().parents[1]
+    data, results, logs = (Path(p).resolve() for p in (args.data_dir, args.results_dir, args.log_dir))
+    logs.mkdir(parents=True, exist_ok=True)
+    results.mkdir(parents=True, exist_ok=True)
+    preflight = [sys.executable, "-m", "fulltd.preflight", "--dataset", args.dataset,
+                 "--data-dir", str(data), "--output", str(results / f"preflight_{args.dataset}.json"),
+                 "--device", "cpu", "--threads", "1"]
+    command = sbatch_base(args, root, logs) + ["--partition", args.partition, "--time", args.time,
+        "--nodes=1", "--ntasks=1", "--ntasks-per-node=1", "--mem", args.memory,
+        "--job-name=fulltd_preflight_" + args.dataset, "--wrap", allocation_command(preflight, root)]
+    receipt = dict(preflight_job=None, dataset=args.dataset, dry_run=args.dry_run,
+                   commands=[command], state="submitting")
+    path = results / f"preflight_submission_{args.dataset}_{uuid.uuid4().hex[:12]}.json"
+    atomic_json(path, receipt)
+    print(shlex.join(command))
+    try:
+        job_id = "PREFLIGHT_JOB_ID" if args.dry_run else subprocess.check_output(command, text=True).strip().split(";")[0]
+        if not args.dry_run and not job_id.isdigit():
+            raise ValueError(f"Unexpected sbatch receipt: {job_id!r}")
+    except (OSError, subprocess.CalledProcessError, ValueError) as error:
+        receipt.update(state="submission_failed", error=str(error))
+        atomic_json(path, receipt)
+        raise RuntimeError(f"Preflight submission stopped; receipt retained in {path}") from error
+    receipt.update(preflight_job=job_id, state="dry_run" if args.dry_run else "submitted")
+    atomic_json(path, receipt)
+    print(f"Preflight submission receipt: {path}")
+    return receipt
+
+
 def load_submission(args):
     manifest = load_manifest(args.manifest)
     mapping = json.loads(Path(args.mapping).read_text())
@@ -86,15 +129,9 @@ def submit(args):
             raise ValueError("Immutable submission record changed")
         if not destination.exists():
             atomic_json(destination, payload)
-    common = ["sbatch", "--parsable", "--cpus-per-task=1",
-              "--ntasks-per-core=1", "--open-mode=append",
-              "--chdir", str(root), "--output", str(logs / "%x_%j.out"),
-              "--error", str(logs / "%x_%j.err"), "--export=ALL"]
-    for name in ("account", "qos", "constraint"):
-        if getattr(args, name):
-            common += ["--" + name, getattr(args, name)]
+    common = sbatch_base(args, root, logs)
     commands = []
-    receipt = dict(preflight_job=None, campaign_job=None, candidate_count=len(indices), pending_count=pending,
+    receipt = dict(campaign_job=None, candidate_count=len(indices), pending_count=pending,
                    array_elements=array_count, array_concurrency=args.concurrency, nodes_per_element=1,
                    tasks_per_node=args.tasks_per_node, cpus_per_task=1, threads_per_process=1,
                    memory_per_node=args.memory, dataset=args.dataset, datasets=list(datasets),
@@ -107,7 +144,7 @@ def submit(args):
         atomic_json(receipt_path, receipt)
         print(shlex.join(command))
         if args.dry_run:
-            return "PREFLIGHT_JOB_ID" if len(commands) == 1 else "CAMPAIGN_JOB_ID"
+            return "CAMPAIGN_JOB_ID"
         try:
             job_id = subprocess.check_output(command, text=True).strip().split(";")[0]
             if not job_id.isdigit():
@@ -118,16 +155,6 @@ def submit(args):
             raise RuntimeError(f"Submission stopped; accepted job IDs are retained in {receipt_path}") from error
         return job_id
 
-    preflight = [sys.executable, "-m", "fulltd.preflight", "--dataset", args.dataset,
-                 "--data-dir", str(data), "--output", str(results / f"preflight_{args.dataset}.json"),
-                 "--device", "cpu", "--threads", "1"]
-    # CityU rejects the 1-CPU/32G preflight in batch. Its partition and wall time
-    # must be independent of the much larger candidate allocations.
-    receipt["preflight_job"] = send(common + ["--partition", args.preflight_partition,
-        "--time", args.preflight_time, "--nodes=1", "--ntasks=1", "--ntasks-per-node=1",
-        "--mem", args.preflight_memory, "--job-name=fulltd_preflight_" + args.dataset,
-        "--wrap", allocation_command(preflight, root)])
-    atomic_json(receipt_path, receipt)
     supervisor = [sys.executable, "-m", "fulltd.hpc", "supervise", "--manifest", str(manifest_path),
                   "--mapping", str(mapping), "--submission-digest", submission_digest,
                   "--expected-code-hash", scientific_hash, "--data-dir", str(data),
@@ -140,7 +167,7 @@ def submit(args):
         f"--ntasks-per-node={args.tasks_per_node}", "--mem", args.memory, "--job-name=fulltd_cpu_" + args.dataset,
         "--array", f"0-{array_count - 1}%{args.concurrency}",
         "--requeue", f"--signal=B:USR1@{args.signal_seconds}",
-        "--dependency=afterok:" + receipt["preflight_job"], "--wrap", allocation_command(supervisor, root)])
+        "--wrap", allocation_command(supervisor, root)])
     receipt["state"] = "dry_run" if args.dry_run else "submitted"
     atomic_json(receipt_path, receipt)
     print(f"Submission receipt: {receipt_path}")
@@ -318,30 +345,31 @@ def main():
         parser.add_argument("--no-auto-requeue", action="store_true")
         args = parser.parse_args()
         return worker(args) if args.action == "worker" else supervise(args)
-    parser.add_argument("--manifest", default="configs/fulltd/manifest.json")
+    preflight_mode = len(sys.argv) > 1 and sys.argv[1] == "preflight"
+    if preflight_mode:
+        parser.add_argument("action", choices=("preflight",))
+    else:
+        parser.add_argument("--manifest", default="configs/fulltd/manifest.json")
+        parser.add_argument("--concurrency", type=int, default=7)
+        parser.add_argument("--tasks-per-node", type=int, default=90)
+        parser.add_argument("--microbatch", type=int, default=256)
+        parser.add_argument("--signal-seconds", type=int, default=180)
+        parser.add_argument("--no-auto-requeue", action="store_true")
     parser.add_argument("--dataset", choices=DATASET_SCOPES, default="all")
-    parser.add_argument("--partition", default="batch", help="Your approved CPU partition")
-    parser.add_argument("--concurrency", type=int, default=7)
-    parser.add_argument("--tasks-per-node", type=int, default=90)
+    parser.add_argument("--partition", default="tiny" if preflight_mode else "batch", help="Your approved CPU partition")
     for name in ("account", "qos", "constraint"):
         parser.add_argument("--" + name)
     storage = Path.home() / "scratch" / "fulltd"
     parser.add_argument("--data-dir", default=os.environ.get("FULLTD_DATA_DIR", str(storage / "data")))
     parser.add_argument("--results-dir", default=os.environ.get("FULLTD_RESULTS_DIR", str(storage / "results")))
     parser.add_argument("--log-dir", help="Defaults to RESULTS_DIR/logs")
-    parser.add_argument("--memory", default="400G", help="Total RAM PER NODE, shared by up to 90 independent processes")
-    parser.add_argument("--preflight-memory", default="32G")
-    parser.add_argument("--preflight-partition", default="tiny", help="Partition for the one-CPU preflight only")
-    parser.add_argument("--preflight-time", default="01:00:00", help="Preflight allocation limit, independent of training")
-    parser.add_argument("--time", default="3-00:00:00")
-    parser.add_argument("--microbatch", type=int, default=256)
-    parser.add_argument("--signal-seconds", type=int, default=180)
-    parser.add_argument("--no-auto-requeue", action="store_true")
+    parser.add_argument("--memory", default="32G" if preflight_mode else "400G", help="Total RAM PER NODE")
+    parser.add_argument("--time", default="01:00:00" if preflight_mode else "3-00:00:00")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if args.log_dir is None:
         args.log_dir = str(Path(args.results_dir) / "logs")
-    submit(args)
+    return submit_preflight(args) if preflight_mode else submit(args)
 
 
 if __name__ == "__main__":

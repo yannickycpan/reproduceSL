@@ -10,7 +10,7 @@ The branch contains only this campaign:
 - `agents/fulltd_*.py`: the six prescribed objectives and their common interface.
 - `fulltd/`: data preparation, fixed backbones, training, evaluation and analysis.
 - `configs/fulltd/`: the complete 630-candidate manifest and dataset manifests.
-- `scripts/`: environment/data setup, two dataset-group submission entries and analysis.
+- `scripts/`: environment/data setup, optional standalone preflight, two direct training submission entries and analysis.
 - `tests/`: reproducible mathematical, data, training and result-integrity checks.
 - `docs/`: protocol, architecture/source attribution, verification and licenses.
 

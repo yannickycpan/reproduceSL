@@ -14,4 +14,4 @@ TORCH_INDEX="${FULLTD_TORCH_INDEX:-https://download.pytorch.org/whl/cpu}"
 mkdir -p "$FULLTD_DATA_DIR"
 "$VENV/bin/python" -m pip freeze > "$FULLTD_DATA_DIR/environment-freeze.txt"
 "$VENV/bin/python" -m fulltd.download --dataset "${FULLTD_DATASET:-all}" --data-dir "$FULLTD_DATA_DIR"
-printf 'Environment and raw data ready. Preprocessing and CPU checks run in the submission preflight job.\n'
+printf 'Environment and raw data ready. Data preparation and CPU checks are available in scripts/submit_fulltd_preflight.sh.\n'
