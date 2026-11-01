@@ -13,6 +13,20 @@ RATES = (0.0001, 0.0002, 0.0003, 0.0005, 0.0007, 0.001)
 TD_RATES = ((.0001, .0001), (.0001, .001), (.0003, .0003),
             (.0003, .003), (.001, .001), (.001, .01))
 LAGS = {"electricity": (1, 24), "metr_la": (1, 3), "fd001": (1, 5)}
+DATASET_SCOPES = ("all", "electricity", "metr_la", "fd001", "metr_la_fd001")
+
+
+def datasets_for_scope(scope):
+    """Execution/analysis grouping only; never alter candidates or their IDs."""
+    if scope == "all":
+        return tuple(LAGS)
+    if scope == "metr_la_fd001":
+        return ("metr_la", "fd001")
+    if scope in LAGS:
+        return (scope,)
+    raise ValueError(f"Unknown dataset scope: {scope}")
+
+
 MATRIX = (
     ("electricity", "tcn", ("mse", "td_full", "td_scalar", "gaussian_nll")),
     ("electricity", "patchtst", ("mse", "td_full")),

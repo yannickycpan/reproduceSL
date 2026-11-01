@@ -16,13 +16,15 @@ import os
 import statistics
 import time
 import uuid
+import warnings
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 
 from .protocol import (PROTOCOL_ID, EVALUATIONS as VALIDATION_EPOCHS, SELECTION_EPOCHS,
-                       SEEDS, TD_RATES, RATES as OTHER_RATES, MATRIX as CAMPAIGN_MATRIX)
+                       SEEDS, TD_RATES, RATES as OTHER_RATES, MATRIX as CAMPAIGN_MATRIX,
+                       DATASET_SCOPES, datasets_for_scope)
 from .validation import validate_sampling_record
 
 MATRIX = {(dataset, backbone): methods for dataset, backbone, methods in CAMPAIGN_MATRIX}
@@ -178,6 +180,7 @@ def audit_campaign(manifest, results_dir, dataset="all"):
     from .protocol import digest
     from .sampling import sources_for_round, sequence_hash
     shared, checked_sources = {}, {}
+    scope = datasets_for_scope(dataset)
     counts = dict(runs=0, complete=0, numerical_failure=0, recorded_rounds=0)
 
     def match(key, value):
@@ -188,7 +191,7 @@ def audit_campaign(manifest, results_dir, dataset="all"):
         shared[key] = value
 
     for config in manifest:
-        if dataset != "all" and config["dataset"] != dataset:
+        if config["dataset"] not in scope:
             continue
         root = Path(results_dir) / config["run_id"]
         status = read_json(root / "status.json")
@@ -264,17 +267,16 @@ def audit_campaign(manifest, results_dir, dataset="all"):
 
 
 def select_candidates(manifest, results_dir, output_dir, dataset="all", write_outputs=True):
-    """Require the entire dataset's campaign before locking its selections."""
+    """Require every candidate in the requested scope before locking selection."""
     if isinstance(manifest, (str, Path)):
         manifest = read_json(manifest)
     validate_manifest(manifest)
-    if dataset not in ("all", "electricity", "metr_la", "fd001"):
-        raise ValueError("Unknown dataset scope")
+    scope = datasets_for_scope(dataset)
     root, out = Path(results_dir), Path(output_dir)
     grouped, group_evidence = defaultdict(list), defaultdict(list)
     validation_rows, candidate_rows = [], []
     for config in manifest:
-        if dataset != "all" and config["dataset"] != dataset:
+        if config["dataset"] not in scope:
             continue
         score, records, status = _validate_candidate(config, root)
         grouped[group_id(config)].append((config, score, status))
@@ -325,7 +327,10 @@ def select_candidates(manifest, results_dir, output_dir, dataset="all", write_ou
                 record.update(group_id=name, pooled_selection_score=best[0], seed_late_validation_mse=seed_score,
                               batch_definition="source_partner_pairs" if run_config["method"].startswith("td_") else "source_windows")
                 for epoch in SELECTION_EPOCHS:
-                    record[f"validation_mse_{epoch}"] = next(r["mse"] for r in validations if r["epoch"] == epoch)
+                    evaluation = next(r for r in validations if r["epoch"] == epoch)
+                    record[f"validation_mse_{epoch}"] = evaluation["mse"]
+                    if evaluation.get("mae") is not None:
+                        record[f"validation_mae_{epoch}"] = evaluation["mae"]
                 record["final_theta"] = json.dumps(validations[-1].get("theta"))
                 for key in ("training_unit", "epochs_completed", "n_sources", "source_draws", "partner_draws",
                             "optimizer_steps", "update_opportunities", "empty_mask_batches", "effective_original_passes",
@@ -517,34 +522,41 @@ def create_figures(table_dir, output_dir):
         if row["run_id"] in run_ids:
             curves[(row["dataset"], row["backbone"])].append(row)
     for key, values in sorted(curves.items()):
-        grouped = defaultdict(list)
-        for row in values:
-            grouped[(row["method"], int(row["batch_size"]), int(row["epoch"]))].append(float(row["mse"]))
-        plot_rows = []
-        fig, ax = plt.subplots(figsize=(6.5, 4.1))
-        labels = sorted({(m, b) for m, b, e in grouped})
-        for method, batch in labels:
-            y, se = [], []
-            for epoch in VALIDATION_EPOCHS:
-                v = np.asarray(grouped[(method, batch, epoch)], dtype=np.float64)
-                if len(v) != 5:
-                    raise ValueError("Selected validation curve is missing one or more seeds")
-                y.append(v.mean())
-                se.append(v.std(ddof=1) / math.sqrt(5))
-                plot_rows.append(dict(dataset=key[0], backbone=key[1], method=method, batch_size=batch,
-                                      epoch=epoch, mean=float(y[-1]), standard_error=float(se[-1]), n=5))
-            line, = ax.plot(VALIDATION_EPOCHS, y, marker="o", ms=3, label=f"{method}, B={batch}")
-            ax.fill_between(VALIDATION_EPOCHS, np.array(y)-se, np.array(y)+se, color=line.get_color(), alpha=.12)
-        ax.set_xlabel("Stochastic training round" if key[0] == "electricity" else "Full training epoch")
-        ax.set_ylabel("Ordinary validation MSE (standardized units)")
-        ax.legend(fontsize=8)
-        ax.grid(alpha=.2)
-        fig.tight_layout()
-        stem = "validation_" + "_".join(key)
-        for extension in ("pdf", "svg"):
-            fig.savefig(out / f"{stem}.{extension}", bbox_inches="tight")
-        plt.close(fig)
-        write_csv(out / f"{stem}.csv", plot_rows)
+        for metric in ("mse", "mae"):
+            if metric == "mae" and any(row.get(metric) in (None, "") for row in values):
+                warnings.warn(f"Skipping MAE validation curve for {'/'.join(key)}: "
+                              "legacy validation records lack MAE; no values are inferred.",
+                              RuntimeWarning, stacklevel=2)
+                continue
+            grouped = defaultdict(list)
+            for row in values:
+                grouped[(row["method"], int(row["batch_size"]), int(row["epoch"]))].append(float(row[metric]))
+            plot_rows = []
+            fig, ax = plt.subplots(figsize=(6.5, 4.1))
+            labels = sorted({(m, b) for m, b, e in grouped})
+            for method, batch in labels:
+                y, se = [], []
+                for epoch in VALIDATION_EPOCHS:
+                    v = np.asarray(grouped[(method, batch, epoch)], dtype=np.float64)
+                    if len(v) != 5:
+                        raise ValueError("Selected validation curve is missing one or more seeds")
+                    y.append(v.mean())
+                    se.append(v.std(ddof=1) / math.sqrt(5))
+                    plot_rows.append(dict(dataset=key[0], backbone=key[1], method=method, batch_size=batch,
+                                          metric=metric, epoch=epoch, mean=float(y[-1]),
+                                          standard_error=float(se[-1]), n=5))
+                line, = ax.plot(VALIDATION_EPOCHS, y, marker="o", ms=3, label=f"{method}, B={batch}")
+                ax.fill_between(VALIDATION_EPOCHS, np.array(y)-se, np.array(y)+se, color=line.get_color(), alpha=.12)
+            ax.set_xlabel("Stochastic training round" if key[0] == "electricity" else "Full training epoch")
+            ax.set_ylabel(f"Ordinary validation {metric.upper()} (standardized units)")
+            ax.legend(fontsize=8)
+            ax.grid(alpha=.2)
+            fig.tight_layout()
+            stem = ("validation_" if metric == "mse" else "validation_mae_") + "_".join(key)
+            for extension in ("pdf", "svg"):
+                fig.savefig(out / f"{stem}.{extension}", bbox_inches="tight")
+            plt.close(fig)
+            write_csv(out / f"{stem}.csv", plot_rows)
         theta_values = [r for r in values if r["method"].startswith("td_") and r.get("theta")]
         if theta_values:
             theta_groups = defaultdict(list)
@@ -665,7 +677,7 @@ def main():
     select.add_argument("--manifest", default="configs/fulltd/manifest.json")
     select.add_argument("--results-dir", required=True)
     select.add_argument("--output-dir", required=True)
-    select.add_argument("--dataset", default="all", choices=("all", "electricity", "metr_la", "fd001"))
+    select.add_argument("--dataset", default="all", choices=DATASET_SCOPES)
     report = commands.add_parser("summarize")
     report.add_argument("--metrics", required=True)
     report.add_argument("--table-dir", required=True)

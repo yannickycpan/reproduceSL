@@ -11,7 +11,7 @@ import torch
 from .analysis import select_candidates, write_csv, write_json
 from .data import load_dataset, sha256
 from .metrics import evaluate
-from .protocol import LAGS, EVALUATIONS, digest, load_manifest
+from .protocol import LAGS, EVALUATIONS, digest, load_manifest, datasets_for_scope
 from .sampling import training_universe
 from .train import make_objective_for, code_hash, seed_runtime, data_identity
 from .validation import validation_view
@@ -204,7 +204,7 @@ def evaluate_selected(manifest_path, results_dir, selection_dir, data_dir, devic
             rows.extend(run_rows)
     # Include deterministic persistence even when all trained methods fail.
     scope = checked["dataset_scope"]
-    names = ("electricity", "metr_la", "fd001") if scope == "all" else (scope,)
+    names = datasets_for_scope(scope)
     for name in names:
         if name == "fd001":
             continue

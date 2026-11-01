@@ -101,6 +101,10 @@ def test_actual_100_full_epochs_and_ten_complete_validations(tmp_path):
     loaded.load_state_dict(result["objective"])
     # The recorded epoch-100 MSE must describe this actual final checkpoint.
     assert validation_mse(loaded.model, validation) == pytest.approx(result["validation"][-1]["mse"], abs=1e-12)
+    assert all(set(("mse", "mae")).issubset(record) for record in result["validation"])
+    endpoint, _ = evaluate(loaded.model, validation, include_raw=False)
+    expected_mae = next(r["value"] for r in endpoint if r["metric"] == "mae" and r["horizon"] == "all")
+    assert result["validation"][-1]["mae"] == expected_mae
     status = json.loads((tmp_path / config["run_id"] / "status.json").read_text())
     assert status["state"] == "complete" and status["epochs_completed"] == 100
     assert status["effective_original_passes"] == 100

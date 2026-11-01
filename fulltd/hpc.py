@@ -10,7 +10,7 @@ import subprocess
 import sys
 import uuid
 
-from .protocol import digest, load_manifest
+from .protocol import DATASET_SCOPES, datasets_for_scope, digest, load_manifest
 
 THREAD_VARIABLES = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
                     "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "BLIS_NUM_THREADS")
@@ -42,7 +42,8 @@ def submit(args):
         raise ValueError("Slurm warning interval must be at most 65535 seconds")
     root = Path(__file__).resolve().parents[1]
     manifest = load_manifest(Path(args.manifest).resolve())
-    indices = [i for i, r in enumerate(manifest) if args.dataset == "all" or r["dataset"] == args.dataset]
+    datasets = datasets_for_scope(args.dataset)
+    indices = [i for i, r in enumerate(manifest) if r["dataset"] in datasets]
     if not indices:
         raise ValueError("No candidates selected")
     array_count = math.ceil(len(indices) / args.tasks_per_node)
@@ -88,7 +89,8 @@ def submit(args):
     receipt = dict(preflight_job=None, campaign_job=None, candidate_count=len(indices), pending_count=pending,
                    array_elements=array_count, array_concurrency=args.concurrency, nodes_per_element=1,
                    tasks_per_node=args.tasks_per_node, cpus_per_task=1, threads_per_process=1,
-                   memory_per_node=args.memory, dataset=args.dataset, dry_run=args.dry_run, commands=commands,
+                   memory_per_node=args.memory, dataset=args.dataset, datasets=list(datasets),
+                   dry_run=args.dry_run, commands=commands,
                    scientific_code_sha256=scientific_hash, state="submitting")
     receipt_path = results / f"submission_{args.dataset}_{uuid.uuid4().hex[:12]}.json"
 
@@ -112,7 +114,8 @@ def submit(args):
                  "--data-dir", str(data), "--output", str(results / f"preflight_{args.dataset}.json"),
                  "--device", "cpu", "--threads", "1"]
     receipt["preflight_job"] = send(common + ["--nodes=1", "--ntasks=1", "--ntasks-per-node=1",
-        "--mem", args.preflight_memory, "--job-name=fulltd_preflight", "--wrap", shlex.join(preflight)])
+        "--mem", args.preflight_memory, "--job-name=fulltd_preflight_" + args.dataset,
+        "--wrap", shlex.join(preflight)])
     atomic_json(receipt_path, receipt)
     supervisor = [sys.executable, "-m", "fulltd.hpc", "supervise", "--manifest", str(manifest_path),
                   "--mapping", str(mapping), "--submission-digest", submission_digest,
@@ -122,7 +125,7 @@ def submit(args):
     if args.no_auto_requeue:
         supervisor.append("--no-auto-requeue")
     receipt["campaign_job"] = send(common + ["--nodes=1", f"--ntasks={args.tasks_per_node}",
-        f"--ntasks-per-node={args.tasks_per_node}", "--mem", args.memory, "--job-name=fulltd_cpu",
+        f"--ntasks-per-node={args.tasks_per_node}", "--mem", args.memory, "--job-name=fulltd_cpu_" + args.dataset,
         "--array", f"0-{array_count - 1}%{args.concurrency}",
         "--requeue", f"--signal=B:USR1@{args.signal_seconds}",
         "--dependency=afterok:" + receipt["preflight_job"], "--wrap", "exec " + shlex.join(supervisor)])
@@ -222,7 +225,7 @@ def _supervise(args, stop_requested, warning):
     attempt = Path(args.results_dir) / "allocation_attempts" / f"{job}_{uuid.uuid4().hex}"
     attempt.mkdir(parents=True, exist_ok=False)
     command = ["srun", "--nodes=1", f"--ntasks={task_count}",
-               f"--ntasks-per-node={args.tasks_per_node}", "--cpus-per-task=1", "--ntasks-per-core=1",
+               f"--ntasks-per-node={task_count}", "--cpus-per-task=1", "--ntasks-per-core=1",
                "--cpu-bind=cores", "--kill-on-bad-exit=0", "--wait=0", "--mpi=none",
                "--output", str(Path(args.log_dir) / f"{job}_rank_%t.out"),
                "--error", str(Path(args.log_dir) / f"{job}_rank_%t.err"), "--open-mode=append",
@@ -304,7 +307,7 @@ def main():
         args = parser.parse_args()
         return worker(args) if args.action == "worker" else supervise(args)
     parser.add_argument("--manifest", default="configs/fulltd/manifest.json")
-    parser.add_argument("--dataset", choices=("all", "electricity", "metr_la", "fd001"), default="all")
+    parser.add_argument("--dataset", choices=DATASET_SCOPES, default="all")
     parser.add_argument("--partition", default="batch", help="Your approved CPU partition")
     parser.add_argument("--concurrency", type=int, default=7)
     parser.add_argument("--tasks-per-node", type=int, default=90)

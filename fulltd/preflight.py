@@ -12,14 +12,14 @@ import numpy as np
 import torch
 
 from .data import load_dataset
-from .protocol import LAGS, make_manifest
+from .protocol import DATASET_SCOPES, LAGS, datasets_for_scope, make_manifest
 from .sampling import rng_for, sources_for_round, training_universe
 from .train import atomic_json, logical_backward, make_objective_for, seed_runtime, finite_gradients
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset", default="all", choices=("all", *LAGS))
+    parser.add_argument("--dataset", default="all", choices=DATASET_SCOPES)
     parser.add_argument("--data-dir", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--device", choices=("cpu",), default="cpu")
@@ -29,10 +29,10 @@ def main():
     if torch.get_num_interop_threads() != 1:
         torch.set_num_interop_threads(1)
     from . import data as preparation
-    report = dict(hardware=dict(torch=torch.__version__, cuda=torch.version.cuda,
+    report = dict(scope=args.dataset, hardware=dict(torch=torch.__version__, cuda=torch.version.cuda,
                                device="cpu", threads_per_process=1),
                   storage_free_bytes=shutil.disk_usage(args.data_dir).free, datasets={}, throughput=[])
-    for name in LAGS if args.dataset == "all" else [args.dataset]:
+    for name in datasets_for_scope(args.dataset):
         metadata_path = Path(args.data_dir) / "processed" / name / "metadata.json"
         if not metadata_path.exists():
             getattr(preparation, "prepare_" + name)(args.data_dir)

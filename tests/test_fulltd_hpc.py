@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from fulltd.hpc import THREAD_VARIABLES, load_submission, submit
 from fulltd.protocol import make_manifest
@@ -34,6 +34,42 @@ def option(command, name):
 
 
 class SubmissionTests(unittest.TestCase):
+    def test_split_submissions_partition_canonical_630_indices_without_overlap(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
+            root = Path(tmp)
+            path = root / "manifest.json"
+            canonical = make_manifest()
+            path.write_text(json.dumps(canonical))
+            maps = []
+            frozen_paths = []
+            for scope, count, limit, concurrency, last in (
+                    ("electricity", 300, "3-00:00:00", 3, 30),
+                    ("metr_la_fd001", 330, "12:00:00", 4, 60)):
+                args = arguments(root, path, dataset=scope, dry_run=True, time=limit, concurrency=concurrency)
+                receipt = submit(args)
+                preflight, campaign = receipt["commands"]
+                self.assertEqual(receipt["candidate_count"], count)
+                self.assertEqual(receipt["array_elements"], 4)
+                self.assertEqual(option(campaign, "--array"), f"0-3%{concurrency}")
+                self.assertEqual(option(campaign, "--time"), limit)
+                self.assertEqual(option(wrapped(preflight), "--dataset"), scope)
+                self.assertIn(f"preflight_{scope}.json", option(wrapped(preflight), "--output"))
+                argv = wrapped(campaign)
+                frozen = argparse.Namespace(manifest=option(argv, "--manifest"), mapping=option(argv, "--mapping"),
+                                            submission_digest=option(argv, "--submission-digest"))
+                frozen_manifest, indices = load_submission(frozen)
+                self.assertEqual(frozen_manifest, canonical)
+                self.assertEqual([len(indices[start:start + 90]) for start in range(0, count, 90)], [90, 90, 90, last])
+                expected = {"electricity"} if scope == "electricity" else {"metr_la", "fd001"}
+                self.assertEqual({canonical[i]["dataset"] for i in indices}, expected)
+                maps.append(indices)
+                frozen_paths.append(frozen.mapping)
+            self.assertFalse(set(maps[0]) & set(maps[1]))
+            self.assertEqual(sorted(maps[0] + maps[1]), list(range(630)))
+            self.assertNotEqual(*frozen_paths)
+            self.assertEqual(len(list(Path(args.results_dir).glob("submission_electricity_*.json"))), 1)
+            self.assertEqual(len(list(Path(args.results_dir).glob("submission_metr_la_fd001_*.json"))), 1)
+
     def test_all_630_indices_once_in_seven_90_process_elements(self):
         with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
             root = Path(tmp)
@@ -137,6 +173,38 @@ class SubmissionTests(unittest.TestCase):
             for changes in (dict(tasks_per_node=0), dict(concurrency=0), dict(signal_seconds=65536)):
                 with self.subTest(changes=changes), self.assertRaises(ValueError):
                     submit(arguments(root, root / "not-needed.json", **changes))
+
+
+class ScopedPreflightTests(unittest.TestCase):
+    def test_only_requested_datasets_are_prepared_and_verified(self):
+        from fulltd import preflight
+        for scope, expected in (("electricity", ["electricity"]),
+                                ("metr_la_fd001", ["metr_la", "fd001"])):
+            with self.subTest(scope=scope), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                dataset = MagicMock()
+                dataset.__len__.return_value = 8
+                dataset.metadata = {"fingerprint": "fixture"}
+                argv = ["fulltd.preflight", "--dataset", scope, "--data-dir", str(root),
+                        "--output", str(root / "preflight.json")]
+                with patch("sys.argv", argv), patch("fulltd.preflight.make_manifest", return_value=[]), \
+                        patch("fulltd.preflight.load_dataset", return_value=dataset) as load, \
+                        patch("fulltd.preflight.training_universe", return_value=(dataset, None, [])), \
+                        patch("fulltd.data.prepare_electricity") as electricity, \
+                        patch("fulltd.data.prepare_metr_la") as traffic, \
+                        patch("fulltd.data.prepare_fd001") as engines, \
+                        patch("fulltd.data.verify_dataset") as verify, \
+                        patch("fulltd.preflight.torch.set_num_threads"), \
+                        patch("fulltd.preflight.torch.get_num_interop_threads", return_value=1), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    preflight.main()
+                self.assertEqual([call.args[0] for call in load.call_args_list], expected)
+                self.assertEqual([call.args[0] for call in verify.call_args_list], expected)
+                for name, prepare in (("electricity", electricity), ("metr_la", traffic), ("fd001", engines)):
+                    self.assertEqual(prepare.call_count, int(name in expected))
+                report = json.loads((root / "preflight.json").read_text())
+                self.assertEqual(report["scope"], scope)
+                self.assertEqual(list(report["datasets"]), expected)
 
 
 if __name__ == "__main__":

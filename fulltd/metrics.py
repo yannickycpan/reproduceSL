@@ -103,16 +103,19 @@ def evaluate(model, dataset, batch_size=256, device="cpu", persistence=False, in
 
 
 @torch.no_grad()
-def validation_mse(model, dataset, batch_size=256, device="cpu", stop_requested=None):
-    """Score the supplied full set or stratified view, never a partial score.
+def validation_scores(model, dataset, batch_size=256, device="cpu", stop_requested=None):
+    """All-horizon standardized MSE and MAE, never a partial score.
 
     An interruption returns None; validation restarts from its beginning after
     recovery from the last durable training boundary. No cursor/sums are saved.
+    Electricity/FD001 average within each entity and then across entities;
+    METR-LA averages all valid scalar targets. Only these two scores are reduced.
     """
     if batch_size < 1 or len(dataset) < 1:
         raise ValueError("Positive validation batch and nonempty dataset required")
     model.eval()
-    sums = MetricSums(dataset.dataset in ("electricity", "fd001"))
+    equal_entity = dataset.dataset in ("electricity", "fd001")
+    sums = {}
     for start in range(0, len(dataset), batch_size):
         if stop_requested is not None and stop_requested():
             return None
@@ -121,6 +124,37 @@ def validation_mse(model, dataset, batch_size=256, device="cpu", stop_requested=
         batch = dataset.get_batch(ids)
         x = torch.as_tensor(batch["x"], dtype=torch.float32, device=device)
         prediction = model(x).detach().cpu().numpy()
-        sums.add(prediction, batch["y"], batch["mask"], dataset.entity_ids[ids])
-    return next(r["value"] for r in sums.records("standardized")
-                if r["metric"] == "mse" and r["horizon"] == "all")
+        error = np.asarray(prediction, np.float64) - np.asarray(batch["y"], np.float64)
+        mask = np.asarray(batch["mask"], bool)
+        if error.shape != mask.shape:
+            raise ValueError("Metric mask shape mismatch")
+        entities = np.asarray(dataset.entity_ids[ids])
+        for entity in np.unique(entities) if equal_entity else [0]:
+            if equal_entity:
+                select = entities == entity
+                values = error[select][mask[select]]
+            else:
+                values = error[mask]
+            if not np.isfinite(values).all():
+                raise FloatingPointError("Nonfinite point predictions")
+            previous = sums.get(int(entity), np.zeros(3, np.float64))
+            with np.errstate(over="ignore", invalid="ignore"):
+                sums[int(entity)] = previous + [np.sum(np.abs(values)), np.sum(values * values), len(values)]
+    totals = np.array([value for value in sums.values() if value[2] > 0])
+    if not len(totals):
+        raise ValueError("No observed targets for metric")
+    if equal_entity:
+        mae = np.mean(totals[:, 0] / totals[:, 2])
+        mse = np.mean(totals[:, 1] / totals[:, 2])
+    else:
+        mae = totals[:, 0].sum() / totals[:, 2].sum()
+        mse = totals[:, 1].sum() / totals[:, 2].sum()
+    if not np.isfinite([mse, mae]).all():
+        raise FloatingPointError("Nonfinite validation MSE/MAE")
+    return dict(mse=float(mse), mae=float(mae))
+
+
+def validation_mse(model, dataset, batch_size=256, device="cpu", stop_requested=None):
+    """Compatibility wrapper; training records both validation_scores outputs."""
+    scores = validation_scores(model, dataset, batch_size, device, stop_requested)
+    return None if scores is None else scores["mse"]

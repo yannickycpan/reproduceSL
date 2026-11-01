@@ -1,7 +1,7 @@
 # Verification before release
 
 Checked on 1 November 2026 with Python 3.12.14, PyTorch 2.5.1 CPU and the core
-versions in `requirements-fulltd.txt`. **132 focused tests passed.** The three
+versions in `requirements-fulltd.txt`. **174 focused tests passed.** The five
 shell scripts pass `sh -n`; Python compilation and Git whitespace checks pass.
 Slurm submission was exercised with mocked receipts/dry runs; no HPC jobs were
 submitted from this workstation. The actual CityU CPU resource settings must
@@ -48,6 +48,17 @@ local correctness tests.
   readouts use the same round100 subset. Full train/test and METR-LA/FD001
   validation sets are preserved. Forged subset records are rejected before test
   access. The selector remains five seeds pooled over 80/90/100.
+- The all-horizon validation-only accumulator returns both MSE and MAE with
+  bitwise agreement against the previous metric path on tested complete/masked
+  tensors, unequal entity counts and multiple batch sizes. It performs no
+  per-horizon/RMSE reductions. Training records both values at all ten scheduled
+  evaluations, and final endpoint metrics retain their full reporting scope.
+- Independent Electricity and METR-LA/FD001 submissions cover disjoint sets of
+  300 and 330 canonical indices (90/90/90/30 and 90/90/90/60 ranks). Scoped
+  preprocessing/selection/evaluation avoid unrequested datasets. Combined
+  METR-LA/FD001 selection succeeds without any Electricity results and blocks
+  incomplete requested runs. Changing MAE cannot change MSE-selected rates.
+  Both MSE and MAE validation curves are generated from retained records.
 - Preprocessing identities now verify scaler and split metadata as well as
   array bytes. Re-preparation of all three actual datasets produced identical
   numerical arrays and counts; the integrity format is `td-v7-data-2`.

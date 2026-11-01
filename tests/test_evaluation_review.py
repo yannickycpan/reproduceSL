@@ -46,6 +46,30 @@ def test_endpoint_cache_is_independent_of_other_dataset_selections(monkeypatch):
     assert first != endpoint.endpoint_cache_identity(config, group, "checkpoint", train, val, test)
 
 
+def test_combined_scope_all_failed_persistence_never_loads_electricity(tmp_path, monkeypatch):
+    manifest = make_manifest()
+    manifest_path = tmp_path / "manifest.json"
+    analysis.write_json(manifest_path, manifest)
+    selected = dict(dataset_scope="metr_la_fd001", protocol_id=manifest[0]["protocol_id"],
+                    groups=[dict(dataset=name, state="all_configurations_failed", run_ids=[])
+                            for name in ("metr_la", "fd001")])
+    out = tmp_path / "out"
+    analysis.write_json(out / "selections.json", selected)
+    monkeypatch.setattr(endpoint, "select_candidates", lambda *args, **kwargs: selected)
+    reads = []
+    def load(name, data_dir, split):
+        assert name == "metr_la", "Unrequested dataset read"
+        reads.append((name, split))
+        return SimpleNamespace(dataset=name, split=split)
+    monkeypatch.setattr(endpoint, "load_dataset", load)
+    monkeypatch.setattr(endpoint, "validation_view", lambda data, epoch, run_id: (data, {"full": True}))
+    monkeypatch.setattr(endpoint, "evaluate_endpoint", lambda *args, **kwargs: (
+        [dict(units="mph", horizon="all", metric="mse", value=1.)], []))
+    rows = endpoint.evaluate_selected(manifest_path, tmp_path / "runs", out, tmp_path / "data")
+    assert reads == [("metr_la", "val"), ("metr_la", "test")]
+    assert all(row["dataset"] == "metr_la" and row["method"] == "last_observation" for row in rows)
+
+
 @pytest.mark.parametrize("kind", ["json", "csv"])
 def test_interrupted_sidecar_publication_preserves_previous_evidence(tmp_path, monkeypatch, kind):
     path = tmp_path / f"records.{kind}"

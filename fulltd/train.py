@@ -18,7 +18,7 @@ import torch
 from . import PROTOCOL_ID
 from .protocol import EVALUATIONS, LAGS, digest, load_manifest, validate_config
 from .sampling import rng_for, sources_for_round, sequence_hash, training_universe
-from .metrics import validation_mse
+from .metrics import validation_scores
 from .validation import validation_view
 
 
@@ -347,13 +347,14 @@ def train_candidate(config, train_data, val_data, result_root, device="cpu", mic
                 return pause_for_allocation()
             if epoch in EVALUATIONS:
                 validation_data, validation_subset = validation_view(val_data, epoch, config["run_id"])
-                mse = validation_mse(objective.model, validation_data, physical, device,
-                                     stop_requested=stop_requested)
-                if mse is None:
+                scores = validation_scores(objective.model, validation_data, physical, device,
+                                           stop_requested=stop_requested)
+                if scores is None:
                     return pause_for_allocation()
-                if not math.isfinite(mse):
-                    raise FloatingPointError("Nonfinite validation MSE")
-                validation.append(dict(epoch=epoch, mse=mse, optimizer_steps=counters["optimizer_steps"],
+                if not all(math.isfinite(scores[key]) for key in ("mse", "mae")):
+                    raise FloatingPointError("Nonfinite validation metric")
+                validation.append(dict(epoch=epoch, mse=scores["mse"], mae=scores["mae"],
+                                       optimizer_steps=counters["optimizer_steps"],
                                        validation_subset=validation_subset,
                                        theta=objective.theta.detach().cpu().tolist() if td else None))
             round_records.append(dict(epoch=epoch, source_draws=len(sources), source_sha256=source_sha,

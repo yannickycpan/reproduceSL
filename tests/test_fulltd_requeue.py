@@ -173,6 +173,21 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(option(command, "--task-count"), "3")
         self.assert_restored()
 
+    def test_last_partial_element_launches_only_remaining_ranks(self):
+        # Five candidates grouped into 3+2: no phantom sixth candidate.
+        self.mapping = self.mapping[:5]
+        Path(self.args.mapping).write_text(json.dumps(self.mapping))
+        self.args.submission_digest = digest(dict(manifest=self.manifest, indices=self.mapping))
+        self.simulate_step(["complete", "complete"], warning=False)
+        receipt = supervise(self.args)
+        self.assertEqual(receipt["state"], "complete")
+        command = self.launch.call_args.args[0]
+        self.assertIn("--ntasks=2", command)
+        self.assertIn("--ntasks-per-node=2", command)
+        self.assertEqual(option(command, "--offset"), "3")
+        self.assertEqual(option(command, "--task-count"), "2")
+        self.scheduler.assert_not_called()
+
     def test_finished_or_numerical_failure_only_does_not_requeue(self):
         self.simulate_step(["complete", "numerical_failure", "complete"])
         self.assertEqual(supervise(self.args)["state"], "complete")

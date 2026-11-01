@@ -93,6 +93,13 @@ original equal-customer validation MSE without bias; it has sampling variability
 and need not select the same configuration as full validation. No such unbiasedness
 claim is made for the selected minimum score.
 
+During training each validation pass accumulates only the all-horizon standardized
+MSE and MAE in float64. Its masks, per-customer/per-engine weighting and reduction
+order are unchanged; per-horizon statistics and RMSE are omitted from this inner
+loop. Both measures are recorded at all ten evaluations and can be plotted. MSE
+alone selects the common configuration; MAE is descriptive. Final endpoint
+evaluation still supplies all previously prescribed horizon-specific/raw metrics.
+
 Electricity's PCG64 stream uses a fixed validation seed, stable SHA-256 run ID,
 evaluation round and customer ID. Different candidates/seeds have independently
 reproducible samples, as authorized by the user's latest correction. These streams
@@ -130,6 +137,16 @@ distributed training of a model. It does not change logical batch sizes,
 gradients, sampling, rates or update counts. CPU/GPU bitwise equality is not
 asserted. Legacy results retain their old protocol identity and are not converted
 or mixed into this restart campaign.
+
+The campaign may also be submitted independently as Electricity (300 candidates)
+and METR-LA plus FD001 (330 candidates). Both use the same original manifest indices
+and run IDs. Default array concurrency is three and four nodes respectively, so
+both submissions together use at most seven candidate nodes. The respective
+72-hour and 12-hour allocation limits are operational defaults, not measured
+completion times or changes to the 100-epoch/round budget. Either group can be
+selected/evaluated after all its own candidates finish or fail numerically;
+unrequested datasets are not read. A later combined analysis uses the same chosen
+models and compatible endpoint caches.
 
 Electricity validation and reported aggregates give each retained customer equal
 weight over its available origins. Horizon1, horizon24 and all24 are retained in
