@@ -115,7 +115,7 @@ for config in configs:
 print('METR-LA Graph WaveNet: 210 canonical candidates')
 print('Counts:', ', '.join(f'{key}={value}' for key, value in counts.items()))
 print(f'Unfinished: {len(pending)}')
-print('Resources: 16 CPU workers/node, physical microbatch 32, node memory 400G, 12h, concurrency 2')
+print('Resources: 32 CPU workers/node, physical microbatch 32, node memory 400G, 18h, concurrency 2')
 print('Logical batches (128/256), updates, epochs, and scientific code are unchanged.')
 if not pending:
     print('Nothing to submit.')
@@ -139,8 +139,8 @@ else:
     os.replace(temporary, subset)
 print('Submitting pending METR-LA runs with the existing fulltd.hpc runner:', subset, flush=True)
 subprocess.run([sys.executable, '-m', 'fulltd.hpc', '--manifest', str(subset),
-                '--dataset', 'metr_la', '--partition', 'batch', '--time', '12:00:00',
-                '--concurrency', '2', '--tasks-per-node', '16', '--microbatch', '32',
+                '--dataset', 'metr_la', '--partition', 'batch', '--time', '18:00:00',
+                '--concurrency', '2', '--tasks-per-node', '32', '--microbatch', '32',
                 '--memory', '400G', '--data-dir', os.environ['FULLTD_DATA_DIR'],
                 '--results-dir', str(results), '--log-dir', str(results / 'logs')], check=True)
 PY
