@@ -75,6 +75,19 @@ def classify(config: dict, results: Path, code_hash: str) -> str:
     return "start_epoch_1"
 
 
+def validate_prepared_data(configs: list[dict], results: Path,
+                           train_hash: str, val_hash: str) -> None:
+    """An existing terminal result must describe the SAME prepared FD001 data."""
+    for config in configs:
+        path = results / config["run_id"] / "status.json"
+        if not path.is_file():
+            continue
+        identity = (read_json(path).get("identity") or {})
+        if (identity.get("data_sha256") != train_hash
+                or identity.get("validation_sha256") != val_hash):
+            raise RuntimeError(f"Existing Gamma result uses different FD001 processed data: {path}")
+
+
 def worker(args) -> int:
     cpu_environment()  # Before torch or numpy imports.
     os.environ["PYTHONUNBUFFERED"] = "1"
@@ -137,11 +150,15 @@ def run_campaign(args) -> int:
         return 0
 
     from fulltd.data import verify_dataset, load_dataset
+    from fulltd.sampling import training_universe
+    from fd001_gamma.common import data_identity
+    from fd001_gamma.protocol import LAGS
     fingerprint = verify_dataset("fd001", data)
     # Verifying the processed test file's SHA is an integrity check, not reading
     # test targets into the training or validation-selection procedure.
-    for split in ("train", "val"):
-        load_dataset("fd001", data, split)
+    train, _, _ = training_universe(load_dataset("fd001", data, "train"), LAGS)
+    val = load_dataset("fd001", data, "val")
+    validate_prepared_data(chosen, results, data_identity(train), data_identity(val))
     print(f"Verified FD001 processed-data fingerprint: {fingerprint}", flush=True)
     results.mkdir(parents=True, exist_ok=True)
     root = Path(__file__).resolve().parents[1]
