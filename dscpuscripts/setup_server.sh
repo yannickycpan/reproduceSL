@@ -78,6 +78,6 @@ echo "Installing pinned CPU PyTorch and experiment dependencies with uv..."
 "$UV" pip install --python "$FULLTD_ENV/bin/python" -r "$ROOT/requirements-fulltd.txt"
 "$UV" pip check --python "$FULLTD_ENV/bin/python"
 "$UV" pip freeze --python "$FULLTD_ENV/bin/python" > "$FULLTD_DATA_DIR/environment-freeze.txt"
-"$FULLTD_ENV/bin/python" -c 'import torch, numpy, pandas, scipy, matplotlib; print("Verified:", torch.__version__, "CPU PyTorch", numpy.__version__)'
+"$FULLTD_ENV/bin/python" -c 'import torch, numpy, pandas, scipy, matplotlib; assert torch.__version__.split("+")[0] == "2.5.1"; assert torch.version.cuda is None and getattr(torch.version, "hip", None) is None, "Unexpected GPU PyTorch build"; print("Verified CPU PyTorch:", torch.__version__, "NumPy:", numpy.__version__)'
 echo "CPU environment ready: $FULLTD_ENV"
 echo "Next: bash dscpuscripts/download_data.sh fd001"
