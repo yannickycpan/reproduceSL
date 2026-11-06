@@ -26,10 +26,18 @@ git switch fullTD
 git pull --ff-only origin fullTD
 ```
 
-`setup_server.sh` installs the existing version-pinned CPU requirements.
-It accepts Python 3.10, 3.11 or 3.12 (Ubuntu 22.04 commonly uses 3.10).
+`setup_server.sh` installs the existing version-pinned CPU requirements
+with a standalone `uv` executable, **without Python pip, ensurepip, or sudo**.
+It reuses an installed `uv` or downloads the official Astral installer into
+`~/scratch/fulltd/.uv-bin/`; it does not modify shell profiles or system Python.
+It also reuses an existing pip-less virtual environment without deleting it.
+The official installer and Python package indexes require internet access.
+If downloading `uv` is blocked, obtain its standalone Linux binary on another
+machine, copy it to the server, and run `FULLTD_UV=/absolute/path/to/uv bash
+dscpuscripts/setup_server.sh`.
+
+The script accepts Python 3.10, 3.11 or 3.12 (Ubuntu 22.04 commonly uses 3.10).
 If needed, specify an interpreter with `FULLTD_PYTHON=/path/to/python`.
-The script will not upgrade system Python or need administrator access.
 
 `download_data.sh fd001` reuses the original NASA C-MAPSS downloader,
 retains SHA-256/source sidecars, performs the original train/val/test split
