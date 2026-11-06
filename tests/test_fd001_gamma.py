@@ -423,6 +423,31 @@ def test_dry_run_writes_nothing_and_duplicate_refusal(submit_env, monkeypatch):
     assert not submit_env[1].exists()
 
 
+@pytest.mark.parametrize(('stdout', 'expected_ids'), [
+    ('', []),
+    ('739296\n', ['739296']),
+    ('718378_2\n718378_3\n', ['718378_2', '718378_3']),
+    ('739296_[0-5]\n', ['739296_[0-5]']),
+])
+def test_gamma_scheduler_query_filters_other_jobs_and_accepts_arrays(monkeypatch, stdout, expected_ids):
+    monkeypatch.setenv('USER', 'fixture')
+    def fake_run(command, **kwargs):
+        assert command == ['squeue', '--array', '--noheader', '--user', 'fixture',
+                           '--name', hpc.JOB_NAME, '--format', '%i']
+        assert kwargs == dict(check=True, text=True, capture_output=True)
+        return SimpleNamespace(stdout=stdout)
+    monkeypatch.setattr(hpc.subprocess, 'run', fake_run)
+    assert hpc.queued_jobs() == [(job_id, hpc.JOB_NAME, 'queued') for job_id in expected_ids]
+
+
+@pytest.mark.parametrize('stdout', ['JOBID\n', 'bogus|name|RUNNING\n', 'Last update in 13 seconds ago\n'])
+def test_gamma_scheduler_rejects_unexpected_output_with_diagnostics(monkeypatch, stdout):
+    monkeypatch.setenv('USER', 'fixture')
+    monkeypatch.setattr(hpc.subprocess, 'run', lambda *args, **kwargs: SimpleNamespace(stdout=stdout))
+    with pytest.raises(RuntimeError, match='Raw response'):
+        hpc.queued_jobs()
+
+
 def test_scheduler_failure_closed(monkeypatch):
     monkeypatch.setenv('USER', 'fixture')
     monkeypatch.setattr(hpc.subprocess, 'run', Mock(side_effect=subprocess.CalledProcessError(1, ['squeue'])))
