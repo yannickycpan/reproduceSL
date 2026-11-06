@@ -237,6 +237,7 @@ def run_campaign(args) -> int:
                         if terminal in ("complete", "numerical_failure"):
                             receipt["completed"].append(dict(run_id=run_id, state=terminal))
                             print(f"Finished {run_id}: {terminal}", flush=True)
+                            atomic_json(receipt_path, receipt)
                             continue
                         return_code = 1
                     if return_code == 75 and stopping:
