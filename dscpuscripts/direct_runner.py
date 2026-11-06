@@ -45,21 +45,62 @@ def available_physical_cores() -> int:
 
 
 def cpu_idle_fraction(seconds: float = 0.75) -> float:
-    """Short, system-wide CPU-idle sample; unlike load average, excludes I/O wait."""
-    def cpu_totals():
-        with Path("/proc/stat").open(encoding="utf-8") as source:
-            fields = source.readline().split()
-        if not fields or fields[0] != "cpu":
-            raise ValueError("Linux /proc/stat CPU summary unavailable")
-        counters = [int(v) for v in fields[1:9]]
-        return sum(counters), counters[3] + counters[4]
+    """Estimate idle *physical* cores from both SMT siblings of each core.
 
-    total0, idle0 = cpu_totals()
+    Using a system-wide fraction of 512 logical threads can overestimate free
+    cores when one thread on each of 256 physical cores is already busy.
+    Taking the minimum idle fraction across each core's siblings avoids that
+    particular overcommit. This is a short snapshot, not a scheduler.
+    """
+    affinity = (os.sched_getaffinity(0) if hasattr(os, "sched_getaffinity")
+                else set(range(os.cpu_count() or 1)))
+    groups = {}
+    for cpu in affinity:
+        base = Path(f"/sys/devices/system/cpu/cpu{cpu}/topology")
+        try:
+            package = int((base / "physical_package_id").read_text().strip())
+            core = int((base / "core_id").read_text().strip())
+        except (OSError, ValueError):
+            # Unknown topology: treat each allowed logical CPU as a group.
+            groups = {(cpu,): [cpu] for cpu in affinity}
+            break
+        groups.setdefault((package, core), []).append(cpu)
+
+    def snapshots():
+        counters = {}
+        with Path("/proc/stat").open(encoding="utf-8") as source:
+            for line in source:
+                fields = line.split()
+                if not fields or not fields[0].startswith("cpu"):
+                    break
+                if fields[0] == "cpu":
+                    continue
+                name = fields[0][3:]
+                if not name.isdigit():
+                    continue
+                values = [int(v) for v in fields[1:9]]
+                counters[int(name)] = (sum(values), values[3] + values[4])
+        return counters
+
+    before = snapshots()
     time.sleep(seconds)
-    total1, idle1 = cpu_totals()
-    if total1 <= total0:
-        raise ValueError("Could not sample CPU idle time")
-    return max(0., min(1., (idle1 - idle0) / (total1 - total0)))
+    after = snapshots()
+    physical_idle = []
+    for sibling_cpus in groups.values():
+        sib_idle = []
+        for cpu in sibling_cpus:
+            if cpu not in before or cpu not in after:
+                continue
+            total0, idle0 = before[cpu]
+            total1, idle1 = after[cpu]
+            if total1 <= total0:
+                continue
+            sib_idle.append(max(0., min(1., (idle1 - idle0) / (total1 - total0))))
+        if sib_idle:
+            physical_idle.append(min(sib_idle))
+    if not physical_idle:
+        raise ValueError("Could not measure Linux per-core CPU idle time")
+    return sum(physical_idle) / len(physical_idle)
 
 
 def choose_workers(requested) -> tuple[int, int, float | None]:
