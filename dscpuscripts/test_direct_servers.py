@@ -9,6 +9,29 @@ from fd001_gamma.common import atomic_json
 from fd001_gamma.protocol import make_manifest, digest
 
 
+@pytest.mark.parametrize(("active", "idle", "ramp", "expected"), [
+    (0, 0., 8, 0),          # All cores occupied: queue remains pending.
+    (0, .3, 8, 8),         # Do not immediately flood a shared server.
+    (8, .3, 8, 16),        # More workers start as capacity is observed.
+    (32, 0., 8, 32),      # High contention: do not kill already-running jobs.
+    (120, 1., 8, 128),    # Never exceed user's explicit concurrency ceiling.
+    (48, .1, 4, 52),      # User-configured ramp-up is respected.
+])
+def test_adaptive_dispatch_is_capacity_aware_and_nonpreemptive(active, idle, ramp, expected):
+    assert direct_runner.adaptive_worker_target(128, active, 256, idle, ramp) == expected
+
+
+@pytest.mark.parametrize(("max_workers", "active", "physical", "idle", "ramp"), [
+    (0, 0, 256, .3, 8), (128, -1, 256, .3, 8),
+    (128, 0, 0, .3, 8), (128, 0, 256, -0.1, 8),
+    (128, 0, 256, 1.1, 8), (128, 0, 256, .3, 0),
+    (128, 129, 256, .3, 8),
+])
+def test_bad_adaptive_sizing_inputs_are_rejected(max_workers, active, physical, idle, ramp):
+    with pytest.raises(ValueError, match="Invalid adaptive"):
+        direct_runner.adaptive_worker_target(max_workers, active, physical, idle, ramp)
+
+
 def test_all_five_seeds_and_thirty_six_configs_are_locally_assigned():
     runs = make_manifest()
     assert len(runs) == 180
@@ -128,8 +151,26 @@ def test_dry_run_does_not_touch_data_or_start_workers(tmp_path, monkeypatch):
     monkeypatch.setattr(direct_runner, "scientific_hash", lambda: "fixed-code")
     monkeypatch.setattr(direct_runner, "choose_workers", lambda value: (96, 256, .5))
     monkeypatch.setattr(os, "getloadavg", lambda: (5., 5., 5.))
-    args = argparse.Namespace(mode="dry-run", workers="auto", microbatch=128, max_runs=0)
+    args = argparse.Namespace(mode="dry-run", workers="auto", microbatch=128,
+                              max_runs=0, adaptive=False, check_seconds=30., ramp_up=8)
     assert direct_runner.run_campaign(args) == 0
+    assert not results.exists()
+
+
+def test_adaptive_dry_run_displays_ceiling_and_initial_safe_ramp(tmp_path, monkeypatch, capsys):
+    results = tmp_path / "no-files-created"
+    monkeypatch.setattr(direct_runner, "campaign_paths",
+                        lambda: (tmp_path / "data", results, tmp_path / "out"))
+    monkeypatch.setattr(direct_runner, "scientific_hash", lambda: "fixture-code")
+    monkeypatch.setattr(direct_runner, "choose_workers", lambda value: (128, 256, None))
+    monkeypatch.setattr(direct_runner, "cpu_idle_fraction", lambda: .3)
+    monkeypatch.setattr(os, "getloadavg", lambda: (220., 220., 220.))
+    args = argparse.Namespace(mode="dry-run", workers="128", microbatch=128,
+                              max_runs=0, adaptive=True, check_seconds=30., ramp_up=8)
+    assert direct_runner.run_campaign(args) == 0
+    out = capsys.readouterr().out
+    assert "maximum 128" in out
+    assert "initial launch budget 8" in out
     assert not results.exists()
 
 
