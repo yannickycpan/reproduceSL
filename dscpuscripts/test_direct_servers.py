@@ -174,6 +174,72 @@ def test_adaptive_dry_run_displays_ceiling_and_initial_safe_ramp(tmp_path, monke
     assert not results.exists()
 
 
+def test_adaptive_dispatcher_waits_for_spare_cores_then_gradually_starts_runs(tmp_path, monkeypatch):
+    from fulltd import data as original_data, sampling as original_sampling
+    import fd001_gamma.common as common
+    configs = make_manifest()[:3]
+    data_dir, results_dir = tmp_path / "data", tmp_path / "results"
+    monkeypatch.setattr(direct_runner, "campaign_paths",
+                        lambda: (data_dir, results_dir, tmp_path / "out"))
+    monkeypatch.setattr(direct_runner, "make_manifest", lambda: configs)
+    monkeypatch.setattr(direct_runner, "scientific_hash", lambda: "scientific-fixture")
+    monkeypatch.setattr(direct_runner, "choose_workers", lambda requested: (128, 256, None))
+    idle_values = iter([0., 0., .3, .3, .3, .3])
+    monkeypatch.setattr(direct_runner, "cpu_idle_fraction", lambda: next(idle_values, .3))
+    monkeypatch.setattr(os, "getloadavg", lambda: (250., 250., 250.))
+    monkeypatch.setattr(original_data, "verify_dataset", lambda *a: "verified-fixture")
+    monkeypatch.setattr(original_data, "load_dataset", lambda *a: object())
+    monkeypatch.setattr(original_sampling, "training_universe", lambda *a: (object(), None, []))
+    monkeypatch.setattr(common, "data_identity", lambda *a: "data-fixture")
+    monkeypatch.setattr(direct_runner, "validate_prepared_data", lambda *a: None)
+    tick = [0.]
+    monkeypatch.setattr(direct_runner.time, "monotonic", lambda: tick[0])
+    monkeypatch.setattr(direct_runner.time, "sleep",
+                        lambda seconds: tick.__setitem__(0, tick[0] + seconds))
+
+    launched, complete = [], set()
+
+    class CompletedWorker:
+        def __init__(self, command, **kwargs):
+            run_id = command[command.index("--run-id") + 1]
+            self.run_id = run_id
+            self.pid = 30000 + len(launched)
+            launched.append((tick[0], run_id))
+
+        def poll(self):
+            complete.add(self.run_id)
+            return 0
+
+        def wait(self):
+            return 0
+
+        def send_signal(self, signum):
+            raise AssertionError("Do not signal successful workers")
+
+    monkeypatch.setattr(direct_runner.subprocess, "Popen", CompletedWorker)
+    monkeypatch.setattr(direct_runner, "classify",
+                        lambda c, *_: "complete" if c["run_id"] in complete else "start_epoch_1")
+    args = argparse.Namespace(mode="run", workers="128", adaptive=True,
+                              check_seconds=5., ramp_up=1, microbatch=128, max_runs=0)
+    assert direct_runner.run_campaign(args) == 0
+    assert [r for t, r in launched] == [c["run_id"] for c in configs]
+    # Capacity was initially zero and remained zero at the first check.
+    # A physical-core idle sample at t=10 first admits one worker.
+    assert launched[0][0] >= 10
+    # Ramp-up permits one *new* worker per check, even though each
+    # mocked worker exits immediately and frees its concurrency slot.
+    assert launched[1][0] >= launched[0][0] + 5
+    assert launched[2][0] >= launched[1][0] + 5
+    receipts = list((results_dir / "direct_launches").glob("*.json"))
+    assert len(receipts) == 1
+    from fd001_gamma.common import read_json
+    receipt = read_json(receipts[0])
+    assert receipt["state"] == "complete"
+    assert receipt["adaptive"] is True
+    assert len(receipt["completed"]) == 3
+    assert len(receipt["adaptive_samples"]) >= 3
+
+
 def test_one_server_runner_has_no_slurm_or_remote_sharding_interface():
     from pathlib import Path
     file = Path(direct_runner.__file__)
