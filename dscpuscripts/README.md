@@ -66,16 +66,28 @@ By default, `--workers auto` measures CPU idleness **once at startup** and
 chooses up to 128 processes. Fixed `--workers 48` or `--workers 128`
 starts that many immediately and is **not load-aware**.
 
-For ongoing load-aware dispatch, explicitly enable `--adaptive`. Then the
-`--workers` value is a **maximum**, not an immediate allocation. The runner
-checks available physical-core capacity every 30 seconds and launches at most
-8 additional processes per check. It retains already-running processes if
-other users' load rises; it simply holds new candidates in its queue.
-It accounts for the current campaign's active jobs when estimating free
-capacity, so idle cores consumed by our own training processes do not make
-the limit incorrectly shrink. This is an advisory local scheduling heuristic,
-not an OS reservation, and does not monitor per-job memory consumption.
+For ongoing load-aware dispatch, explicitly enable `--adaptive`. The
+`--workers` value becomes the **simultaneous-process ceiling**. The runner
+samples available physical-core capacity **at launch and every 600 seconds
+(10 minutes)**. At each sample it admits up to **80% of currently idle
+physical-core capacity**, subject to the ceiling and the number of pending
+runs. For example, 100 estimated idle physical cores can admit up to 80 new
+jobs; if only 30 pending runs remain, it admits 30. The previous arbitrary
+8-jobs-per-check limit has been removed.
+
+The cap is on **running** jobs: if 80 jobs are already active and the next
+sample finds 50 idle cores, at most 40 more may be admitted (and never more
+than `max_workers - 80`). Jobs that finish are immediately replaced up to
+the latest allowed concurrency. If other users occupy additional cores,
+no running jobs are terminated; the runner instead stops increasing its
+concurrency until capacity recovers. If estimated idle capacity is zero,
+no *additional* concurrent workers are launched.
+
+This is an advisory 0.75-second CPU-idle measurement, **not a CPU reservation**
+or guarantee of spare physical cores. The 10-minute interval means that
+sudden changes in others' workloads are not immediately detected.
 All candidates remain queued until completed, failed or interrupted.
+The logical training batch remains 128 regardless of worker count.
 
 The logical training batch remains 128 regardless of CPU worker count.
 
@@ -121,8 +133,9 @@ echo "Dispatcher PID: $!"
 
 Before launching, inspect the pending configurations and starting capacity with
 `bash dscpuscripts/run_fd001_gamma.sh --dry-run --workers 128 --adaptive`.
-The `--check-seconds 30 --ramp-up 8` defaults can be adjusted, but very
-short intervals and aggressive ramp-up may create unnecessary contention.
+The default is `--check-seconds 600`, and the admission fraction is fixed
+at 80%. You can explicitly change the check interval with `--check-seconds`.
+There is no longer a `--ramp-up` option.
 A new launcher version is used only after stopping and restarting the old
 dispatcher; pulling Git updates does not change a process already running.
 
@@ -147,9 +160,11 @@ free -h
 The `vmstat` columns `r`, `b`, `si`, `so`, `us`, `sy`,
 `id`, `wa` help distinguish CPU contention, I/O wait, and swapping.
 Pay particular attention to sustained `si/so` activity and low
-`MemAvailable`. `--workers auto` without `--adaptive` measures availability only once;
-`--adaptive` periodically adjusts the *admission of new runs*, not the CPU
-allocation of workers already running.
+`MemAvailable`. `--workers auto` without `--adaptive` measures availability
+only once; `--adaptive` checks every ten minutes and changes only the
+*admission of additional runs*, not the CPU allocation of workers already
+running. Do not launch a second dispatcher while an old one is active;
+restart the old one gracefully if you change scheduling modes.
 
 ## Analyze after all 180 candidates finish
 
