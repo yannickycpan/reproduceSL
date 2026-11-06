@@ -1,45 +1,47 @@
-"""Targeted tests for scheduler-free dispatch and safe cross-server imports."""
+"""Single-server CPU dispatch, automatic worker sizing, checkpoint safety."""
 import argparse
-import json
-from pathlib import Path
-from types import SimpleNamespace
+import os
 
 import pytest
 
-from dscpuscripts import direct_runner, import_results
+from dscpuscripts import direct_runner
 from fd001_gamma.common import atomic_json
 from fd001_gamma.protocol import make_manifest, digest
 
 
-@pytest.mark.parametrize(("spec", "total", "expected"), [
-    ("0", 1, (0,)),
-    ("0-3", 5, (0, 1, 2, 3)),
-    ("4", 5, (4,)),
-    ("0,2-3", 5, (0, 2, 3)),
-    ("4,0,0", 5, (0, 4)),
+def test_all_five_seeds_and_thirty_six_configs_are_locally_assigned():
+    runs = make_manifest()
+    assert len(runs) == 180
+    assert set(c["seed"] for c in runs) == set(range(5))
+    assert len(set(c["run_id"] for c in runs)) == 180
+    assert len(set((c["gamma_variant"], c["alpha"], c["beta"]) for c in runs)) == 36
+
+
+@pytest.mark.parametrize(("idle", "expected"), [
+    (1., 128),
+    (.8, 128),
+    (.5, 96),
+    (.25, 48),
+    (.1, 19),
+    (0., 1),
 ])
-def test_parse_shards(spec, total, expected):
-    assert direct_runner.parse_shards(spec, total) == expected
+def test_auto_workers_uses_idle_physical_cores_not_logical_threads(monkeypatch, idle, expected):
+    monkeypatch.setattr(direct_runner, "available_physical_cores", lambda: 256)
+    monkeypatch.setattr(direct_runner, "cpu_idle_fraction", lambda: idle)
+    monkeypatch.setattr(os, "sched_getaffinity", lambda x: set(range(512)))
+    assert direct_runner.choose_workers("auto") == (expected, 256, idle)
 
 
-@pytest.mark.parametrize(("spec", "total"), [
-    ("", 5), ("foo", 5), ("0-5", 5), ("4-2", 5), ("-1", 5),
-    ("0", 0), ("1,,2", 5),
-])
-def test_bad_shards_rejected(spec, total):
-    with pytest.raises(ValueError):
-        direct_runner.parse_shards(spec, total)
-
-
-def test_two_server_shards_are_disjoint_complete_and_seed_balanced():
-    all_ids = [c["run_id"] for c in make_manifest()]
-    large = direct_runner.selected_configs(5, (0, 1, 2, 3))
-    small = direct_runner.selected_configs(5, (4,))
-    assert len(all_ids) == 180 and len(large) == 144 and len(small) == 36
-    assert set(c["run_id"] for c in large).isdisjoint(c["run_id"] for c in small)
-    assert set(c["run_id"] for c in large + small) == set(all_ids)
-    assert set(c["seed"] for c in large) == {0, 1, 2, 3}
-    assert set(c["seed"] for c in small) == {4}
+def test_explicit_worker_override_and_invalid_worker_rejected(monkeypatch):
+    monkeypatch.setattr(direct_runner, "available_physical_cores", lambda: 256)
+    monkeypatch.setattr(os, "sched_getaffinity", lambda x: set(range(512)))
+    assert direct_runner.choose_workers("128") == (128, 256, None)
+    with pytest.raises(ValueError, match="positive"):
+        direct_runner.choose_workers("0")
+    with pytest.raises(ValueError, match="positive integer"):
+        direct_runner.choose_workers("invalid")
+    with pytest.raises(ValueError, match="logical CPUs"):
+        direct_runner.choose_workers("513")
 
 
 def test_classify_preserves_existing_result_identity_and_completion(tmp_path):
@@ -80,45 +82,21 @@ def test_prepared_data_mismatch_blocks_checkpoint_reuse(tmp_path):
         direct_runner.validate_prepared_data([config], tmp_path, "different-train", "original-val")
 
 
-def test_dry_run_no_scheduler_no_written_files(tmp_path, monkeypatch):
+def test_dry_run_does_not_touch_data_or_start_workers(tmp_path, monkeypatch):
     results = tmp_path / "never-created-results"
     monkeypatch.setattr(direct_runner, "campaign_paths", lambda: (tmp_path / "data", results, tmp_path / "outputs"))
     monkeypatch.setattr(direct_runner, "scientific_hash", lambda: "fixed-code")
-    args = argparse.Namespace(mode="dry-run", workers=4, shards=5, shard_indices="4",
-                              microbatch=128, max_runs=0)
+    monkeypatch.setattr(direct_runner, "choose_workers", lambda value: (96, 256, .5))
+    monkeypatch.setattr(os, "getloadavg", lambda: (5., 5., 5.))
+    args = argparse.Namespace(mode="dry-run", workers="auto", microbatch=128, max_runs=0)
     assert direct_runner.run_campaign(args) == 0
     assert not results.exists()
 
 
-def test_import_validation_rejects_mismatched_data_and_incomplete_runs(tmp_path):
-    config = make_manifest()[0]
-    p = tmp_path / config["run_id"]
-    p.mkdir()
-    identity = dict(config_sha256=digest(config), code_sha256="code",
-                    data_sha256="train", validation_sha256="val")
-    status = dict(config=config, protocol_id=config["protocol_id"], identity=identity,
-                  state="complete", epochs_completed=100)
-    atomic_json(p / "status.json", status)
-    with pytest.raises(ValueError, match="missing evidence"):
-        import_results.validate_incoming(p, config, "code", "train", "val")
-    for file in ("final.pt", "validation.json", "rounds.json"):
-        (p / file).write_bytes(b"fixture")
-    assert import_results.validate_incoming(p, config, "code", "train", "val") == "complete"
-    with pytest.raises(ValueError, match="Different scientific code or processed"):
-        import_results.validate_incoming(p, config, "code", "DIFFERENT", "val")
-    status["state"] = "running"
-    atomic_json(p / "status.json", status)
-    with pytest.raises(ValueError, match="Only terminal"):
-        import_results.validate_incoming(p, config, "code", "train", "val")
-
-
-def test_import_tree_digest_detects_content_conflicts(tmp_path):
-    first = tmp_path / "first"
-    second = tmp_path / "second"
-    first.mkdir()
-    second.mkdir()
-    (first / "status.json").write_text('{"a": 1}')
-    (second / "status.json").write_text('{"a": 1}')
-    assert import_results.tree_digest(first) == import_results.tree_digest(second)
-    (second / "status.json").write_text('{"a": 2}')
-    assert import_results.tree_digest(first) != import_results.tree_digest(second)
+def test_one_server_runner_has_no_slurm_or_remote_sharding_interface():
+    from pathlib import Path
+    file = Path(direct_runner.__file__)
+    script = file.read_text()
+    assert "--shards" not in script and "--shard-indices" not in script
+    assert '"sbatch"' not in script and '"squeue"' not in script
+    assert '"srun"' not in script
