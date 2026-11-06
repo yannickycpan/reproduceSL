@@ -7,6 +7,14 @@ uname -srm
 echo "=== CPU topology ==="
 command -v lscpu >/dev/null 2>&1 && lscpu | grep -E '^(Architecture|Model name|Socket|Core|Thread|CPU\(s\)|NUMA node\(s\))' || true
 echo "Available logical CPUs (affinity): $(nproc)"
+echo "=== Current contention ==="
+uptime || true
+if command -v vmstat >/dev/null 2>&1; then
+  echo "vmstat: r=run queue, b=blocked, si/so=swap-in/out, id=CPU idle, wa=I/O wait"
+  vmstat 1 4 || true
+fi
+echo "=== Top CPU consumers ==="
+ps -eo user,pid,stat,pcpu,pmem,comm --sort=-pcpu | sed -n '1,16p' || true
 echo "=== Memory ==="
 command -v free >/dev/null 2>&1 && free -h || grep -E '^(MemTotal|MemAvailable|SwapTotal):' /proc/meminfo
 echo "=== Disk ==="
