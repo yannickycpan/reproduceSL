@@ -303,6 +303,7 @@ def run_campaign(args) -> int:
         stopping = False
         forwarded = False
         launch_limit = initial_target
+        launches_since_check = 0
         next_capacity_check = time.monotonic() + args.check_seconds
 
         def request_stop(signum, frame):
@@ -319,6 +320,7 @@ def run_campaign(args) -> int:
                     launch_limit = adaptive_worker_target(
                         max_workers, len(active), physical, measured_idle, args.ramp_up)
                     next_capacity_check = time.monotonic() + args.check_seconds
+                    launches_since_check = 0
                     sample = dict(time_utc=datetime.now(timezone.utc).isoformat(),
                                   active=len(active), idle_fraction=measured_idle,
                                   allowed_concurrent=launch_limit)
@@ -327,7 +329,8 @@ def run_campaign(args) -> int:
                     print(f"Adaptive check: {len(active)} active; physical-core idle "
                           f"{measured_idle:.1%}; permitted concurrency {launch_limit}/{max_workers}",
                           flush=True)
-                while not stopping and len(active) < launch_limit and not exhausted:
+                while (not stopping and len(active) < launch_limit and not exhausted
+                       and (not args.adaptive or launches_since_check < args.ramp_up)):
                     config = next(submitted, None)
                     if config is None:
                         exhausted = True
@@ -348,6 +351,7 @@ def run_campaign(args) -> int:
                         proc = subprocess.Popen(command, env=env, cwd=root,
                                                 stdout=log, stderr=subprocess.STDOUT)
                     active[run_id] = proc
+                    launches_since_check += 1
                     print(f"Started {run_id} (PID {proc.pid})", flush=True)
                 if stopping and not forwarded:
                     for proc in active.values():
