@@ -32,6 +32,46 @@ def test_auto_workers_uses_idle_physical_cores_not_logical_threads(monkeypatch, 
     assert direct_runner.choose_workers("auto") == (expected, 256, idle)
 
 
+def test_physical_core_idle_sampling_does_not_count_idle_smt_sibling_as_free_core(tmp_path, monkeypatch):
+    # Core 0 has one fully busy sibling and one idle sibling. Core 1 has
+    # two idle siblings. Available physical idle fraction should be 1/2,
+    # not the misleading 3/4 logical-thread average.
+    from pathlib import Path as RealPath
+    for cpu, core in enumerate((0, 0, 1, 1)):
+        directory = tmp_path / "topology" / f"cpu{cpu}" / "topology"
+        directory.mkdir(parents=True)
+        (directory / "physical_package_id").write_text("0")
+        (directory / "core_id").write_text(str(core))
+    stat = tmp_path / "procstat"
+    stat.write_text(
+        "cpu 0 0 0 400 0 0 0 0\n"
+        + "".join(f"cpu{c} 0 0 0 100 0 0 0 0\n" for c in range(4))
+        + "intr 0\n"
+    )
+    def after_sample(_):
+        # CPU0 fully busy, CPU1 fully idle, CPUs2/3 fully idle.
+        stat.write_text(
+            "cpu 100 0 0 700 0 0 0 0\n"
+            "cpu0 100 0 0 100 0 0 0 0\n"
+            "cpu1 0 0 0 200 0 0 0 0\n"
+            "cpu2 0 0 0 200 0 0 0 0\n"
+            "cpu3 0 0 0 200 0 0 0 0\n"
+            "intr 0\n"
+        )
+    original_path = RealPath
+    def fake_path(value):
+        name = str(value)
+        if name == "/proc/stat":
+            return stat
+        if name.startswith("/sys/devices/system/cpu/"):
+            return tmp_path / "topology" / name.removeprefix("/sys/devices/system/cpu/")
+        return original_path(value)
+    monkeypatch.setattr(direct_runner, "Path", fake_path)
+    monkeypatch.setattr(direct_runner.os, "sched_getaffinity", lambda _: {0, 1, 2, 3})
+    monkeypatch.setattr(direct_runner.time, "sleep", after_sample)
+    assert direct_runner.cpu_idle_fraction() == pytest.approx(.5)
+
+
 def test_explicit_worker_override_and_invalid_worker_rejected(monkeypatch):
     monkeypatch.setattr(direct_runner, "available_physical_cores", lambda: 256)
     monkeypatch.setattr(os, "sched_getaffinity", lambda x: set(range(512)))
