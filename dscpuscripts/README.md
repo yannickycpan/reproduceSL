@@ -103,16 +103,14 @@ On the EPYC server:
 
 ```bash
 cd ~/reproduceSL
-mkdir -p "$HOME/scratch/fulltd/fd001_gamma_v1/from_xeon"
-rsync -av --prune-empty-dirs \
-  --include='fd001_gamma_v1_*/' --include='fd001_gamma_v1_*/***' --exclude='*' \
-  USER@XEON_HOST:~/scratch/fulltd/fd001_gamma_v1/results/ \
-  "$HOME/scratch/fulltd/fd001_gamma_v1/from_xeon/"
-"$HOME/scratch/fulltd/.venv-fulltd/bin/python" -m dscpuscripts.import_results \
-  --source "$HOME/scratch/fulltd/fd001_gamma_v1/from_xeon" --dry-run
-"$HOME/scratch/fulltd/.venv-fulltd/bin/python" -m dscpuscripts.import_results \
-  --source "$HOME/scratch/fulltd/fd001_gamma_v1/from_xeon"
+bash dscpuscripts/pull_remote_results.sh USER@XEON_HOST
 ```
+
+If the secondary server uses a different results path, supply it as the second
+argument. The helper uses `rsync` to stage only canonical run directories,
+performs a dry-run verification, then imports them. Staging files are retained
+for audit and safe retry. You may instead transfer the directory manually and
+call `python -m dscpuscripts.import_results --source /path/to/staging`.
 
 The importer checks every run's canonical configuration, frozen protocol,
 code fingerprint, and prepared-data identities against the local data. It
