@@ -62,11 +62,22 @@ Linux load is not identical to instantaneous CPU utilization; it can include
 I/O-waiting tasks. The script prints both a short CPU-idle measurement and
 the load average. **It warns rather than blocking on a high load**.
 
-`--workers auto` is the default. It chooses **up to 128 concurrent processes**
-using approximately 75% of the measured idle physical-core capacity (a
-starting heuristic, not a benchmark). If you know you have capacity, override
-the estimate explicitly with `--workers 96` or `--workers 128`.
-The logical-batch size remains 128 regardless of CPU worker count.
+By default, `--workers auto` measures CPU idleness **once at startup** and
+chooses up to 128 processes. Fixed `--workers 48` or `--workers 128`
+starts that many immediately and is **not load-aware**.
+
+For ongoing load-aware dispatch, explicitly enable `--adaptive`. Then the
+`--workers` value is a **maximum**, not an immediate allocation. The runner
+checks available physical-core capacity every 30 seconds and launches at most
+8 additional processes per check. It retains already-running processes if
+other users' load rises; it simply holds new candidates in its queue.
+It accounts for the current campaign's active jobs when estimating free
+capacity, so idle cores consumed by our own training processes do not make
+the limit incorrectly shrink. This is an advisory local scheduling heuristic,
+not an OS reservation, and does not monitor per-job memory consumption.
+All candidates remain queued until completed, failed or interrupted.
+
+The logical training batch remains 128 regardless of CPU worker count.
 
 Run the preflight/dry-run first:
 
@@ -99,6 +110,22 @@ nohup bash dscpuscripts/run_fd001_gamma.sh --run --workers 96 \
 echo "Dispatcher PID: $!"
 ```
 
+For a shared server where more cores may become available **while the
+campaign is running**, use an adaptive ceiling of 128:
+
+```bash
+nohup bash dscpuscripts/run_fd001_gamma.sh --run --workers 128 --adaptive \
+  > "$HOME/fd001_gamma_direct.log" 2>&1 < /dev/null &
+echo "Dispatcher PID: $!"
+```
+
+Before launching, inspect the pending configurations and starting capacity with
+`bash dscpuscripts/run_fd001_gamma.sh --dry-run --workers 128 --adaptive`.
+The `--check-seconds 30 --ramp-up 8` defaults can be adjusted, but very
+short intervals and aggressive ramp-up may create unnecessary contention.
+A new launcher version is used only after stopping and restarting the old
+dispatcher; pulling Git updates does not change a process already running.
+
 Do not launch two dispatchers simultaneously. A filesystem lock enforces
 this. All workers run as independent one-thread Python CPU processes.
 One completed run gets its own log in
@@ -120,8 +147,9 @@ free -h
 The `vmstat` columns `r`, `b`, `si`, `so`, `us`, `sy`,
 `id`, `wa` help distinguish CPU contention, I/O wait, and swapping.
 Pay particular attention to sustained `si/so` activity and low
-`MemAvailable`. `--workers auto` measures availability at startup,
-not dynamically throughout the campaign.
+`MemAvailable`. `--workers auto` without `--adaptive` measures availability only once;
+`--adaptive` periodically adjusts the *admission of new runs*, not the CPU
+allocation of workers already running.
 
 ## Analyze after all 180 candidates finish
 
