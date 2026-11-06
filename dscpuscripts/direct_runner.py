@@ -233,6 +233,9 @@ def run_campaign(args) -> int:
                     atomic_json(receipt_path, receipt)
                 if not any_finished:
                     time.sleep(1)
+        except BaseException as error:
+            receipt["failed"].append(dict(stage="dispatcher", error=f"{type(error).__name__}: {error}"))
+            raise
         finally:
             # Do not leave orphan workers if dispatcher fails unexpectedly.
             for proc in active.values():
