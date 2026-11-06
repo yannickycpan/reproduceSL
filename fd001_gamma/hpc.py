@@ -36,6 +36,11 @@ def queued_jobs():
         job_id = line.strip()
         if not job_id:
             continue
+        # This cluster's squeue frontend emits a freshness footer on stdout,
+        # even with --noheader and an empty --name-filtered queue.
+        # Recognize only that exact informational form; fail closed otherwise.
+        if re.fullmatch(r"Last update in \d+ seconds? ago", job_id):
+            continue
         if not re.fullmatch(r"\d+(?:_(?:\d+|\[[0-9,%\-]+\]))?", job_id):
             raise RuntimeError(f"Unrecognized squeue job ID {job_id!r}; submission refused. "
                                f"Raw response: {result.stdout!r}")
