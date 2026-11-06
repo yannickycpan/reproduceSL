@@ -9,27 +9,27 @@ from fd001_gamma.common import atomic_json
 from fd001_gamma.protocol import make_manifest, digest
 
 
-@pytest.mark.parametrize(("active", "idle", "ramp", "expected"), [
-    (0, 0., 8, 0),          # All cores occupied: queue remains pending.
-    (0, .3, 8, 8),         # Do not immediately flood a shared server.
-    (8, .3, 8, 16),        # More workers start as capacity is observed.
-    (32, 0., 8, 32),      # High contention: do not kill already-running jobs.
-    (120, 1., 8, 128),    # Never exceed user's explicit concurrency ceiling.
-    (48, .1, 4, 52),      # User-configured ramp-up is respected.
+@pytest.mark.parametrize(("active", "idle", "expected"), [
+    (0, 0., 0),            # No idle cores: no new jobs.
+    (0, 100 / 256, 80),   # User's example: 100 idle physical cores -> 80 jobs.
+    (0, 0.3, 61),         # 80% of approximately 77 available cores.
+    (20, 100 / 256, 100), # Existing 20 active plus 80% of 100 new idle cores.
+    (32, 0., 32),        # Don't kill already-running jobs when busy.
+    (80, 0.25, 128),     # 80 active + 51 new opportunities, capped at 128.
+    (120, 1., 128),      # Never exceed concurrency ceiling.
 ])
-def test_adaptive_dispatch_is_capacity_aware_and_nonpreemptive(active, idle, ramp, expected):
-    assert direct_runner.adaptive_worker_target(128, active, 256, idle, ramp) == expected
+def test_adaptive_dispatch_is_capacity_aware_and_nonpreemptive(active, idle, expected):
+    assert direct_runner.adaptive_worker_target(128, active, 256, idle) == expected
 
 
-@pytest.mark.parametrize(("max_workers", "active", "physical", "idle", "ramp"), [
-    (0, 0, 256, .3, 8), (128, -1, 256, .3, 8),
-    (128, 0, 0, .3, 8), (128, 0, 256, -0.1, 8),
-    (128, 0, 256, 1.1, 8), (128, 0, 256, .3, 0),
-    (128, 129, 256, .3, 8),
+@pytest.mark.parametrize(("max_workers", "active", "physical", "idle"), [
+    (0, 0, 256, .3), (128, -1, 256, .3),
+    (128, 0, 0, .3), (128, 0, 256, -0.1),
+    (128, 0, 256, 1.1), (128, 129, 256, .3),
 ])
-def test_bad_adaptive_sizing_inputs_are_rejected(max_workers, active, physical, idle, ramp):
+def test_bad_adaptive_sizing_inputs_are_rejected(max_workers, active, physical, idle):
     with pytest.raises(ValueError, match="Invalid adaptive"):
-        direct_runner.adaptive_worker_target(max_workers, active, physical, idle, ramp)
+        direct_runner.adaptive_worker_target(max_workers, active, physical, idle)
 
 
 def test_all_five_seeds_and_thirty_six_configs_are_locally_assigned():
@@ -152,7 +152,7 @@ def test_dry_run_does_not_touch_data_or_start_workers(tmp_path, monkeypatch):
     monkeypatch.setattr(direct_runner, "choose_workers", lambda value: (96, 256, .5))
     monkeypatch.setattr(os, "getloadavg", lambda: (5., 5., 5.))
     args = argparse.Namespace(mode="dry-run", workers="auto", microbatch=128,
-                              max_runs=0, adaptive=False, check_seconds=30., ramp_up=8)
+                              max_runs=0, adaptive=False, check_seconds=600.)
     assert direct_runner.run_campaign(args) == 0
     assert not results.exists()
 
@@ -166,11 +166,12 @@ def test_adaptive_dry_run_displays_ceiling_and_initial_safe_ramp(tmp_path, monke
     monkeypatch.setattr(direct_runner, "cpu_idle_fraction", lambda: .3)
     monkeypatch.setattr(os, "getloadavg", lambda: (220., 220., 220.))
     args = argparse.Namespace(mode="dry-run", workers="128", microbatch=128,
-                              max_runs=0, adaptive=True, check_seconds=30., ramp_up=8)
+                              max_runs=0, adaptive=True, check_seconds=600.)
     assert direct_runner.run_campaign(args) == 0
     out = capsys.readouterr().out
-    assert "maximum 128" in out
-    assert "initial launch budget 8" in out
+    assert "ceiling 128" in out
+    assert "initial launch budget 61" in out
+    assert "recheck every 600s" in out
     assert not results.exists()
 
 
@@ -220,16 +221,15 @@ def test_adaptive_dispatcher_waits_for_spare_cores_then_gradually_starts_runs(tm
     monkeypatch.setattr(direct_runner, "classify",
                         lambda c, *_: "complete" if c["run_id"] in complete else "start_epoch_1")
     args = argparse.Namespace(mode="run", workers="128", adaptive=True,
-                              check_seconds=5., ramp_up=1, microbatch=128, max_runs=0)
+                              check_seconds=5., microbatch=128, max_runs=0)
     assert direct_runner.run_campaign(args) == 0
     assert [r for t, r in launched] == [c["run_id"] for c in configs]
     # Capacity was initially zero and remained zero at the first check.
-    # A physical-core idle sample at t=10 first admits one worker.
+    # At t=10 physical-core idleness rises: all three pending jobs may
+    # start immediately because fewer than 80% of idle cores are needed.
     assert launched[0][0] >= 10
-    # Ramp-up permits one *new* worker per check, even though each
-    # mocked worker exits immediately and frees its concurrency slot.
-    assert launched[1][0] >= launched[0][0] + 5
-    assert launched[2][0] >= launched[1][0] + 5
+    assert launched[1][0] == launched[0][0]
+    assert launched[2][0] == launched[0][0]
     receipts = list((results_dir / "direct_launches").glob("*.json"))
     assert len(receipts) == 1
     from fd001_gamma.common import read_json
@@ -237,7 +237,9 @@ def test_adaptive_dispatcher_waits_for_spare_cores_then_gradually_starts_runs(tm
     assert receipt["state"] == "complete"
     assert receipt["adaptive"] is True
     assert len(receipt["completed"]) == 3
-    assert len(receipt["adaptive_samples"]) >= 3
+    assert len(receipt["adaptive_samples"]) >= 2
+    assert receipt["admission_fraction"] == .8
+    assert receipt["check_seconds"] == 5.
 
 
 def test_one_server_runner_has_no_slurm_or_remote_sharding_interface():
