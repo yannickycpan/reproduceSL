@@ -3,7 +3,7 @@
 No Slurm, job array, allocation time, or HPC module system is involved. Each
 candidate runs in its own one-thread Python subprocess and writes its ordinary
 fd001_gamma checkpoint files. A rerun skips terminal candidates and resumes
-compatible epoch checkpoints. Use disjoint deterministic shards on two servers.
+compatible epoch checkpoints. All five seeds run on one AMD EPYC server.
 """
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from datetime import datetime, timezone
 import os
 from pathlib import Path
 import platform
-import re
 import signal
 import subprocess
 import sys
@@ -27,27 +26,64 @@ from fd001_gamma.protocol import digest, make_manifest
 STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 
 
-def parse_shards(spec: str, count: int) -> tuple[int, ...]:
-    if count < 1:
-        raise ValueError("--shards must be positive")
-    found = set()
-    for part in spec.split(","):
-        value = part.strip()
-        match = re.fullmatch(r"(\d+)(?:-(\d+))?", value)
-        if match is None:
-            raise ValueError(f"Invalid shard range {value!r}; use e.g. 0-3 or 4")
-        start = int(match.group(1))
-        end = int(match.group(2)) if match.group(2) is not None else start
-        if start > end or end >= count:
-            raise ValueError(f"Shard {value!r} is outside 0..{count - 1}")
-        found.update(range(start, end + 1))
-    if not found:
-        raise ValueError("Select at least one shard")
-    return tuple(sorted(found))
+def available_physical_cores() -> int:
+    """Count unique physical cores accessible through Linux CPU affinity."""
+    affinity = (os.sched_getaffinity(0) if hasattr(os, "sched_getaffinity")
+                else set(range(os.cpu_count() or 1)))
+    cores = set()
+    for cpu in affinity:
+        base = Path(f"/sys/devices/system/cpu/cpu{cpu}/topology")
+        try:
+            package = int((base / "physical_package_id").read_text().strip())
+            core = int((base / "core_id").read_text().strip())
+        except (OSError, ValueError):
+            # Linux sysfs is expected on Ubuntu; don't double-count SMT in a
+            # nonstandard environment where topology data are missing.
+            return max(1, len(affinity) // 2)
+        cores.add((package, core))
+    return max(1, len(cores))
 
 
-def selected_configs(shards: int, indices: tuple[int, ...]) -> list[dict]:
-    return [config for i, config in enumerate(make_manifest()) if i % shards in indices]
+def cpu_idle_fraction(seconds: float = 0.75) -> float:
+    """Short, system-wide CPU-idle sample; unlike load average, excludes I/O wait."""
+    def cpu_totals():
+        with Path("/proc/stat").open(encoding="utf-8") as source:
+            fields = source.readline().split()
+        if not fields or fields[0] != "cpu":
+            raise ValueError("Linux /proc/stat CPU summary unavailable")
+        counters = [int(v) for v in fields[1:9]]
+        return sum(counters), counters[3] + counters[4]
+
+    total0, idle0 = cpu_totals()
+    time.sleep(seconds)
+    total1, idle1 = cpu_totals()
+    if total1 <= total0:
+        raise ValueError("Could not sample CPU idle time")
+    return max(0., min(1., (idle1 - idle0) / (total1 - total0)))
+
+
+def choose_workers(requested) -> tuple[int, int, float | None]:
+    """Auto uses at most 128 processes and ~75% of currently idle cores.
+
+    Explicit --workers N overrides the heuristic. It is a throughput starting
+    point, not an ongoing resource reservation or dynamic scheduler.
+    """
+    physical = available_physical_cores()
+    if str(requested) == "auto":
+        idle = cpu_idle_fraction()
+        workers = max(1, min(128, int(0.75 * physical * idle)))
+    else:
+        try:
+            workers = int(str(requested))
+        except ValueError as exc:
+            raise ValueError("--workers must be a positive integer or 'auto'") from exc
+        if workers < 1:
+            raise ValueError("--workers must be positive")
+        idle = None
+    logical = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
+    if workers > logical:
+        raise ValueError(f"Requested {workers} workers, but only {logical} logical CPUs are available")
+    return workers, physical, idle
 
 
 def classify(config: dict, results: Path, code_hash: str) -> str:
@@ -124,27 +160,30 @@ def worker(args) -> int:
 
 def run_campaign(args) -> int:
     cpu_environment()
-    if args.workers < 1 or not 1 <= args.microbatch <= 128 or args.max_runs < 0:
-        raise ValueError("Use positive --workers, --microbatch in 1..128, and --max-runs >= 0")
-    if args.mode == "run":
-        available = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
-        if args.workers > available:
-            raise ValueError(f"Requested {args.workers} workers but only {available} logical CPUs are available")
-    shard_ids = parse_shards(args.shard_indices, args.shards)
+    if not 1 <= args.microbatch <= 128 or args.max_runs < 0:
+        raise ValueError("Use --microbatch in 1..128 and --max-runs >= 0")
+    workers, physical, idle = choose_workers(args.workers)
     data, results, _ = campaign_paths()
     code_hash = scientific_hash()
-    chosen = selected_configs(args.shards, shard_ids)
+    chosen = make_manifest()
     counts = Counter(classify(c, results, code_hash) for c in chosen)
     pending = [c for c in chosen if classify(c, results, code_hash)
                not in ("complete", "numerical_failure")]
     if args.max_runs:
         pending = pending[:args.max_runs]
 
-    print(f"FD001 Gamma: {len(chosen)} assigned runs; shards {shard_ids} of {args.shards}; "
+    print(f"FD001 Gamma: all {len(chosen)} runs assigned to this AMD server; "
           f"{len(pending)} to process now", flush=True)
     print(f"States: {dict(counts)}", flush=True)
     print(f"Data: {data}; results: {results}", flush=True)
-    print(f"Workers: {args.workers} CPU processes; physical microbatch: {args.microbatch}", flush=True)
+    print(f"CPU capacity: {physical} physical cores available; "
+          f"1-minute load average: {os.getloadavg()[0]:.1f}", flush=True)
+    if idle is not None:
+        print(f"Measured system-wide idle CPU fraction: {idle:.1%}", flush=True)
+    print(f"Workers: {workers} one-thread processes; physical microbatch: {args.microbatch}", flush=True)
+    if os.getloadavg()[0] >= 0.75 * physical:
+        print("WARNING: this shared server is heavily loaded; use --workers auto "
+              "or a small explicit value until contention subsides.", flush=True)
     if args.mode == "dry-run" or not pending:
         print("Dry-run / nothing pending: no files or jobs changed.", flush=True)
         return 0
@@ -177,8 +216,8 @@ def run_campaign(args) -> int:
                                    + uuid.uuid4().hex[:12] + ".json")
         receipt = dict(state="running", hostname=platform.node(), launcher_pid=os.getpid(),
                        started_utc=datetime.now(timezone.utc).isoformat(), code_sha256=code_hash,
-                       data_fingerprint=fingerprint, shards=args.shards, shard_indices=list(shard_ids),
-                       workers=args.workers, microbatch=args.microbatch,
+                       data_fingerprint=fingerprint, workers=workers, physical_cores=physical,
+                       idle_fraction_at_launch=idle, microbatch=args.microbatch,
                        selected_runs=len(chosen), queued_runs=[c["run_id"] for c in pending],
                        completed=[], failed=[], interrupted=[])
         atomic_json(receipt_path, receipt)
@@ -196,7 +235,7 @@ def run_campaign(args) -> int:
             signal.signal(sig, request_stop)
         try:
             while active or not stopping:
-                while not stopping and len(active) < args.workers:
+                while not stopping and len(active) < workers:
                     config = next(submitted, None)
                     if config is None:
                         break
@@ -276,9 +315,8 @@ def main():
     mode.add_argument("--dry-run", dest="mode", action="store_const", const="dry-run")
     mode.add_argument("--run", dest="mode", action="store_const", const="run")
     mode.add_argument("--worker", dest="mode", action="store_const", const="worker")
-    parser.add_argument("--workers", type=int, default=8)
-    parser.add_argument("--shards", type=int, default=1)
-    parser.add_argument("--shard-indices", default="0")
+    parser.add_argument("--workers", default="auto",
+                        help="Number of single-thread processes, or auto (up to 128 based on idle physical cores)")
     parser.add_argument("--microbatch", type=int, default=128)
     parser.add_argument("--max-runs", type=int, default=0,
                         help="Optional limited first batch; rerun without this to finish all.")
