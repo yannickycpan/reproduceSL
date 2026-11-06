@@ -129,19 +129,20 @@ def choose_workers(requested) -> tuple[int, int, float | None]:
 
 
 def adaptive_worker_target(max_workers: int, active: int, physical: int,
-                           idle: float, ramp_up: int) -> int:
-    """Bound launches by free physical-core capacity, ceiling and ramp limit.
+                           idle: float) -> int:
+    """80% of estimated idle physical cores, plus existing active workers.
 
-    Already-running workers are never preempted when capacity shrinks.
-    Slots estimated from idle time are new opportunities *in addition to*
-    current workers; counting only idle time would incorrectly shrink the
-    target as our own training jobs consume those idle cores.
+    If 100 physical cores are currently idle and there is no active worker,
+    admit 80 jobs, capped by max_workers and the pending-run count (the
+    latter is handled by the launch loop). If 80 are already active, retain
+    them and add up to 80% of the NEW idle capacity at the next check.
+    Do not terminate active jobs when capacity decreases.
     """
-    if (max_workers < 1 or active < 0 or physical < 1 or ramp_up < 1
+    if (max_workers < 1 or active < 0 or physical < 1
             or not 0 <= idle <= 1 or active > max_workers):
         raise ValueError("Invalid adaptive worker sizing inputs")
-    free_slots = int(0.75 * physical * idle)
-    return min(max_workers, active + min(free_slots, ramp_up))
+    new_slots = int(0.80 * physical * idle)
+    return min(max_workers, active + new_slots)
 
 
 
@@ -223,12 +224,12 @@ def run_campaign(args) -> int:
         raise ValueError("Use --microbatch in 1..128 and --max-runs >= 0")
     workers, physical, idle = choose_workers(args.workers)
     if args.adaptive:
-        if args.check_seconds < 5 or args.ramp_up < 1:
-            raise ValueError("Adaptive checks require --check-seconds >= 5 and --ramp-up >= 1")
+        if not 5 <= args.check_seconds <= 86400:
+            raise ValueError("Adaptive checks require --check-seconds between 5 and 86400")
         max_workers = min(128, physical) if str(args.workers) == "auto" else workers
         if idle is None:
             idle = cpu_idle_fraction()
-        initial_target = adaptive_worker_target(max_workers, 0, physical, idle, args.ramp_up)
+        initial_target = adaptive_worker_target(max_workers, 0, physical, idle)
     else:
         max_workers, initial_target = workers, workers
     data, results, _ = campaign_paths()
@@ -249,9 +250,10 @@ def run_campaign(args) -> int:
     if idle is not None:
         print(f"Measured system-wide idle CPU fraction: {idle:.1%}", flush=True)
     if args.adaptive:
-        print(f"Adaptive concurrency: maximum {max_workers} one-thread workers, "
-              f"initial launch budget {initial_target}; recheck every {args.check_seconds:g}s, "
-              f"ramp at most {args.ramp_up} new workers per recheck", flush=True)
+        print(f"Adaptive concurrency: ceiling {max_workers} one-thread workers; "
+              f"initial launch budget {initial_target}; recheck every {args.check_seconds:g}s; "
+              "admit 80% of currently idle physical cores (bounded by remaining runs)",
+              flush=True)
     else:
         print(f"Workers: {workers} fixed one-thread processes; "
               f"physical microbatch: {args.microbatch}", flush=True)
@@ -292,7 +294,7 @@ def run_campaign(args) -> int:
                        started_utc=datetime.now(timezone.utc).isoformat(), code_sha256=code_hash,
                        data_fingerprint=fingerprint, workers=max_workers, physical_cores=physical,
                        adaptive=bool(args.adaptive), check_seconds=args.check_seconds if args.adaptive else None,
-                       ramp_up=args.ramp_up if args.adaptive else None,
+                       admission_fraction=0.80 if args.adaptive else None,
                        idle_fraction_at_launch=idle, microbatch=args.microbatch,
                        selected_runs=len(chosen), queued_runs=[c["run_id"] for c in pending],
                        adaptive_samples=[], completed=[], failed=[], interrupted=[])
@@ -303,7 +305,6 @@ def run_campaign(args) -> int:
         stopping = False
         forwarded = False
         launch_limit = initial_target
-        launches_since_check = 0
         next_capacity_check = time.monotonic() + args.check_seconds
 
         def request_stop(signum, frame):
@@ -318,19 +319,19 @@ def run_campaign(args) -> int:
                 if args.adaptive and not stopping and not exhausted and time.monotonic() >= next_capacity_check:
                     measured_idle = cpu_idle_fraction()
                     launch_limit = adaptive_worker_target(
-                        max_workers, len(active), physical, measured_idle, args.ramp_up)
+                        max_workers, len(active), physical, measured_idle)
                     next_capacity_check = time.monotonic() + args.check_seconds
-                    launches_since_check = 0
                     sample = dict(time_utc=datetime.now(timezone.utc).isoformat(),
                                   active=len(active), idle_fraction=measured_idle,
+                                  estimated_idle_cores=physical * measured_idle,
+                                  new_admission_budget=max(0, launch_limit - len(active)),
                                   allowed_concurrent=launch_limit)
                     receipt["adaptive_samples"].append(sample)
                     atomic_json(receipt_path, receipt)
                     print(f"Adaptive check: {len(active)} active; physical-core idle "
                           f"{measured_idle:.1%}; permitted concurrency {launch_limit}/{max_workers}",
                           flush=True)
-                while (not stopping and len(active) < launch_limit and not exhausted
-                       and (not args.adaptive or launches_since_check < args.ramp_up)):
+                while not stopping and len(active) < launch_limit and not exhausted:
                     config = next(submitted, None)
                     if config is None:
                         exhausted = True
@@ -351,7 +352,6 @@ def run_campaign(args) -> int:
                         proc = subprocess.Popen(command, env=env, cwd=root,
                                                 stdout=log, stderr=subprocess.STDOUT)
                     active[run_id] = proc
-                    launches_since_check += 1
                     print(f"Started {run_id} (PID {proc.pid})", flush=True)
                 if stopping and not forwarded:
                     for proc in active.values():
@@ -421,10 +421,8 @@ def main():
                         help="Number of single-thread processes, or auto (up to 128 based on idle physical cores)")
     parser.add_argument("--adaptive", action="store_true",
                         help="Treat --workers as a ceiling; start more jobs as CPU capacity frees up")
-    parser.add_argument("--check-seconds", type=float, default=30.0,
-                        help="Seconds between adaptive CPU checks (minimum 5)")
-    parser.add_argument("--ramp-up", type=int, default=8,
-                        help="Maximum additional workers at each adaptive CPU check")
+    parser.add_argument("--check-seconds", type=float, default=600.0,
+                        help="Seconds between adaptive CPU checks (default: 600 = 10 minutes)")
     parser.add_argument("--microbatch", type=int, default=128)
     parser.add_argument("--max-runs", type=int, default=0,
                         help="Optional limited first batch; rerun without this to finish all.")
