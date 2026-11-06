@@ -1,12 +1,14 @@
-# Direct CPU servers: FD001 Gamma campaign
+# One AMD EPYC server: FD001 Gamma sweep
 
-All new operational scripts live in **dscpuscripts/**. These servers do not need
-Slurm, HPC modules, job arrays, requested memory, or allocation time limits.
-The scripts reuse the **unchanged** `fd001_gamma.train`, `fd001_gamma.analysis`,
-`fd001_gamma.protocol`, `fulltd.data`, and `fulltd.download`. They do
-not modify the original TD/Graph WaveNet experiment or any scientific code hash.
+All operational scripts are inside `dscpuscripts/`. The scientific model, the
+three Gamma variants, the 3-by-4 learning-rate grid, five seeds, original
+sampler, training objective, Adam, and validation/test protocol are unchanged.
+**All 180 configurations run on one machine.** No Slurm, cluster job time
+limit, second server, sharding, copying or result merging is involved.
 
-## Commands on either server
+## First-time setup
+
+On the dual AMD EPYC 9754 Ubuntu server:
 
 ```bash
 git clone --branch fullTD https://github.com/yannickycpan/reproduceSL.git
@@ -16,147 +18,144 @@ bash dscpuscripts/setup_server.sh
 bash dscpuscripts/download_data.sh fd001
 ```
 
-If the repository is already cloned, use `git switch fullTD` then
-`git pull --ff-only origin fullTD` instead of cloning.
-
-The setup requires Python **3.12** (e.g. `python3.12`) and installs the
-existing pinned PyTorch 2.5.1 CPU environment. To use a specific interpreter:
+If you already cloned the repository, instead run:
 
 ```bash
-FULLTD_PYTHON=/path/to/python3.12 bash dscpuscripts/setup_server.sh
+cd ~/reproduceSL
+git switch fullTD
+git pull --ff-only origin fullTD
 ```
 
-If the server cannot reach the NASA download URL, copy the original
-`raw/fd001/` archive, extracted files, and `*.source.json` provenance files
-from a trusted machine into the same `FULLTD_DATA_DIR`, then rerun
-`download_data.sh fd001`; do not invent source sidecars. The downloader uses
-the NASA official CMAPSSData.zip location already prescribed by the project.
+`setup_server.sh` installs the existing version-pinned CPU requirements.
+It accepts Python 3.10, 3.11 or 3.12 (Ubuntu 22.04 commonly uses 3.10).
+If needed, specify an interpreter with `FULLTD_PYTHON=/path/to/python`.
+The script will not upgrade system Python or need administrator access.
 
-`download_data.sh` uses the existing downloader and preprocessing functions.
-It verifies prepared split hashes and refuses to silently reprepare a populated
-processed dataset. To acquire other datasets with the same code, run
-`bash dscpuscripts/download_data.sh electricity`, `metr_la`, or `all`.
-**Only FD001 has the direct CPU training runner here.**
+`download_data.sh fd001` reuses the original NASA C-MAPSS downloader,
+retains SHA-256/source sidecars, performs the original train/val/test split
+and training-only standardization, and verifies every processed file. It
+does not overwrite already prepared data. It can optionally download
+`electricity`, `metr_la` or `all`, but this direct training campaign is
+**FD001-only**.
 
-### One server only
+## CPU concurrency: choose from the actual server state
+
+AMD EPYC 9754 provides 128 physical cores and 256 SMT threads per socket:
+dual socket means 256 physical cores and up to 512 logical CPUs.
+
+The old 16-process suggestion was a conservative check, **not the capacity**.
+An idle machine may support 96, 128 or more independent single-thread runs,
+but the practical optimum depends on memory bandwidth, process memory and
+other active users.
+
+The login report showed load 246.91. On a shared 256-core machine, that is
+a reason to measure current utilization rather than blindly start 128 jobs.
+Linux load is not identical to instantaneous CPU utilization; it can include
+I/O-waiting tasks. The script prints both a short CPU-idle measurement and
+the load average. **It warns rather than blocking on a high load**.
+
+`--workers auto` is the default. It chooses **up to 128 concurrent processes**
+using approximately 75% of the measured idle physical-core capacity (a
+starting heuristic, not a benchmark). If you know you have capacity, override
+the estimate explicitly with `--workers 96` or `--workers 128`.
+The logical-batch size remains 128 regardless of CPU worker count.
+
+Run the preflight/dry-run first:
 
 ```bash
-bash dscpuscripts/run_fd001_gamma.sh --dry-run --workers 16
-bash dscpuscripts/run_fd001_gamma.sh --run --workers 16
+bash dscpuscripts/inspect_server.sh
+bash dscpuscripts/run_fd001_gamma.sh --dry-run
 ```
 
-The runner skips completed and numerical-failure candidates, resumes compatible
-epoch checkpoints, and writes a separate log per run under
-`~/scratch/fulltd/fd001_gamma_v1/results/direct_logs/`. There is **no time
-limit**. A Ctrl-C or SIGTERM requests a graceful pause at a batch boundary;
-the current partial epoch is discarded, as in the original protocol.
-
-Use `tmux` or `nohup` to survive SSH disconnection, for example:
+For an initial **full 100-epoch single-run smoke test**, use:
 
 ```bash
-nohup bash dscpuscripts/run_fd001_gamma.sh --run --workers 16 \
+bash dscpuscripts/run_fd001_gamma.sh --run --workers 1 --max-runs 1
+```
+
+It trains one canonical configuration and leaves its checkpoint/result
+available for the next invocation. If the server is not busy, run the
+remaining candidates with the default auto worker selection:
+
+```bash
+nohup bash dscpuscripts/run_fd001_gamma.sh --run \
   > "$HOME/fd001_gamma_direct.log" 2>&1 < /dev/null &
 echo "Dispatcher PID: $!"
 ```
 
-A short operational trial can select `--max-runs 1`. This completes the
-chosen candidate's full 100 epochs; rerunning without the limit fills the
-remaining configurations. No incomplete-epoch trial results are used.
-
-### Two servers: deterministic split (4:1)
-
-The canonical manifest iterates over **five seeds fastest**, so modulo-five
-shards assign the same hardware to the same seed across all hyperparameters
-and three Gamma variants.
-
-**Dual EPYC 9754 server** (144 candidates, seeds 0,1,2,3):
+Or explicitly choose a higher concurrency on an otherwise idle machine:
 
 ```bash
-bash dscpuscripts/run_fd001_gamma.sh --dry-run --shards 5 --shard-indices 0-3 --workers 16
-bash dscpuscripts/run_fd001_gamma.sh --run     --shards 5 --shard-indices 0-3 --workers 16
+nohup bash dscpuscripts/run_fd001_gamma.sh --run --workers 96 \
+  > "$HOME/fd001_gamma_direct.log" 2>&1 < /dev/null &
+echo "Dispatcher PID: $!"
 ```
 
-**Dual Xeon Gold 6226R server** (36 candidates, seed 4):
+Do not launch two dispatchers simultaneously. A filesystem lock enforces
+this. All workers run as independent one-thread Python CPU processes.
+One completed run gets its own log in
+`~/scratch/fulltd/fd001_gamma_v1/results/direct_logs/`.
+Progress and restart receipts are in `results/direct_launches/`.
+No hidden job time limit, requeue or Slurm command is involved.
+On Ctrl-C/SIGTERM, in-progress runs are asked to stop gracefully and
+restart later from their most recent **completed epoch**. Repeating
+`--run` skips completed or terminal numerical-failure records.
+
+Monitor:
 
 ```bash
-bash dscpuscripts/run_fd001_gamma.sh --dry-run --shards 5 --shard-indices 4 --workers 4
-bash dscpuscripts/run_fd001_gamma.sh --run     --shards 5 --shard-indices 4 --workers 4
+tail -f "$HOME/fd001_gamma_direct.log"
+vmstat 1 5
+free -h
 ```
 
-These are conservative initial concurrency settings, **not automatic
-hardware benchmarks**. Compare `free -h`, CPU utilization, and timings before
-raising to, for example, 32 processes on EPYC and 8 on Xeon. Each worker runs
-PyTorch with exactly one CPU thread and its own independent Python process.
-Avoid scheduling another CPU-intensive workload at the same time. The launcher
-checks available CPU affinity and refuses worker counts beyond it.
+The `vmstat` columns `r`, `b`, `si`, `so`, `us`, `sy`,
+`id`, `wa` help distinguish CPU contention, I/O wait, and swapping.
+Pay particular attention to sustained `si/so` activity and low
+`MemAvailable`. `--workers auto` measures availability at startup,
+not dynamically throughout the campaign.
 
-Do not run the two shards into the same results directory on a shared
-filesystem unless you intentionally coordinate dispatchers; the top-level
-direct-runner lock prevents simultaneous launchers in one directory. The
-recommended setup uses each server's own local `~/scratch/fulltd/` folder.
-
-## Bring the Xeon results onto the EPYC machine
-
-Do this **after** both servers have finished their assigned runs. Replace
-`USER@XEON_HOST` and the remote path with your actual SSH address.
-On the EPYC server:
+## Analyze after all 180 candidates finish
 
 ```bash
 cd ~/reproduceSL
-bash dscpuscripts/pull_remote_results.sh USER@XEON_HOST
-```
-
-If the secondary server uses a different results path, supply it as the second
-argument. The helper uses `rsync` to stage only canonical run directories,
-performs a dry-run verification, then imports them. Staging files are retained
-for audit and safe retry. You may instead transfer the directory manually and
-call `python -m dscpuscripts.import_results --source /path/to/staging`.
-
-The importer checks every run's canonical configuration, frozen protocol,
-code fingerprint, and prepared-data identities against the local data. It
-imports only completed or terminal numerical-failure runs, compares hashes
-when a run already exists, and **never overwrites a different local result**.
-It copies run directories atomically. No user data is deleted.
-
-Both servers must run the **same git scientific code** and produce the
-**same processed-data fingerprint**. Check the value printed by
-`download_data.sh` on each server. Identical raw datasets from the same
-source are required. Different CPUs can still produce small floating-point
-differences; your paired comparisons must retain seed/hardware provenance.
-
-## Analyze the complete 180-run campaign
-
-On the machine with all results (EPYC after import):
-
-```bash
 bash dscpuscripts/analyze_fd001_gamma.sh
 ```
 
-The existing analysis refuses to open test targets before all 180 runs have
-terminal audit records. It selects one joint `(gamma_variant, alpha, beta)`
-setting from five-seed pooled validation MSE at epochs 80/90/100; evaluates
-the five selected seeds **per variant** (15 models) and plots validation,
-Gamma and test metrics. Outputs appear in
-`~/scratch/fulltd/fd001_gamma_v1/outputs/`.
+The existing analysis requires all candidates to have terminal records,
+checks the scientific/protocol hashes, and selects hyperparameters **only**
+from five-seed validation MSE at epochs 80, 90 and 100. It evaluates the
+five chosen seeds for each variant (15 trained models), saving score tables,
+test engine predictions, uncertainty summaries, and vector figures.
 
-## Diagnosis and safety
+Results:
 
-- Run `bash dscpuscripts/inspect_server.sh` and send its output if Python,
-  RAM, number of visible CPUs, or disk layout is uncertain.
-- An operational worker error makes the dispatcher stop starting new jobs,
-  signal running workers to checkpoint at their next safe boundary, and
-  return nonzero. Inspect `results/direct_logs/<run_id>.log` and rerun.
-- Scientific numerical failures remain terminal and are included in
-  validation selection as failed candidates; do not silently retry them.
-- To change paths without editing code, export `FULLTD_ENV`,
-  `FULLTD_DATA_DIR`, `FULLTD_FD001_GAMMA_RESULTS_DIR`, or
-  `FULLTD_FD001_GAMMA_OUTPUT_DIR` **on each server**.
-- `--dry-run` never writes experiment files or starts training.
-- Never delete `~/scratch/fulltd/results/`: it holds unrelated earlier
-  FD001/METR-LA campaigns.
+```text
+~/scratch/fulltd/fd001_gamma_v1/results/
+~/scratch/fulltd/fd001_gamma_v1/outputs/
+```
 
-Targeted tests, after setup:
+No original FD001 or ongoing METR-LA results are changed or deleted. Do not
+delete `~/scratch/fulltd/results/`.
+
+## Verification
 
 ```bash
-"$HOME/scratch/fulltd/.venv-fulltd/bin/python" -m pytest -q dscpuscripts/test_direct_servers.py
+"$HOME/scratch/fulltd/.venv-fulltd/bin/python" -m pytest -q \
+  dscpuscripts/test_direct_servers.py
 ```
+
+This verifies one-server manifest coverage, worker selection, checkpoint
+identities and dry-run behavior. Synthetic tests and code review do **not**
+replace a real-machine dry run and one-config smoke test.
+
+If the setup or performance is unclear, send the output of:
+
+```bash
+bash dscpuscripts/inspect_server.sh
+```
+
+The default paths are exported by `dscpuscripts/env.sh` and may be
+overridden through `FULLTD_ENV`, `FULLTD_DATA_DIR`,
+`FULLTD_FD001_GAMMA_RESULTS_DIR` and
+`FULLTD_FD001_GAMMA_OUTPUT_DIR`. Use fast local storage if available.
