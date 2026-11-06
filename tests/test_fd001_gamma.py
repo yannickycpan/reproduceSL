@@ -425,9 +425,11 @@ def test_dry_run_writes_nothing_and_duplicate_refusal(submit_env, monkeypatch):
 
 @pytest.mark.parametrize(('stdout', 'expected_ids'), [
     ('', []),
+    ('Last update in 0 seconds ago\n', []),
+    ('739296\nLast update in 13 seconds ago\n', ['739296']),
+    ('718378_2\n718378_3\nLast update in 1 second ago\n', ['718378_2', '718378_3']),
+    ('739296_[0-5]\nLast update in 16 seconds ago\n', ['739296_[0-5]']),
     ('739296\n', ['739296']),
-    ('718378_2\n718378_3\n', ['718378_2', '718378_3']),
-    ('739296_[0-5]\n', ['739296_[0-5]']),
 ])
 def test_gamma_scheduler_query_filters_other_jobs_and_accepts_arrays(monkeypatch, stdout, expected_ids):
     monkeypatch.setenv('USER', 'fixture')
@@ -440,7 +442,9 @@ def test_gamma_scheduler_query_filters_other_jobs_and_accepts_arrays(monkeypatch
     assert hpc.queued_jobs() == [(job_id, hpc.JOB_NAME, 'queued') for job_id in expected_ids]
 
 
-@pytest.mark.parametrize('stdout', ['JOBID\n', 'bogus|name|RUNNING\n', 'Last update in 13 seconds ago\n'])
+@pytest.mark.parametrize('stdout', ['JOBID\n', 'bogus|name|RUNNING\n',
+                                    'Last update in unknown seconds ago\n',
+                                    'Last update in 13 seconds ago\nmalformed-id\n'])
 def test_gamma_scheduler_rejects_unexpected_output_with_diagnostics(monkeypatch, stdout):
     monkeypatch.setenv('USER', 'fixture')
     monkeypatch.setattr(hpc.subprocess, 'run', lambda *args, **kwargs: SimpleNamespace(stdout=stdout))
