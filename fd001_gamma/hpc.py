@@ -6,6 +6,7 @@ from collections import Counter
 import math
 import os
 from pathlib import Path
+import re
 import shlex
 import signal
 import subprocess
@@ -21,14 +22,24 @@ ANALYSIS_JOB = "fulltd_fd001_gamma_analysis"
 
 
 def queued_jobs():
-    result = subprocess.run(["squeue", "--array", "--noheader", "--user", os.environ["USER"],
-                             "--format", "%F|%100j|%T"], check=True, text=True, capture_output=True)
+    """Check only this campaign; unrelated Slurm jobs must not break submission.
+
+    %i is the normal job/array-task identifier. --name filters server-side, so
+    there is no need to parse every unrelated job's name, state, or array ID.
+    Reject any unexpected output rather than risk a duplicate submission.
+    """
+    command = ["squeue", "--array", "--noheader", "--user", os.environ["USER"],
+               "--name", JOB_NAME, "--format", "%i"]
+    result = subprocess.run(command, check=True, text=True, capture_output=True)
     rows = []
     for line in result.stdout.splitlines():
-        pieces = [p.strip() for p in line.split("|")]
-        if len(pieces) != 3 or not pieces[0].isdigit():
-            raise RuntimeError("Unrecognized squeue response; submission refused")
-        rows.append(tuple(pieces))
+        job_id = line.strip()
+        if not job_id:
+            continue
+        if not re.fullmatch(r"\d+(?:_(?:\d+|\[[0-9,%\-]+\]))?", job_id):
+            raise RuntimeError(f"Unrecognized squeue job ID {job_id!r}; submission refused. "
+                               f"Raw response: {result.stdout!r}")
+        rows.append((job_id, JOB_NAME, "queued"))
     return rows
 
 
