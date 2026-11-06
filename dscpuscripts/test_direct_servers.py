@@ -69,6 +69,17 @@ def test_classify_preserves_existing_result_identity_and_completion(tmp_path):
         direct_runner.classify(config, root, "hash")
 
 
+def test_prepared_data_mismatch_blocks_checkpoint_reuse(tmp_path):
+    config = make_manifest()[0]
+    directory = tmp_path / config["run_id"]
+    directory.mkdir(parents=True)
+    atomic_json(directory / "status.json", dict(identity=dict(
+        data_sha256="original-train", validation_sha256="original-val")))
+    direct_runner.validate_prepared_data([config], tmp_path, "original-train", "original-val")
+    with pytest.raises(RuntimeError, match="different FD001 processed data"):
+        direct_runner.validate_prepared_data([config], tmp_path, "different-train", "original-val")
+
+
 def test_dry_run_no_scheduler_no_written_files(tmp_path, monkeypatch):
     results = tmp_path / "never-created-results"
     monkeypatch.setattr(direct_runner, "campaign_paths", lambda: (tmp_path / "data", results, tmp_path / "outputs"))
