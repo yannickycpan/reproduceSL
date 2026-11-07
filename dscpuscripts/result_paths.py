@@ -59,3 +59,33 @@ def configure_environment():
     for name, value in values.items():
         os.environ.setdefault(name, value)
     return values
+
+
+def guard_unmigrated_runs(results_dir, configs, previous_roots):
+    """Refuse retraining when recorded runs exist in a former result directory.
+
+    The destination may already hold completed or interrupted runs; the guard
+    only checks for *missing* run IDs with evidence in another known location.
+    It never moves, deletes or overwrites any result or treats failures as
+    missing. Run IDs are assumed to be prevalidated canonical names.
+    """
+    results = Path(results_dir).expanduser().resolve()
+    for previous in previous_roots:
+        old = Path(previous).expanduser().resolve()
+        if old == results or not old.is_dir():
+            continue
+        unmigrated = []
+        for config in configs:
+            run_id = config["run_id"]
+            source = old / run_id
+            destination = results / run_id
+            markers = ("status.json", "recovery.pt", "final.pt")
+            if (any((source / name).exists() for name in markers)
+                    and not any((destination / name).exists() for name in markers)):
+                unmigrated.append(run_id)
+        if unmigrated:
+            raise RuntimeError(
+                f"{len(unmigrated)} existing run records still live at {old}, "
+                f"but are absent from {results}. Copy the original run "
+                "directories without overwriting checkpoints before rerunning. "
+                f"Example run: {unmigrated[0]}.")
