@@ -246,6 +246,83 @@ any training results.
 No original FD001 or ongoing METR-LA results are changed or deleted. Do not
 delete `~/scratch/fulltd/results/`.
 
+## Consolidate all FD001 methods (previous baselines + new Gamma)
+
+The old FD001 v7 experiment already evaluated two trained TCN baselines:
+**MSE (B=256)** and **Gaussian NLL (B=256)**, each with five seeds.
+The new experiment evaluated **TD typed**, **TD raw26** and
+**TD representation** (all B=128), five seeds each.
+
+The old B=128/B=256 TD-full runs and all refit_OLS/refit_TD outputs are
+**excluded completely**. There is no training or readout refit.
+The baseline source is the previously generated \`outputs_fd001\` directory
+(\`selections.json\`, \`scores.csv\`, \`candidate_accounting.csv\`,
+\`validation_records.csv\`, \`metrics.csv\`, \`evaluation_manifest.json\`)
+or the provided small \`fd001_legacy_baselines_only.zip\` archive filtered
+from the exact earlier FD001 analysis.
+
+If the older \`~/scratch/fulltd/outputs_fd001\` directory is available on
+the AMD server, no data transfer is needed. Otherwise download the
+**fd001_legacy_baselines_only.zip** from this ChatGPT conversation to your
+own computer, then copy it to the AMD server, for example:
+
+\`\`\`bash
+scp fd001_legacy_baselines_only.zip yangcpan@144.214.209.203:~/scratch/fulltd/
+\`\`\`
+
+On the AMD server run:
+
+\`\`\`bash
+cd ~/reproduceSL
+git pull --ff-only origin fullTD
+~/scratch/fulltd/.venv-fulltd/bin/python -m pytest -q dscpuscripts/test_combined_fd001.py
+bash dscpuscripts/analyze_fd001_all.sh
+\`\`\`
+
+The command automatically locates the already imported baseline-only records,
+the earlier \`outputs_fd001\` directory, or the uploaded ZIP. On first run
+it creates one **baseline-only** local copy under
+\`~/scratch/fulltd/fd001_gamma_v1/results/legacy_baselines/\`.
+The 180 Gamma run directories remain unchanged. Original results on the old
+server are not copied, changed, or deleted.
+
+Combined reports go to:
+
+\`\`\`text
+~/scratch/fulltd/fd001_gamma_v1/outputs/combined/
+    metrics.csv
+    summary_metrics.csv
+    paired_comparisons.csv
+    selections.json
+    provenance.json
+    validation_records.csv
+    validation_summary.csv
+    figures/
+\`\`\`
+
+Figures include all five methods, with explicit B128/B256 labels, for test
+RMSE/MAE (cycles), asymmetric RUL score, and validation MSE/MAE curves.
+Comparisons are descriptive five-seed matched-index differences. Batch size
+differs between Gamma and the old baselines; the combined chart must not be
+presented as a controlled same-batch method comparison. No test results enter
+hyperparameter selection.
+
+For **plots only**, after the unified tables already exist:
+
+\`\`\`bash
+bash dscpuscripts/analyze_fd001_all.sh plots
+\`\`\`
+
+RUL means *Remaining Useful Life*: the number of engine operating cycles
+remaining until failure. Errors are reported in **cycles**. The NASA
+asymmetric RUL score penalizes underestimating and overestimating remaining
+life differently; smaller scores indicate better predictions.
+
+The old TD data are not imported into the consolidated FD001 results, so
+they are no longer required for these comparisons. Removing original legacy
+TD training directories on another server is a separate irreversible
+operation; do not delete any baseline or Gamma checkpoint directories.
+
 ## Verification
 
 ```bash
