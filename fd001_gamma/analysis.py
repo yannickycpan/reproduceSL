@@ -311,18 +311,26 @@ def figures(output_dir, rows, gamma_rows):
         for winner in selected["per_variant"]:
             if not winner["run_ids"]:
                 continue
-            means, errors = [], []
+            updates, means, errors = [], [], []
             for epoch in EVALUATIONS:
-                v = [float(r[metric]) for r in validation if r["run_id"] in winner["run_ids"] and int(r["epoch"]) == epoch]
-                if len(v) != 5:
+                records = [r for r in validation if r["run_id"] in winner["run_ids"]
+                           and int(r["epoch"]) == epoch]
+                if len(records) != 5:
                     raise ValueError("Selected validation curve is missing seeds")
-                row = dict(gamma_variant=winner["gamma_variant"], epoch=epoch, metric=metric,
-                           mean=statistics.mean(v), standard_error=statistics.stdev(v) / math.sqrt(5), n=5)
+                steps = {int(r["optimizer_steps"]) for r in records}
+                if len(steps) != 1:
+                    raise ValueError("Selected validation seeds disagree on update count")
+                step = steps.pop()
+                v = [float(r[metric]) for r in records]
+                row = dict(gamma_variant=winner["gamma_variant"], epoch=epoch,
+                           optimizer_steps=step, metric=metric, mean=statistics.mean(v),
+                           standard_error=statistics.stdev(v) / math.sqrt(5), n=5)
                 data.append(row)
+                updates.append(step)
                 means.append(row["mean"])
                 errors.append(row["standard_error"])
-            ax.errorbar(EVALUATIONS, means, yerr=errors, marker="o", capsize=2, label=winner["gamma_variant"])
-        ax.set_xlabel("Completed full training epoch")
+            ax.errorbar(updates, means, yerr=errors, marker="o", capsize=2, label=winner["gamma_variant"])
+        ax.set_xlabel("Cumulative Adam optimizer updates")
         ax.set_ylabel(f"Validation {metric.upper()} (standardized)")
         if data:
             ax.legend()
@@ -333,21 +341,25 @@ def figures(output_dir, rows, gamma_rows):
         for winner in selected["per_variant"]:
             if not winner["run_ids"]:
                 continue
-            means, errors = [], []
+            updates, means, errors = [], [], []
             for epoch in EVALUATIONS:
                 v = [float(r["mean"]) for r in gamma_rows if r["run_id"] in winner["run_ids"]
                      and r["epoch"] == epoch and r["type"] == kind]
-                if len(v) != 5:
-                    raise ValueError("Gamma trajectory is missing seeds")
+                steps = {int(r["optimizer_steps"]) for r in validation
+                         if r["run_id"] in winner["run_ids"] and int(r["epoch"]) == epoch}
+                if len(v) != 5 or len(steps) != 1:
+                    raise ValueError("Gamma trajectory is missing seeds or update counts")
+                step = steps.pop()
                 with np.errstate(invalid="ignore", over="ignore"):
                     mean, sd = float(np.mean(v)), float(np.std(v, ddof=1))
-                row = dict(gamma_variant=winner["gamma_variant"], epoch=epoch, lag=lag,
-                           mean=mean, standard_error=sd / math.sqrt(5), n=5)
+                row = dict(gamma_variant=winner["gamma_variant"], epoch=epoch, optimizer_steps=step,
+                           lag=lag, mean=mean, standard_error=sd / math.sqrt(5), n=5)
                 data.append(row)
+                updates.append(step)
                 means.append(row["mean"])
                 errors.append(row["standard_error"])
-            ax.errorbar(EVALUATIONS, means, yerr=errors, marker="o", capsize=2, label=winner["gamma_variant"])
-        ax.set_xlabel("Completed full training epoch")
+            ax.errorbar(updates, means, yerr=errors, marker="o", capsize=2, label=winner["gamma_variant"])
+        ax.set_xlabel("Cumulative Adam optimizer updates")
         ax.set_ylabel(f"Mean realized Gamma, lag {lag}; fixed training probe")
         if data:
             ax.legend()
