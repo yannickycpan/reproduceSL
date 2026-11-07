@@ -39,7 +39,7 @@ def test_dataset_results_paths_share_fd001_and_isolate_other_datasets(tmp_path,m
     assert baseline[0]==traffic[0]==tmp_path/'data'
     assert baseline[1]!=traffic[1]
     assert baseline[1]==tmp_path/'fulltd/fd001_results'
-    assert baseline[2]==tmp_path/'fulltd/fd001_results/outputs/baselines'
+    assert baseline[2]==tmp_path/'fulltd/fd001_outputs/baselines'
     assert traffic[1]==tmp_path/'fulltd/metr_la_results'
     assert not baseline[1].exists()
 
