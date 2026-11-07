@@ -50,6 +50,10 @@ def test_v2_canonical_manifest_and_hp_grids():
     assert len(configs) == 600
     assert Counter(c["method"] for c in configs) == {
         "mse": 50, "gaussian_nll": 50, "td_typed": 250, "td_pairwise": 250}
+    assert Counter((c["method"], c["batch_size"]) for c in configs) == {
+        ("mse", 256): 50, ("gaussian_nll", 256): 50,
+        ("td_typed", 128): 125, ("td_typed", 256): 125,
+        ("td_pairwise", 128): 125, ("td_pairwise", 256): 125}
     assert set(protocol.METHODS) == {"mse","gaussian_nll","td_typed","td_pairwise"}
     assert protocol.BASELINE_ALPHAS == (
         .0001, .0003, .0005, .0007, .0009, .001, .003, .005, .007, .01)
@@ -171,7 +175,8 @@ def test_v2_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch):
                   and r["configuration"] == 0)
     assert viable["score"] == pytest.approx(0.1)  # NOT ~0.025 from early evaluations
     choice = next(r for r in selected["selected"] if r["method"]=="td_pairwise")
-    assert (choice["batch_size"], choice["configuration"]) != (128, 0)
+    assert choice["batch_size"] == 256
+    assert choice["configuration"] == 0  # Same rate pair at B256 remains valid
 
 
 def test_pairwise_td_uses_same_update_checkpoint_and_selection_protocol(
