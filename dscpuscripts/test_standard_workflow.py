@@ -29,14 +29,19 @@ def test_canonical_manifest_is_filtered_not_rewritten(name,count):
         assert len({c['alpha'] for c in configs}) == 6
 
 
-def test_fresh_paths_do_not_overwrite_completed_gamma(tmp_path,monkeypatch):
-    monkeypatch.setenv('FULLTD_DIRECT_ROOT',str(tmp_path / 'separate'))
+def test_dataset_results_paths_share_fd001_and_isolate_other_datasets(tmp_path,monkeypatch):
+    monkeypatch.setenv('FULLTD_RESULTS_ROOT',str(tmp_path / 'fulltd'))
     monkeypatch.setenv('FULLTD_DATA_DIR',str(tmp_path / 'data'))
-    a=runner.paths('fd001_baselines')
-    b=runner.paths('metr_la')
-    assert a[0]==b[0] and a[1]!=b[1]
-    assert a[1]==tmp_path/'separate/fd001_baselines/results'
-    assert not a[1].exists()
+    monkeypatch.delenv('FULLTD_FD001_ROOT', raising=False)
+    monkeypatch.delenv('FULLTD_METR_LA_ROOT', raising=False)
+    baseline=runner.paths('fd001_baselines')
+    traffic=runner.paths('metr_la')
+    assert baseline[0]==traffic[0]==tmp_path/'data'
+    assert baseline[1]!=traffic[1]
+    assert baseline[1]==tmp_path/'fulltd/fd001_results/results'
+    assert baseline[2]==tmp_path/'fulltd/fd001_results/outputs/baselines'
+    assert traffic[1]==tmp_path/'fulltd/metr_la_results/results'
+    assert not baseline[1].exists()
 
 
 def test_resumption_requires_identity_and_all_final_evidence(tmp_path):
