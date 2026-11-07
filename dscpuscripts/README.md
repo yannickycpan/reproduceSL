@@ -1,5 +1,11 @@
 # One AMD EPYC server: FD001 Gamma sweep
 
+**New FD001 pairwise-Gamma and alpha-extension campaign:** see
+[`STANDARD_CAMPAIGNS.md`](STANDARD_CAMPAIGNS.md#fd001-gamma-extension-two-representation-variants-140-new-runs)
+for the 140 new runs, original-representation HP extension, baseline reruns,
+and six-method plots with optimizer updates on the x-axis. This original
+180-run campaign is frozen and its results are reused unchanged.
+
 All operational scripts are inside `dscpuscripts/`. The scientific model, the
 three Gamma variants, the 3-by-4 learning-rate grid, five seeds, original
 sampler, training objective, Adam, and validation/test protocol are unchanged.
