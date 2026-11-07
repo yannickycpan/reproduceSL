@@ -273,6 +273,27 @@ def test_matched_seed_comparison_does_not_omit_any_seed():
     assert first["descriptive_t95_lower"]<=-1.<=first["descriptive_t95_upper"]
 
 
+def test_analysis_curve_nonfinite_checkpoint_and_json_agree(tmp_path):
+    """Nonfinite diagnostics must not invalidate an otherwise matching run."""
+    import inspect
+    from dscpuscripts.common import atomic_json, read_json
+    from dscpuscripts.fd001_train import json_safe
+
+    checkpoint_curve = [dict(
+        optimizer_steps=500, mse_standardized=1.2,
+        rul_score_sum=float("inf"),
+        gamma_probe=dict(types=[dict(mean=float("-inf"), std=float("nan"))]))]
+    sidecar = tmp_path / "update_curve.json"
+    atomic_json(sidecar, checkpoint_curve)
+    recorded_curve = read_json(sidecar)
+
+    assert checkpoint_curve != recorded_curve  # Raw floats vs JSON strings
+    assert json_safe(checkpoint_curve) == recorded_curve
+    # Check the real audit path, not just the serializer in isolation.
+    assert 'json_safe(ckpt["progress"]["curve"])' in inspect.getsource(
+        analysis.evaluate_selected)
+
+
 def test_fd001_reporting_never_trains_or_refits():
     source = (Path(__file__).with_name("fd001_analysis.py")).read_text()
     assert "optimizer.step(" not in source
