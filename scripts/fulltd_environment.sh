@@ -21,3 +21,8 @@ export FULLTD_DATA_DIR="${FULLTD_DATA_DIR:-$HOME/scratch/fulltd/data}"
 export FULLTD_RESULTS_DIR="${FULLTD_RESULTS_DIR:-$HOME/scratch/fulltd/results}"
 export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 BLIS_NUM_THREADS=1
+# Share the dataset_results layout with the direct-use server; only the
+# environment/module and scheduler launch scripts differ across hosts.
+SCRIPT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$SCRIPT_ROOT/dscpuscripts/env.sh"
+unset SCRIPT_ROOT
