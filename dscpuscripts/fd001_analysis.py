@@ -17,7 +17,7 @@ from dscpuscripts.common import atomic_json, file_lock, read_json, write_csv, fi
 from dscpuscripts.result_paths import paths as dataset_paths
 from .fd001_protocol import (make_manifest, METHODS, SEEDS,
                               EPOCHS, EVAL_UPDATE_PERIOD, PROTOCOL_ID, digest)
-from .fd001_train import code_hash, build_objective
+from .fd001_train import code_hash, build_objective, json_safe
 
 LABELS = dict(mse="MSE", gaussian_nll="Gaussian NLL",
               td_typed="TD typed", td_pairwise="TD pairwise")
@@ -175,7 +175,7 @@ def evaluate_selected(selection, root, data_dir, output):
             if (ckpt["identity"] != status["identity"]
                     or ckpt["config"] != config or status["state"] != "complete"
                     or ckpt["progress"]["epoch"] != EPOCHS+1
-                    or ckpt["progress"]["curve"] != read_json(directory / "update_curve.json")):
+                    or json_safe(ckpt["progress"]["curve"]) != read_json(directory / "update_curve.json")):
                 raise ValueError(f"Selected checkpoint sidecars disagree: {run_id}")
             for record in ckpt["progress"]["curve"]:
                 for metric in ("rmse_cycles", "mae_cycles", "rul_score_sum"):
