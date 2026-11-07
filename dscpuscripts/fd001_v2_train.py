@@ -88,6 +88,19 @@ def rng_restore(s):
     torch.set_rng_state(s["torch"].cpu())
 
 
+def json_safe(value):
+    """Use identical nonfinite markers in retained checkpoints and JSON sidecars."""
+    if isinstance(value, dict):
+        return {k: json_safe(v) for k, v in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [json_safe(v) for v in value]
+    if isinstance(value, (float, np.floating)) and not math.isfinite(float(value)):
+        return "NaN" if math.isnan(value) else "Infinity" if value > 0 else "-Infinity"
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
 def capture_validation(objective, validation, training, pair_law, batch_size,
                        optimizer_steps, epoch, td):
     """Observation-only, including full FD001 RUL metrics, with no RNG effects."""
@@ -116,7 +129,7 @@ def capture_validation(objective, validation, training, pair_law, batch_size,
                 if probe is None:
                     raise RuntimeError("Unexpected interrupted gamma probe")
                 record["gamma_probe"] = probe
-            return record
+            return json_safe(record)
     finally:
         objective.train(was_training)
         rng_restore(state)
