@@ -14,7 +14,7 @@ import statistics
 
 from dscpuscripts.standard_runner import paths as baseline_paths
 from dscpuscripts.fd001_report import read_outputs, selected_records, target_scale
-from fd001_gamma.common import atomic_json, file_lock, read_json, write_csv
+from fd001_gamma.common import atomic_json, file_lock, read_json, write_csv, campaign_paths as original_gamma_paths
 from fd001_gamma_ext.runtime import campaign_paths
 from fd001_gamma_ext.analysis import VARIANTS
 
@@ -51,11 +51,7 @@ def report(out):
         raise ValueError("Baseline and Gamma target scale disagree")
     # Strict same-data comparison: directly examine the saved training identities.
     from fd001_gamma.common import read_json
-    from fd001_gamma_ext.protocol import make_manifest as extension_manifest
-    from fd001_gamma.protocol import make_manifest as original_manifest
-    old_configs = {c["run_id"]: c for c in original_manifest()}
-    ext_configs = {c["run_id"]: c for c in extension_manifest()}
-    _, original_gamma_results, _ = __import__("fd001_gamma.common", fromlist=["campaign_paths"]).campaign_paths()
+    _, original_gamma_results, _ = original_gamma_paths()
     gamma_ident = set()
     for choice in choices:
         root = original_gamma_results if choice["origin"] == "original" else extension_results
@@ -168,7 +164,7 @@ def run(mode):
         write_csv(out / "validation_rmse_updates.csv", curve)
         write_csv(out / "selected_hyperparameters.csv", [
             dict(method=BASE_NAMES[g["method"]], alpha=g["alpha"], beta=g.get("beta"),
-                 batch_size=256, selection_mse=g["score"]) for g in baseline_selections
+                 batch_size=256, selection_mse=g["validation_selection_mse"]) for g in baseline_selections
         ] + [
             dict(method=GAMMA_NAMES[g["gamma_variant"]], alpha=g["alpha"], beta=g["beta"],
                  batch_size=128, selection_mse=g["score"], origin=g["origin"]) for g in choices
