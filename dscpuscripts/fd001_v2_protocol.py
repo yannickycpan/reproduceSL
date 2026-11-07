@@ -6,6 +6,8 @@ retained checkpoints at step 0 and every 500 optimizer updates.
 """
 from __future__ import annotations
 
+import os
+
 from fulltd.protocol import digest
 
 PROTOCOL_ID = "fd001-four-methods-update-v2"
@@ -13,7 +15,11 @@ SEEDS = tuple(range(5))
 EPOCHS = 100
 SELECT_EPOCHS = (80, 90, 100)
 EPOCH_VALIDATIONS = tuple(range(10, 101, 10))
-EVAL_UPDATE_PERIOD = 500  # New future campaigns can change this before launch.
+# Optional future experiment setting. It is retained inside every run config
+# and therefore in the checkpoint identity; changing it cannot reuse old runs.
+EVAL_UPDATE_PERIOD = int(os.environ.get("FULLTD_FD001_EVAL_EVERY", "500"))
+if EVAL_UPDATE_PERIOD < 1:
+    raise ValueError("FULLTD_FD001_EVAL_EVERY must be a positive integer")
 BETAS = (0.00003, 0.0001, 0.0003, 0.001, 0.003)
 BASELINE_ALPHAS = (0.0002, 0.0003, 0.0005, 0.0007, 0.001, 0.003, 0.01)
 TYPED_ALPHAS = (0.0003, 0.001, 0.003)
