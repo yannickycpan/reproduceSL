@@ -241,7 +241,8 @@ def run_campaign(args) -> int:
     if args.max_runs:
         pending = pending[:args.max_runs]
 
-    print(f"FD001 Gamma: all {len(chosen)} runs assigned to this AMD server; "
+    label = "FD001 Gamma extension" if getattr(args, "campaign", "original") == "extension" else "FD001 Gamma"
+    print(f"{label}: all {len(chosen)} runs assigned to this AMD server; "
           f"{len(pending)} to process now", flush=True)
     print(f"States: {dict(counts)}", flush=True)
     print(f"Data: {data}; results: {results}", flush=True)
@@ -338,6 +339,7 @@ def run_campaign(args) -> int:
                         break
                     run_id = config["run_id"]
                     command = [sys.executable, "-m", "dscpuscripts.direct_runner",
+                               "--campaign", getattr(args, "campaign", "original"),
                                "--worker", "--run-id", run_id,
                                "--data-dir", str(data), "--results-dir", str(results),
                                "--expected-code-hash", code_hash,
@@ -412,7 +414,10 @@ def run_campaign(args) -> int:
 
 
 def main():
+    global make_manifest, scientific_hash, campaign_paths
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--campaign", choices=("original", "extension"), default="original",
+                        help="Original 180 Gamma runs or isolated 140-run extension")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--dry-run", dest="mode", action="store_const", const="dry-run")
     mode.add_argument("--run", dest="mode", action="store_const", const="run")
@@ -431,9 +436,18 @@ def main():
     parser.add_argument("--results-dir")
     parser.add_argument("--expected-code-hash")
     args = parser.parse_args()
+    if args.campaign == "extension":
+        from fd001_gamma_ext import protocol as ext_protocol
+        from fd001_gamma_ext import runtime as ext_runtime
+        make_manifest = ext_protocol.make_manifest
+        scientific_hash = ext_runtime.scientific_hash
+        campaign_paths = ext_runtime.campaign_paths
     if args.mode == "worker":
         if not all((args.run_id, args.data_dir, args.results_dir, args.expected_code_hash)):
             parser.error("Internal --worker requires run-id, data-dir, results-dir, expected-code-hash")
+        if args.campaign == "extension":
+            from fd001_gamma_ext.runtime import worker as extension_worker
+            return extension_worker(args)
         return worker(args)
     return run_campaign(args)
 
