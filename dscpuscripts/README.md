@@ -1,205 +1,150 @@
-# Dataset results and direct CPU experiments
+# Direct-server experiments: FD001 fresh four-method sweep
 
-This is the **shared** results, analysis and plotting workflow for the AMD
-server or a supported HPC host. Machines differ only in environment setup
-and how processes are launched, **not** in scientific checkpoint formats,
-hyperparameter selection, report definitions or figures.
+This is the recommended workflow for the new, **270-run** FD001 comparison.
+The earlier 180-run Gamma, 140-run extension, and 60-run baseline experiments
+remain intact with their original checkpoint identities and run IDs.
+Only one launcher and one analyzer are used for the fresh sweep.
 
-## Directory convention (same on every server)
-
-All defaults are relative to `$HOME/scratch/fulltd`, or override the common
-`FULLTD_RESULTS_ROOT` environment variable:
+## Files and directories
 
 ```text
 ~/scratch/fulltd/
-  data/                            # prepared datasets shared by campaigns
-  .venv-fulltd/                   # direct CPU Python environment
-  fd001_results/
-    fd001_gamma_v1_typed_b128_a0_b0_s0/    # run IDs live HERE, not in results/
-    fd001_gamma_v1_raw26_b128_a0_b0_s0/
-    fd001_gamma_v1_representation_b128_a0_b0_s0/
-    ...                         # 180 original + 140 extension + 60 baseline IDs
-    direct_logs/                # worker logs
-    direct_launches/            # dispatcher receipts
-    initial_states/             # initial checkpoint states
-    outputs/                    # analysis output files are separate from run folders
-      rmse_report/                # original three-Gamma RMSE report
-      extension/                  # four-Gamma selection, tables and plots
-      baselines/                  # direct MSE and Gaussian NLL analysis
-      comparison/                 # single six-method test table and common RMSE figure
-  electricity_results/
-    <canonical-electricity-run-id>/
-    outputs/
-  metr_la_results/
-    <canonical-metr_la-run-id>/
-    outputs/
+    data/                       # previously verified processed datasets
+    fd001_results/              # ALL training runs; flat run-ID directories
+        fd001_v2_mse_.../
+        fd001_v2_gaussian_nll_.../
+        fd001_v2_td_typed_.../
+        fd001_v2_td_pairwise_.../
+        fd001_gamma_v1_.../     # historical data remain unchanged
+        fd001_gamma_ext_v1_.../
+    fd001_outputs/              # NEW shared FD001 analysis, SIBLING of results/
+        selections.json
+        hp_scores.csv
+        selected_hyperparameters.csv
+        per_seed_metrics.csv
+        performance_summary.csv
+        validation_learning_curves.csv
+        validation_curve_per_seed.csv
+        figures/
+        td_diagnostics/
+        .cache/
 ```
 
-FD001 run folders live directly in `fd001_results/` because their frozen run IDs are disjoint.
-The run directories, statuses, checkpoints and original selection files must
-**not** be renamed. Different analysis outputs are separated to prevent
-overwriting each other's selection evidence.
+No new nested result directory is created. Results and analysis are shared by
+the direct CPU server and HPC: host-specific differences are only environment
+setup and dispatch. `dscpuscripts/result_paths.py` resolves the root;
+`FULLTD_RESULTS_ROOT` and `FULLTD_FD001_ROOT` allow explicit overrides.
+Existing historical `fd001_results/outputs/` are *not deleted*.
 
-The canonical paths are defined in `dscpuscripts/result_paths.py`. Both
-`dscpuscripts/env.sh` and direct Python reporting commands use them. Environment
-overrides take precedence, including `FULLTD_FD001_ROOT`,
-`FULLTD_ELECTRICITY_ROOT`, `FULLTD_METR_LA_ROOT` and `FULLTD_DATA_DIR`.
+## New FD001 scientific protocol
 
-**Your moved original FD001 results are expected at**
-`/home/yangcpan/scratch/fulltd/fd001_results/`;
-the original Gamma analysis outputs are expected at
-`/home/yangcpan/scratch/fulltd/fd001_results/outputs/`.
-No script will move, overwrite, or delete those trained results.
+One frozen TCN architecture, the same FD001 train/validation/test split, same
+train-data standardization, same deterministic source/partner sampling, 100
+full epochs, Adam with constant rates and no clipping, weight decay, learning
+schedule, refit, auxiliary supervised term, or early stopping.
 
-## Why there are fd001_gamma and fd001_gamma_ext source packages
+| Method | Predictor alpha sweep | Operator beta sweep | Total runs |
+| --- | --- | --- | ---: |
+| MSE, B256 | .0002, .0003, .0005, .0007, .001, .003, .01 | — | 35 |
+| Gaussian NLL, B256 | same seven alpha values | — | 35 |
+| TD typed, B128 | .0003, .001, .003 | .00003, .0001, .0003, .001, .003 | 75 |
+| TD pairwise, B128 | .00003, .0001, .0003, .001, .003 | same five beta values | 125 |
+| **Total** | | | **270** |
 
-- `fd001_gamma/` is the **frozen** original 180-candidate protocol, its
-  objective/training implementation, and its validated checkpoint identities.
-- `fd001_gamma_ext/` is a **separate scientific protocol** for 140 additional
-  candidates: 40 extra old-representation rates and 100 new pairwise-head
-  candidates. It imports the original epoch trainer instead of copying it.
-- The common CPU dispatcher is `dscpuscripts/direct_runner.py`; baseline,
-  Electricity and METR-LA training share `dscpuscripts/standard_runner.py`.
-  The new code-head dimension is inferred from `model.feature_dim`, not fixed
-  at 64.
+All methods use five seeds. Raw26, source-only representation TD and MAE-trained
+FD001 algorithms are **absent**. The TD operators and baseline losses are reused
+from the frozen implementations.
 
-Merging these scientific modules would change recorded code hashes and risk
-invalidating existing original/extension checkpoints. Keeping the source
-protocols separate is intentional; **they do not require separate results
-folders**.
+**Selection is unchanged:** mean standardized validation MSE over epochs
+80, 90 and 100, pooled across five seeds. Any genuine nonfinite numerical
+failure invalidates the *entire five-seed HP setting* with infinite score.
+Missing/incomplete checkpoints block analysis; they are not misclassified as
+divergence. Test data are loaded only after selection has been locked.
 
-## One-time migration of earlier baseline or extension runs, if needed
+**Learning-curve observations are independent of selection:** initial
+evaluation at update **0**, then at **500, 1000, 1500, ...** actual Adam
+optimizer updates. Each observation evaluates validation RMSE, MAE and summed
+RUL score, and each scheduled step retains a full checkpoint (model, Adam,
+RNG state, source cursor and records). There are also separate epoch-end
+selection evaluations and rolling recovery checkpoints. Interrupted training
+resumes from the last durable source cursor within an epoch without changing
+the source/partner sampling stream. No interpolation of historical learning
+curves or evaluation on test during training is used.
 
-The original 180 run directories are **already directly inside**
-`fd001_results/`, as shown by your listing. **Do not move them again.**
-Only older baseline/extension runs saved in other directories may require copying.
+The default 500-update cadence is configurable for **future, distinct**
+experiments via `FULLTD_FD001_EVAL_EVERY`; this value is saved in every run's
+config and its checkpoint identity. **Do not change it after the sweep starts.**
 
-If the earlier separate paths still contain baseline or extension
-checkpoints, stop any associated dispatchers, then copy their run directories
-into the common FD001 results folder **without overwriting files**:
+Original Graph WaveNet's reference training uses masked MAE. Its *historical*
+MAE baseline remains available solely for that cited-reference exception;
+the fresh FD001 sweep and all four current methods do not train using MAE.
+All four are nevertheless **evaluated using both MAE and RMSE**, plus FD001
+RUL score.
 
-```bash
-dest="$HOME/scratch/fulltd/fd001_results"
-mkdir -p "$dest" "$dest/outputs/baselines" "$dest/outputs/extension"
-# ONLY run the following commands if the respective source exists.
-# Some runs may have been started using the mistaken nested layout:
-test ! -d "$dest/results" || rsync -av --ignore-existing "$dest/results/" "$dest/"
-test ! -d "$HOME/scratch/fulltd/direct/fd001_baselines/results" || rsync -av --ignore-existing "$HOME/scratch/fulltd/direct/fd001_baselines/results/" "$dest/"
-test ! -d "$HOME/scratch/fulltd/direct/fd001_baselines/outputs" || rsync -av --ignore-existing "$HOME/scratch/fulltd/direct/fd001_baselines/outputs/" "$dest/outputs/baselines/"
-test ! -d "$HOME/scratch/fulltd/fd001_gamma_extension_v1/results" || rsync -av --ignore-existing "$HOME/scratch/fulltd/fd001_gamma_extension_v1/results/" "$dest/"
-test ! -d "$HOME/scratch/fulltd/fd001_gamma_extension_v1/outputs" || rsync -av --ignore-existing "$HOME/scratch/fulltd/fd001_gamma_extension_v1/outputs/" "$dest/outputs/extension/"
-```
-
-Use `test -d SOURCE_DIRECTORY` first: `rsync` errors on nonexistent sources.
-The runners detect existing old/nested checkpoints that were not
-migrated and refuse to silently rerun those configurations. **Never delete
-the old directories until the new status and analysis checks pass.**
-
-## Run (single AMD server, no Slurm)
+## Launch on the AMD server
 
 ```bash
 cd ~/reproduceSL
 git switch fullTD
 git pull --ff-only origin fullTD
-bash dscpuscripts/setup_server.sh
-bash dscpuscripts/download_data.sh fd001
+~/scratch/fulltd/.venv-fulltd/bin/python -m pytest -q \
+  dscpuscripts/test_fd001_v2.py \
+  dscpuscripts/test_standard_workflow.py \
+  dscpuscripts/test_result_paths.py
 
-# Inspect the 180 original Gamma runs.
-bash dscpuscripts/status_fd001_gamma.sh --terminal  # allows recorded numerical failures
-# Use --strict instead to require every single training run to have completed
+# No jobs launched by --dry-run:
+bash dscpuscripts/run_standard.sh fd001_v2 --dry-run
 
-# The 60 previously defined MSE/NLL baselines (B256).
-bash dscpuscripts/run_standard.sh fd001_baselines --dry-run
-nohup bash dscpuscripts/run_standard.sh fd001_baselines --run \
-  --workers 48 --adaptive > "$HOME/fd001_baselines.log" 2>&1 < /dev/null &
-
-# The 140 Gamma-extension configurations (B128).
-# Launch after the baseline dispatcher finishes to avoid resource contention.
-bash dscpuscripts/run_fd001_gamma_extension.sh --dry-run
-nohup bash dscpuscripts/run_fd001_gamma_extension.sh --run \
-  --workers 128 --adaptive > "$HOME/fd001_gamma_extension.log" 2>&1 < /dev/null &
+# Start the entire 270-run campaign with one direct scheduler:
+nohup bash dscpuscripts/run_standard.sh fd001_v2 \
+  --run --workers 48 --adaptive \
+  > "$HOME/fd001_v2.log" 2>&1 < /dev/null &
+echo $!
 ```
 
-The source files have no maximum wall time. `--adaptive` is a 10-minute
-CPU-idleness sampling heuristic, not a scheduler reservation. It never kills
-healthy workers when other users become busy. A repeated `--run` resumes
-compatible checkpoints and skips completed configurations.
-
-For **Electricity** or **METR-LA** use the same scripts and dataset naming:
+Check progress without launching additional jobs:
 
 ```bash
-bash dscpuscripts/download_data.sh electricity
-bash dscpuscripts/run_standard.sh electricity --dry-run
-# Then --run --workers 8 --adaptive
-
-bash dscpuscripts/download_data.sh metr_la
-bash dscpuscripts/run_standard.sh metr_la --dry-run
-# Then --run --workers 8 --microbatch 32 --adaptive
+bash dscpuscripts/run_standard.sh fd001_v2 --status
+tail -n 40 "$HOME/fd001_v2.log"
 ```
 
-## Numerical failures versus missing records
+The shared server is heavily utilized. Start at most one launcher and use
+`--adaptive` rather than assuming all 256 physical cores are idle. Logs,
+snapshots, and training outputs are under the flat `fd001_results` tree.
+The launcher skips completed/numerically failed run IDs and resumes any
+compatible checkpoints. It refuses to overwrite a record from another
+protocol/code/data identity.
 
-The original Gamma selector assigns `+Infinity` to every hyperparameter
-combination for which **even one of the five seeds** reports a genuine
-`numerical_failure`. It cannot be chosen ahead of a finite five-seed
-configuration. The 320-run joint Gamma selector does the same. A missing
-`status.json`, incomplete checkpoint, code/data identity mismatch, or absent
-run folder is **not** a numerical divergence and must be repaired/audited;
-these must never silently be scored as failed HPs.
+## Unified results analysis (one command)
 
-`status_fd001_gamma.sh --strict` requires 180 actual successful completions.
-`status_fd001_gamma.sh --terminal` succeeds when all 180 have finished or
-documented numerical failure statuses; it does **not** pretend the failed
-runs trained successfully.
-
-## Analyze and plot (exact same commands on either machine)
+Only after all 270 runs have finished successfully or have documented
+numerical failures:
 
 ```bash
-# No retraining or readout refit; validation selects each method separately.
-bash dscpuscripts/analyze_fd001_gamma.sh check
-bash dscpuscripts/analyze_standard.sh fd001_baselines
-bash dscpuscripts/analyze_fd001_gamma_extension.sh check
-bash dscpuscripts/analyze_fd001_gamma_extension.sh run   # regenerates original Gamma outputs first
-bash dscpuscripts/compare_fd001.sh
+bash dscpuscripts/analyze_standard.sh fd001_v2 check
+bash dscpuscripts/analyze_standard.sh fd001_v2 run
 ```
 
-If the original `fd001_results/outputs/` was never moved, the extension
-`run` entrypoint automatically recreates the original Gamma analysis from
-the existing epoch-100 checkpoints. It does not start new training or refit.
-If some candidates are recorded as genuine numerical failures, their entire
-hyperparameter combinations receive infinite selection scores. Missing
-status files are not interpreted as divergence.
+`check` audits all candidates and determines the four winners without
+opening test labels. `run` evaluates the **actual epoch-100 models**
+and produces one common FD001 report in `fd001_outputs/`: a validation/test
+table with RMSE, MAE and RUL score, one HP selection table, measured
+0/500/... learning curves on the real optimizer-update axis, and TD operator
+diagnostics. There is **no baseline-only analysis, extension-only analysis,
+or rmse_report** in the fresh workflow.
 
-The unified six-method figure is:
-`fd001_results/outputs/comparison/figures/fd001_six_methods_validation_rmse_updates.pdf`
-(and SVG, PNG), with **actual cumulative Adam optimizer updates** on the
-horizontal axis. Tables include test RMSE, MAE and summed RUL score. Each
-method chooses HPs from five-seed validation MSE at epochs 80, 90 and 100;
-test evaluation uses the actual epoch-100 trained model, **never a refit**.
-
-For plots only:
+Regenerate figures only without checkpoint evaluation:
 
 ```bash
-bash dscpuscripts/compare_fd001.sh plots
+bash dscpuscripts/analyze_standard.sh fd001_v2 plots
 ```
 
-The original `fd001_gamma/analysis.py` retains its three-Gamma audit and
-operator diagnostics, `fd001_gamma_ext/analysis.py` audits all 320 Gamma
-candidates and jointly selects representation HPs, and
-`dscpuscripts/standard_analysis.py` selects/evaluates baselines plus
-Electricity and METR-LA. The **single common FD001 RMSE curve renderer**
-lives in `dscpuscripts/fd001_report.py`; the unified six-method comparison
-uses `dscpuscripts/compare_fd001_extension.py`. Previous ZIP-only,
-five-method reporting duplicates have been deleted.
+## Legacy experiments
 
-## Verification
-
-```bash
-~/scratch/fulltd/.venv-fulltd/bin/python -m pytest -q dscpuscripts/test_result_paths.py \
-  dscpuscripts/test_direct_servers.py dscpuscripts/test_gamma_extension.py \
-  dscpuscripts/test_gamma_extension_selection.py dscpuscripts/test_gamma_reporting.py \
-  dscpuscripts/test_standard_workflow.py
-```
-
-A passing synthetic suite is not a replacement for a real 60/140-run
-completion check, checkpoint/data-identity audit, or successful report.
+Older commands `run_fd001_gamma.sh`,
+`run_fd001_gamma_extension.sh`, and `analyze_fd001_gamma.sh` are retained
+for *historical checkpoint reproducibility*, not part of this fresh FD001
+comparison. The older Electricity/METR-LA runner and their published
+experimental protocols remain unchanged; they can use the direct-server
+`run_standard.sh electricity` or `run_standard.sh metr_la` commands.
