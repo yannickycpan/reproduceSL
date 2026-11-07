@@ -2,7 +2,7 @@
 
 fd001_baselines = original MSE/NLL grid (60 runs, B256).
 electricity = original 300 runs; metr_la = original 210 runs.
-All dataset methods share ~/scratch/fulltd/<dataset>_results/results/;
+All dataset methods share run directories directly in ~/scratch/fulltd/<dataset>_results/;
 analysis outputs remain isolated by campaign.
 """
 from __future__ import annotations
