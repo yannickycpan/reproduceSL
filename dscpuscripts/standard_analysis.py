@@ -157,7 +157,7 @@ def main():
     parser.add_argument('campaign', choices=CAMPAIGNS)
     parser.add_argument('mode', choices=('check', 'run', 'plots'), nargs='?', default='run')
     args = parser.parse_args()
-    if args.campaign == 'fd001_v2':
+    if args.campaign == 'fd001_v2b':
         # One unified four-method analysis; no baseline-only, extension-only,
         # or auxiliary RMSE report is generated for the fresh sweep.
         from dscpuscripts.fd001_v2_analysis import run as analyze_v2
