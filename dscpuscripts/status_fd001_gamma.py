@@ -94,6 +94,8 @@ def report(rows, *, show=8):
 
 
 def main():
+    from dscpuscripts.result_paths import configure_environment
+    configure_environment()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-dir", type=Path, default=None,
                         help="Override the existing FD001 Gamma results directory")
