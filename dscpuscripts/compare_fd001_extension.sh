@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
-# Six FD001 trained methods: MSE/NLL rerun locally plus four TD Gamma methods.
+# Backward-compatible alias; reporting logic lives in compare_fd001.sh.
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$ROOT/dscpuscripts/env.sh"
-cd "$ROOT"
-PYTHON="$FULLTD_ENV/bin/python"
-[[ -x "$PYTHON" ]] || { echo "Run bash dscpuscripts/setup_server.sh first." >&2; exit 1; }
-exec "$PYTHON" -m dscpuscripts.compare_fd001_extension "${1:-run}"
+exec bash "$ROOT/dscpuscripts/compare_fd001.sh" "$@"
