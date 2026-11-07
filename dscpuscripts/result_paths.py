@@ -33,7 +33,9 @@ def paths(dataset, output_kind=None):
     """
     root = dataset_root(dataset)
     data = Path(os.environ.get("FULLTD_DATA_DIR", base_root() / "data")).expanduser().resolve()
-    out = root / "outputs"
+    # New analyses live beside the data/results folder, never inside it.
+    # Historical outputs under <dataset>_results/outputs are left untouched.
+    out = root.parent / f"{dataset}_outputs"
     if output_kind:
         if not (output_kind.replace("_", "").isalnum() and "/" not in output_kind):
             raise ValueError("Invalid output directory kind")
@@ -50,7 +52,7 @@ def configure_environment():
     Explicit user environment overrides always take precedence.
     """
     data, results, gamma_out = paths("fd001")
-    extension_out = dataset_root("fd001") / "outputs" / "extension"
+    extension_out = gamma_out / "extension"
     values = dict(FULLTD_DATA_DIR=str(data),
                   FULLTD_FD001_GAMMA_RESULTS_DIR=str(results),
                   FULLTD_FD001_GAMMA_OUTPUT_DIR=str(gamma_out),
