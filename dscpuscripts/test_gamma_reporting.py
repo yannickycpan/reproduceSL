@@ -68,7 +68,8 @@ def make_saved_csv_fixture(out):
                 validation.append(dict(
                     run_id=run_id, gamma_variant=variant, seed=seed,
                     epoch=epoch, mse=20.0 + variant_i + 0.1 * seed,
-                    mae=4.0 + variant_i + 0.1 * seed))
+                    mae=4.0 + variant_i + 0.1 * seed,
+                    optimizer_steps=epoch * 110))
                 for kind in (1, 2):
                     gammas.append(dict(run_id=run_id, gamma_variant=variant,
                                        seed=seed, epoch=epoch, type=kind,
