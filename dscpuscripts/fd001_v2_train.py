@@ -1,8 +1,8 @@
-"""Fresh FD001 training: unchanged objectives/Adam, validation at update 0/500/etc.
+"""Fresh FD001: unchanged objectives and 100-epoch Adam, measured every 500 updates.
 
-All original scientific training modules remain frozen and readable. This
-implementation creates independent fd001_v2 run IDs and atomic full-state
-checkpoints at exact update intervals, and resumes at the saved source cursor.
+Original scientific training modules are frozen. Independent fd001_v2b run IDs
+retain exact-update full-state checkpoints and a recoverable source cursor.
+HP selection uses the last quarter of periodic validation observations.
 """
 from __future__ import annotations
 
@@ -19,13 +19,13 @@ import torch
 
 from fd001_gamma.common import atomic_json, read_json, file_hash, data_identity
 from fulltd.data import load_dataset
-from fulltd.metrics import validation_scores, evaluate
+from fulltd.metrics import evaluate
 from fulltd.models import build_model
 from fulltd.sampling import (rng_for, sources_for_round, sequence_hash,
                              training_universe)
 from fulltd.train import (seed_runtime, state_hash, logical_backward)
-from .fd001_v2_protocol import (PROTOCOL_ID, EPOCHS, EPOCH_VALIDATIONS,
-                                 EVAL_UPDATE_PERIOD, digest, validate_config)
+from .fd001_v2_protocol import (PROTOCOL_ID, EPOCHS, EVAL_UPDATE_PERIOD,
+                                 digest, validate_config)
 
 
 SCIENTIFIC_SOURCES = (
@@ -140,7 +140,7 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
     """Produce canonical update/epoch evidence; test hook stops after an update."""
     validate_config(config)
     if device != "cpu":
-        raise ValueError("The direct FD001 v2 sweep uses CPU only")
+        raise ValueError("The direct fresh FD001 sweep uses CPU only")
     stop_requested = stop_requested or (lambda: False)
     seed_runtime(config["seed"])
     train, law, excluded = training_universe(train_data, tuple(config["lags"]))
@@ -159,7 +159,7 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
     if status_file.exists():
         old_status = read_json(status_file)
         if old_status.get("config") != config or old_status.get("identity") != identity:
-            raise ValueError("Existing v2 run belongs to a different protocol/code/data")
+            raise ValueError("Existing FD001 run belongs to a different protocol/code/data")
         if old_status["state"] == "numerical_failure" and not final.exists():
             return old_status
     objective = build_objective(config).cpu()
@@ -168,13 +168,13 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
                                  betas=(.9, .999), eps=1e-8, weight_decay=0, amsgrad=False)
     expected_updates = math.ceil(n / batch_size) * EPOCHS
     initial = dict(epoch=1, cursor=0, count=0, optimizer_steps=0, epoch_loss=0.,
-                   epoch_valid=0, validation=[], curve=[], rounds=[])
+                   epoch_valid=0, curve=[], rounds=[])
     progress = initial
     checkpoint_file = final if final.exists() else recovery
     if checkpoint_file.exists():
         ckpt = torch.load(checkpoint_file, map_location="cpu", weights_only=False)
         if ckpt["identity"] != identity or ckpt["config"] != config or ckpt["initial_mean_sha256"] != mean_hash:
-            raise ValueError("Saved v2 checkpoint is incompatible; never silently restart")
+            raise ValueError("Saved FD001 checkpoint is incompatible; never silently restart")
         objective.load_state_dict(ckpt["objective"])
         optimizer.load_state_dict(ckpt["optimizer"])
         rng_restore(ckpt["rng"])
@@ -184,7 +184,7 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
             raise ValueError("FD001 expected one actual Adam update per logical batch")
     else:
         if status_file.exists():
-            raise ValueError("Existing v2 status without a checkpoint; preserve and investigate")
+            raise ValueError("Existing status without a checkpoint; preserve and investigate")
         # Record initial identical predictor states without accessing validation/test labels.
         initfile = Path(results_dir) / "initial_states" / f"fd001_tcn_s{config['seed']}_{mean_hash[:16]}.pt"
         if not initfile.exists():
@@ -206,7 +206,6 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
             path = root / "checkpoints" / f"step_{progress['optimizer_steps']:07d}.pt"
             atomic_torch(path, value)
         atomic_torch(final if state == "complete" else recovery, value)
-        atomic_json(root / "validation.json", progress["validation"])
         atomic_json(root / "update_curve.json", progress["curve"])
         atomic_json(root / "rounds.json", progress["rounds"])
         report = dict(config=config, identity=identity, state=state,
@@ -267,12 +266,6 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
                     return checkpoint("checkpointed")
             if stop_requested():
                 return checkpoint("checkpointed")
-            if epoch in EPOCH_VALIDATIONS:
-                score = validation_scores(objective.model, val_data, physical, "cpu")
-                if not all(math.isfinite(score[k]) for k in ("mse", "mae")):
-                    raise FloatingPointError("Nonfinite epoch-selection validation")
-                progress["validation"].append(dict(epoch=epoch, optimizer_steps=progress["optimizer_steps"],
-                                                   mse=score["mse"], mae=score["mae"]))
             progress["rounds"].append(dict(epoch=epoch, source_draws=n,
                                           source_sha256=sequence_hash(sources),
                                           partner_sha256=sequence_hash(partners) if td else None,
