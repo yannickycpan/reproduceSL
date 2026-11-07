@@ -51,7 +51,10 @@ def configure_environment():
     call this before using those APIs, so every machine obtains dataset_results.
     Explicit user environment overrides always take precedence.
     """
-    data, results, gamma_out = paths("fd001")
+    data, results, _ = paths("fd001")
+    # Legacy Gamma reports keep their historical output directory. The fresh
+    # 270-run unified FD001 analysis alone owns the sibling fd001_outputs/.
+    gamma_out = dataset_root("fd001") / "outputs"
     extension_out = gamma_out / "extension"
     values = dict(FULLTD_DATA_DIR=str(data),
                   FULLTD_FD001_GAMMA_RESULTS_DIR=str(results),
