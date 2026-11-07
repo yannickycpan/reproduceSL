@@ -1,6 +1,6 @@
 # Direct-server experiments: FD001 fresh four-method sweep
 
-This is the recommended workflow for the new, **270-run** FD001 comparison.
+This is the recommended workflow for the new, **600-run** FD001 comparison.
 The earlier 180-run Gamma, 140-run extension, and 60-run baseline experiments
 remain intact with their original checkpoint identities and run IDs.
 Only one launcher and one analyzer are used for the fresh sweep.
@@ -11,10 +11,12 @@ Only one launcher and one analyzer are used for the fresh sweep.
 ~/scratch/fulltd/
     data/                       # previously verified processed datasets
     fd001_results/              # ALL training runs; flat run-ID directories
-        fd001_v2_mse_.../
-        fd001_v2_gaussian_nll_.../
-        fd001_v2_td_typed_.../
-        fd001_v2_td_pairwise_.../
+        fd001_v2b_mse_.../
+        fd001_v2b_gaussian_nll_.../
+        fd001_v2b_td_typed_b128_.../
+        fd001_v2b_td_typed_b256_.../
+        fd001_v2b_td_pairwise_b128_.../
+        fd001_v2b_td_pairwise_b256_.../
         fd001_gamma_v1_.../     # historical data remain unchanged
         fd001_gamma_ext_v1_.../
     fd001_outputs/              # NEW shared FD001 analysis, SIBLING of results/
@@ -46,18 +48,22 @@ schedule, refit, auxiliary supervised term, or early stopping.
 
 | Method | Predictor alpha sweep | Operator beta sweep | Total runs |
 | --- | --- | --- | ---: |
-| MSE, B256 | .0002, .0003, .0005, .0007, .001, .003, .01 | — | 35 |
-| Gaussian NLL, B256 | same seven alpha values | — | 35 |
-| TD typed, B128 | .0003, .001, .003 | .00003, .0001, .0003, .001, .003 | 75 |
-| TD pairwise, B128 | .00003, .0001, .0003, .001, .003 | same five beta values | 125 |
-| **Total** | | | **270** |
+| MSE, B256 | .0001, .0003, .0005, .0007, .0009, .001, .003, .005, .007, .01 | — | 50 |
+| Gaussian NLL, B256 | same ten alpha values | — | 50 |
+| TD typed, B128 + B256 | .00003, .0001, .0003, .001, .003 | .00003, .0001, .0003, .001, .003 | 250 |
+| TD pairwise, B128 + B256 | same five alpha values | same five beta values | 250 |
+| **Total** | | | **600** |
 
 All methods use five seeds. Raw26, source-only representation TD and MAE-trained
 FD001 algorithms are **absent**. The TD operators and baseline losses are reused
 from the frozen implementations.
 
-**Selection is unchanged:** mean standardized validation MSE over epochs
-80, 90 and 100, pooled across five seeds. Any genuine nonfinite numerical
+**Selection:** for each candidate, average standardized validation MSE over the
+last ceil(25%) of scheduled post-start evaluations (the initial evaluation at
+update 0 is excluded). Pool the resulting score across all five seeds,
+then select learning rates and, for TD, batch size jointly. With the current
+FD001 update counts, these are updates 4500,5000,5500 for B256 and
+8500,9000,9500,10000,10500,11000 for B128. Any genuine nonfinite numerical
 failure invalidates the *entire five-seed HP setting* with infinite score.
 Missing/incomplete checkpoints block analysis; they are not misclassified as
 divergence. Test data are loaded only after selection has been locked.
@@ -66,8 +72,8 @@ divergence. Test data are loaded only after selection has been locked.
 evaluation at update **0**, then at **500, 1000, 1500, ...** actual Adam
 optimizer updates. Each observation evaluates validation RMSE, MAE and summed
 RUL score, and each scheduled step retains a full checkpoint (model, Adam,
-RNG state, source cursor and records). There are also separate epoch-end
-selection evaluations and rolling recovery checkpoints. Interrupted training
+RNG state, source cursor and records). There are also rolling epoch-end recovery checkpoints (no extra epoch-only
+validation measurements). Interrupted training
 resumes from the last durable source cursor within an epoch without changing
 the source/partner sampling stream. No interpolation of historical learning
 curves or evaluation on test during training is used.
@@ -94,10 +100,10 @@ git pull --ff-only origin fullTD
   dscpuscripts/test_result_paths.py
 
 # No jobs launched by --dry-run:
-bash dscpuscripts/run_standard.sh fd001_v2 --dry-run
+bash dscpuscripts/run_standard.sh fd001_v2b --dry-run
 
-# Start the entire 270-run campaign with one direct scheduler:
-nohup bash dscpuscripts/run_standard.sh fd001_v2 \
+# Start the entire 600-run campaign with one direct scheduler:
+nohup bash dscpuscripts/run_standard.sh fd001_v2b \
   --run --workers 48 --adaptive \
   > "$HOME/fd001_v2.log" 2>&1 < /dev/null &
 echo $!
@@ -106,7 +112,7 @@ echo $!
 Check progress without launching additional jobs:
 
 ```bash
-bash dscpuscripts/run_standard.sh fd001_v2 --status
+bash dscpuscripts/run_standard.sh fd001_v2b --status
 tail -n 40 "$HOME/fd001_v2.log"
 ```
 
@@ -119,12 +125,12 @@ protocol/code/data identity.
 
 ## Unified results analysis (one command)
 
-Only after all 270 runs have finished successfully or have documented
+Only after all 600 runs have finished successfully or have documented
 numerical failures:
 
 ```bash
-bash dscpuscripts/analyze_standard.sh fd001_v2 check
-bash dscpuscripts/analyze_standard.sh fd001_v2 run
+bash dscpuscripts/analyze_standard.sh fd001_v2b check
+bash dscpuscripts/analyze_standard.sh fd001_v2b run
 ```
 
 `check` audits all candidates and determines the four winners without
@@ -138,7 +144,7 @@ or rmse_report** in the fresh workflow.
 Regenerate figures only without checkpoint evaluation:
 
 ```bash
-bash dscpuscripts/analyze_standard.sh fd001_v2 plots
+bash dscpuscripts/analyze_standard.sh fd001_v2b plots
 ```
 
 ## Legacy experiments
