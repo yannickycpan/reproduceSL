@@ -386,11 +386,13 @@ def run(*, source=None, output=None, results=None, plots_only=False):
     provenance_path = result_root / "legacy_baselines" / "import_provenance.json"
     provenance = read_json(provenance_path)
     expected_fingerprint = provenance.get("legacy_data_fingerprint")
-    if expected_fingerprint:
-        from fulltd.data import load_dataset
-        actual = load_dataset("fd001", data, "train").metadata.get("fingerprint")
-        if expected_fingerprint != actual:
-            raise ValueError("Legacy MSE/NLL and Gamma dataset fingerprints differ; comparison blocked")
+    if not expected_fingerprint:
+        raise ValueError("Legacy baseline source is missing its FD001 data fingerprint; "
+                         "use the supplied baseline-only ZIP or original evaluation_manifest.json")
+    from fulltd.data import load_dataset
+    actual = load_dataset("fd001", data, "train").metadata.get("fingerprint")
+    if expected_fingerprint != actual:
+        raise ValueError("Legacy MSE/NLL and Gamma dataset fingerprints differ; comparison blocked")
     metrics, summary = normalize_metrics(gamma_metrics, legacy_metrics)
     val_rows, val_summary = combined_validation(gamma_validation, legacy_validation)
     output_root.mkdir(parents=True, exist_ok=True)
