@@ -58,6 +58,30 @@ def test_cross_campaign_data_mismatch_blocks_selection(tmp_path,monkeypatch):
         extension_analysis.audit_and_select(old,new)
 
 
+def test_numerical_divergence_excludes_entire_hp_setting(tmp_path, monkeypatch):
+    import math
+    from fd001_gamma.common import read_json
+    old, new = fake_records(tmp_path)
+    config = next(c for c in extension_manifest()
+                  if c["gamma_variant"] == "pairwise" and c["alpha"] == .0001
+                  and c["beta"] == .00003 and c["seed"] == 0)
+    status_file = new / config["run_id"] / "status.json"
+    status = read_json(status_file)
+    status["state"] = "numerical_failure"
+    atomic_json(status_file, status)
+    monkeypatch.setattr(original_analysis, "select", lambda root: {"audited": True})
+    chosen, scores, _ = extension_analysis.audit_and_select(old, new)
+    failed_score = next(r for r in scores if r["gamma_variant"] == "pairwise"
+                        and r["alpha"] == .0001 and r["beta"] == .00003)
+    assert math.isinf(failed_score["score"])
+    assert failed_score["failed_seeds"] == [0]
+    best = next(r for r in chosen["per_variant"]
+                if r["gamma_variant"] == "pairwise")
+    assert best["alpha"] == .0001
+    assert best["beta"] != .00003
+    assert config["run_id"] not in best["run_ids"]
+
+
 def test_old_scientific_modules_not_modified():
     from pathlib import Path
     from fd001_gamma.common import scientific_hash as original_hash
