@@ -241,20 +241,16 @@ def run_campaign(args) -> int:
     if args.max_runs:
         pending = pending[:args.max_runs]
 
-    # The new shared dataset_results layout must not silently retrain runs
-    # already saved in the old separate extension folder.
-    if getattr(args, "campaign", "original") == "extension" and args.mode == "run":
-        previous_root = Path.home() / "scratch/fulltd/fd001_gamma_extension_v1/results"
-        if previous_root != results and previous_root.is_dir():
-            old_ids = [c["run_id"] for c in chosen
-                       if (previous_root / c["run_id"] / "status.json").exists()]
-            missing = [rid for rid in old_ids
-                       if not (results / rid / "status.json").exists()]
-            if missing:
-                raise RuntimeError(
-                    f"{len(missing)} extension results already exist under {previous_root} "
-                    f"but are missing under {results}. Move those run folders into the "
-                    "new shared fd001_results/results directory before launching.")
+    # Fail safely if an older nested/per-campaign directory contains run
+    # checkpoints absent from the actual flat FD001 results directory.
+    if args.mode == "run":
+        from dscpuscripts.result_paths import dataset_root, guard_unmigrated_runs
+        previous = [dataset_root("fd001") / "results"]
+        if getattr(args, "campaign", "original") == "extension":
+            previous.append(Path.home() / "scratch/fulltd/fd001_gamma_extension_v1/results")
+        else:
+            previous.append(Path.home() / "scratch/fulltd/fd001_gamma_v1/results")
+        guard_unmigrated_runs(results, chosen, previous)
 
     label = "FD001 Gamma extension" if getattr(args, "campaign", "original") == "extension" else "FD001 Gamma"
     print(f"{label}: all {len(chosen)} runs assigned to this AMD server; "
