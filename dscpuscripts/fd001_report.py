@@ -19,7 +19,8 @@ import zipfile
 
 LABELS = {'mse': 'MSE (B256)', 'gaussian_nll': 'Gaussian NLL (B256)',
           'typed': 'TD typed (B128)', 'raw26': 'TD raw26 (B128)',
-          'representation': 'TD representation (B128)'}
+          'representation': 'TD representation (B128)',
+          'pairwise': 'TD pairwise (B128)'}
 ORDER = tuple(LABELS)
 
 
@@ -128,12 +129,22 @@ def plot_learning_curve(curves, destination):
     destination.parent.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(9.2, 5.2))
     for method in ORDER:
-        rows = sorted([r for r in curves if r['method'] == method], key=lambda r: r['epoch'])
+        rows = sorted((r for r in curves
+                       if r['method'] in (method, LABELS[method])),
+                      key=lambda r: int(r['optimizer_steps']))
         if not rows:
             continue
-        x, mean, se = [[r[k] for r in rows] for k in ('optimizer_steps', 'mean', 'standard_error')]
-        ax.plot(x, mean, marker='o', markersize=3.5, linewidth=1.8, label=LABELS[method])
-        ax.fill_between(x, [m-s for m,s in zip(mean,se)], [m+s for m,s in zip(mean,se)], alpha=.10)
+        if len(rows) != 10:
+            raise ValueError(f"Incomplete ten-checkpoint RMSE learning curve: {method}")
+        x = [int(r['optimizer_steps']) for r in rows]
+        if len(set(x)) != 10 or x != sorted(x):
+            raise ValueError(f"Invalid optimizer-update axis for {method}")
+        mean = [float(r['mean']) for r in rows]
+        se = [float(r['standard_error']) for r in rows]
+        ax.plot(x, mean, marker='o', markersize=3.5, linewidth=1.8,
+                label=LABELS[method])
+        ax.fill_between(x, [m-e for m,e in zip(mean,se)],
+                        [m+e for m,e in zip(mean,se)], alpha=.10)
     ax.set_xlabel('Cumulative Adam optimizer updates (B128 vs B256)')
     ax.set_ylabel('Validation RMSE (cycles)')
 
@@ -175,7 +186,7 @@ def run(gamma_source, output, baseline_source=None):
 def main():
     from fd001_gamma.common import campaign_paths
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=('gamma', 'baselines', 'compare'))
+    parser.add_argument('mode', choices=('gamma', 'baselines'))
     parser.add_argument('--gamma')
     parser.add_argument('--legacy', '--baseline', dest='baseline')
     parser.add_argument('--output-dir')
@@ -191,17 +202,8 @@ def main():
         plot_learning_curve(curves, out / 'validation_rmse_fd001_tcn')
         return
     gamma = Path(args.gamma).expanduser() if args.gamma else campaign_paths()[2]
-    baseline = args.baseline
-    if args.mode == 'compare' and not baseline:
-        from dscpuscripts.standard_runner import paths
-        local = paths('fd001_baselines')[2]
-        if (local / 'selections.json').is_file():
-            baseline = local
-        else:
-            from dscpuscripts.combined_fd001 import locate_source
-            baseline = locate_source(None, campaign_paths()[1])
-    output = Path(args.output_dir).expanduser() if args.output_dir else gamma / ('rmse_report' if args.mode == 'gamma' else 'comparison_report')
-    run(gamma, output, baseline if args.mode == 'compare' else None)
+    output = Path(args.output_dir).expanduser() if args.output_dir else gamma / 'rmse_report'
+    run(gamma, output)
 
 
 if __name__ == '__main__':
