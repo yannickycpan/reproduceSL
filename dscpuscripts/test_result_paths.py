@@ -31,7 +31,7 @@ def test_every_fd001_method_shares_one_result_directory(dataset_layout):
     d0, results0, out0 = result_paths.paths("fd001")
     d1, results1, out1 = standard_runner.paths("fd001_baselines")
     assert d0 == d1 == base / "data"
-    assert results0 == results1 == base / "fd001_results" / "results"
+    assert results0 == results1 == base / "fd001_results"
     assert out0 == base / "fd001_results" / "outputs"
     assert out1 == out0 / "baselines"
     result_paths.configure_environment()
@@ -43,16 +43,38 @@ def test_dataset_specific_results_on_any_host(dataset_layout):
     for name in ("electricity", "metr_la"):
         data, results, outputs = standard_runner.paths(name)
         assert data == dataset_layout / "data"
-        assert results == dataset_layout / (name + "_results") / "results"
+        assert results == dataset_layout / (name + "_results")
         assert outputs == dataset_layout / (name + "_results") / "outputs"
     with pytest.raises(ValueError, match="Unknown dataset"):
         result_paths.paths("unknown")
 
 
+def test_existing_flat_gamma_directories_are_detected_without_moving_them(
+        dataset_layout, monkeypatch):
+    from fd001_gamma.protocol import make_manifest
+    from dscpuscripts.status_fd001_gamma import inspect
+    from fd001_gamma.common import atomic_json
+    from fd001_gamma.protocol import digest
+    root = dataset_layout / "fd001_results"
+    sample = make_manifest()[0]
+    directory = root / sample["run_id"]
+    directory.mkdir(parents=True)
+    for name in ("final.pt", "rounds.json", "validation.json"):
+        (directory / name).touch()
+    atomic_json(directory / "status.json", dict(
+        config=sample, state="complete", epochs_completed=100, next_epoch=101,
+        identity=dict(config_sha256=digest(sample), code_sha256="fixture-science")))
+    import dscpuscripts.status_fd001_gamma as status
+    monkeypatch.setattr(status, "make_manifest", lambda: [sample])
+    assert result_paths.paths("fd001")[1] == root
+    assert inspect(root, code_hash="fixture-science")[0]["state"] == "complete"
+    assert not (root / "results").exists()
+
+
 def test_explicit_root_override_is_consistent(tmp_path, monkeypatch):
     monkeypatch.setenv("FULLTD_FD001_ROOT", str(tmp_path / "user-fd001"))
     d, results, out = result_paths.paths("fd001", "comparison")
-    assert results == tmp_path / "user-fd001" / "results"
+    assert results == tmp_path / "user-fd001"
     assert out == tmp_path / "user-fd001" / "outputs" / "comparison"
     with pytest.raises(ValueError, match="Invalid output"):
         result_paths.paths("fd001", "../../unsafe")
