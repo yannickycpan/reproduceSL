@@ -23,6 +23,7 @@ Only one launcher and one analyzer are used for the fresh sweep.
         selected_hyperparameters.csv
         per_seed_metrics.csv
         performance_summary.csv
+        paired_comparisons.csv          # matched five-seed descriptive differences
         validation_learning_curves.csv
         validation_curve_per_seed.csv
         figures/
@@ -129,7 +130,7 @@ bash dscpuscripts/analyze_standard.sh fd001_v2 run
 `check` audits all candidates and determines the four winners without
 opening test labels. `run` evaluates the **actual epoch-100 models**
 and produces one common FD001 report in `fd001_outputs/`: a validation/test
-table with RMSE, MAE and RUL score, one HP selection table, measured
+table with RMSE, MAE and RUL score, matched-seed differences with\ndescriptive t intervals, one HP selection table, measured
 0/500/... learning curves on the real optimizer-update axis, and TD operator
 diagnostics. There is **no baseline-only analysis, extension-only analysis,
 or rmse_report** in the fresh workflow.
