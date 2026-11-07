@@ -99,8 +99,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-dir", type=Path, default=None,
                         help="Override the existing FD001 Gamma results directory")
-    parser.add_argument("--strict", action="store_true",
-                        help="Return nonzero unless every candidate completed successfully")
+    completion = parser.add_mutually_exclusive_group()
+    completion.add_argument("--strict", action="store_true",
+                            help="Return nonzero unless all 180 runs completed successfully")
+    completion.add_argument("--terminal", action="store_true",
+                            help="Return zero if all 180 runs are complete or documented numerical failures; "
+                                 "the HP selector excludes any failed configuration")
     parser.add_argument("--show", type=int, default=8,
                         help="Number of unfinished candidates to print")
     args = parser.parse_args()
@@ -108,8 +112,25 @@ def main():
         parser.error("--show must be nonnegative")
     results = args.results_dir if args.results_dir is not None else campaign_paths()[1]
     print("Results:", results)
-    all_complete = report(inspect(results), show=args.show)
-    return 0 if all_complete or not args.strict else 1
+    rows = inspect(results)
+    if all(row["state"] == "missing" for row in rows):
+        # Catch exactly the mistaken nested path from the previous runner
+        # release. Never move, rename, or infer successful training from dirs.
+        flat = results.parent
+        examples = sum((flat / c["run_id"]).is_dir()
+                       for c in make_manifest()[:8])
+        if examples >= 3:
+            print(f"PATH MISMATCH: run directories are under {flat}, not {results}. "
+                  "Use the flat dataset_results root; do not retrain them.")
+    all_complete = report(rows, show=args.show)
+    all_terminal = all(row["state"] in TERMINAL for row in rows)
+    if args.strict:
+        return 0 if all_complete else 1
+    if args.terminal:
+        if all_terminal:
+            print("All 180 runs terminal; numerical failures are excluded from HP selection.")
+        return 0 if all_terminal else 1
+    return 0
 
 
 if __name__ == "__main__":
