@@ -39,6 +39,23 @@ def test_every_fd001_method_shares_one_result_directory(dataset_layout):
     assert extension_gamma_paths() == (d0, results0, out0 / "extension")
 
 
+def test_guard_prevents_retraining_runs_saved_in_previous_nested_layout(
+        dataset_layout):
+    from fd001_gamma.protocol import make_manifest
+    config = make_manifest()[0]
+    results = dataset_layout / "fd001_results"
+    previous = results / "results"
+    old_run = previous / config["run_id"]
+    old_run.mkdir(parents=True)
+    (old_run / "status.json").write_text('{"state":"complete"}')
+    with pytest.raises(RuntimeError, match="existing run records"):
+        result_paths.guard_unmigrated_runs(results, [config], [previous])
+    current = results / config["run_id"]
+    current.mkdir()
+    (current / "status.json").write_text('{"state":"complete"}')
+    result_paths.guard_unmigrated_runs(results, [config], [previous])
+
+
 def test_dataset_specific_results_on_any_host(dataset_layout):
     for name in ("electricity", "metr_la"):
         data, results, outputs = standard_runner.paths(name)
