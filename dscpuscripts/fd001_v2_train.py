@@ -32,8 +32,11 @@ SCIENTIFIC_SOURCES = (
     "dscpuscripts/fd001_v2_protocol.py", "dscpuscripts/fd001_v2_train.py",
     "agents/fulltd_objectives.py", "agents/fulltd_mse.py",
     "agents/fulltd_gaussian_nll.py", "fd001_gamma_ext/objectives.py",
-    "fd001_gamma/objectives.py", "fulltd/train.py", "fulltd/data.py",
-    "fulltd/metrics.py", "fulltd/models.py", "fulltd/sampling.py",
+    "fd001_gamma_ext/protocol.py", "fd001_gamma/objectives.py",
+    "fd001_gamma/protocol.py", "fd001_gamma/train.py",
+    "fd001_gamma/common.py", "fulltd/protocol.py", "fulltd/train.py",
+    "fulltd/data.py", "fulltd/metrics.py", "fulltd/models.py",
+    "fulltd/sampling.py",
 )
 
 
