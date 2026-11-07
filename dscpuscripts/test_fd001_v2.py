@@ -163,6 +163,53 @@ def test_v2_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch):
     assert choice["configuration"] != 0
 
 
+def test_pairwise_td_uses_same_update_checkpoint_and_selection_protocol(
+        tmp_path, monkeypatch):
+    from fd001_gamma_ext.objectives import PairwiseGammaTD
+
+    class TinyPairwiseMean(nn.Module):
+        feature_dim = 8
+        output_dim = 1
+
+        def __init__(self):
+            super().__init__()
+            self.encoding = nn.Linear(24, self.feature_dim)
+            self.head = nn.Linear(self.feature_dim, 1)
+
+        def features(self, x):
+            return torch.tanh(self.encoding(x[:, :, -1]))
+
+        def forward(self, x):
+            return self.head(self.features(x))
+
+    class PairwiseData(ToyFD001):
+        def __init__(self, split, n):
+            super().__init__(split, n)
+            self.x = (np.arange(n * 24 * 30, dtype=np.float32)
+                      .reshape(n, 24, 30) / 100000.)
+            self.y = (self.x[:, :1, -1] * .4 + .2).astype(np.float32)
+
+    config = next(c for c in protocol.make_manifest()
+                  if c["method"] == "td_pairwise" and c["seed"] == 0)
+    monkeypatch.setattr(train, "code_hash", lambda: "pairwise-v2-test-code")
+    monkeypatch.setattr(train, "build_objective",
+                        lambda _: PairwiseGammaTD(TinyPairwiseMean()))
+    root = tmp_path / "pairwise"
+    result = train.train_candidate(
+        config, PairwiseData("train", 600), PairwiseData("val", 15),
+        root, microbatch=128)
+    assert result["state"] == "complete"
+    assert result["optimizer_steps"] == 500
+    directory = root / config["run_id"]
+    assert (directory / "checkpoints" / "step_0000000.pt").exists()
+    assert (directory / "checkpoints" / "step_0000500.pt").exists()
+    checkpoint = torch.load(directory / "final.pt",
+                            map_location="cpu", weights_only=False)
+    assert [r["optimizer_steps"] for r in checkpoint["progress"]["curve"]] == [0,500]
+    assert all("gamma_probe" in r for r in checkpoint["progress"]["curve"])
+    assert [r["epoch"] for r in checkpoint["progress"]["validation"]] == list(range(10,101,10))
+
+
 def test_v2_outputs_are_siblings_of_results(tmp_path, monkeypatch):
     monkeypatch.setenv("FULLTD_RESULTS_ROOT", str(tmp_path))
     monkeypatch.delenv("FULLTD_FD001_ROOT", raising=False)
