@@ -429,6 +429,8 @@ def run_campaign(args) -> int:
 
 
 def main():
+    from dscpuscripts.result_paths import configure_environment
+    configure_environment()
     global make_manifest, scientific_hash, campaign_paths
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--campaign", choices=("original", "extension"), default="original",
