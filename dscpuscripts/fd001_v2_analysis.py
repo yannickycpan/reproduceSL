@@ -1,28 +1,27 @@
-"""Single FD001 sweep analysis: four methods, one shared fd001_outputs directory.
+"""Single FD001 four-method report; jointly select learning rates and TD batch.
 
-Each method chooses its HP solely by five-seed mean validation MSE at epochs
-80/90/100; test is opened only after all four choices are locked. All figures
-use measured optimizer steps (including update zero), not interpolation.
+Selection uses five-seed mean validation MSE from the last 25% of *measured*
+post-initial update evaluations (never test). Reports use actual epoch-100
+weights and all measured update-zero/500-step observations.
 """
 from __future__ import annotations
 
 import argparse
 from collections import defaultdict, Counter
 import csv
-import hashlib
 import math
 from pathlib import Path
 import statistics
 
 from fd001_gamma.common import atomic_json, file_lock, read_json, write_csv, file_hash, data_identity
 from dscpuscripts.result_paths import paths as dataset_paths
-from .fd001_v2_protocol import (make_manifest, METHODS, SEEDS, SELECT_EPOCHS,
-                                 EPOCH_VALIDATIONS, EPOCHS, EVAL_UPDATE_PERIOD,
-                                 PROTOCOL_ID, digest)
+from .fd001_v2_protocol import (make_manifest, METHODS, SEEDS,
+                                 EPOCHS, EVAL_UPDATE_PERIOD, SELECTION_FRACTION,
+                                 selection_update_steps, PROTOCOL_ID, digest)
 from .fd001_v2_train import code_hash, build_objective
 
-LABELS = dict(mse="MSE (B256)", gaussian_nll="Gaussian NLL (B256)",
-              td_typed="TD typed (B128)", td_pairwise="TD pairwise (B128)")
+LABELS = dict(mse="MSE", gaussian_nll="Gaussian NLL",
+              td_typed="TD typed", td_pairwise="TD pairwise")
 OUT_METRICS = (("cycles", "rmse"), ("cycles", "mae"), ("score", "rul_score_sum"))
 
 
@@ -47,7 +46,7 @@ def audit_and_select(results):
         directory = Path(results) / run_id
         status_path = directory / "status.json"
         if not status_path.exists():
-            raise ValueError(f"Missing FD001 v2 run status: {run_id}")
+            raise ValueError(f"Missing fresh FD001 run status: {run_id}")
         status = read_json(status_path)
         if status.get("config") != config or status.get("identity", {}).get("code_sha256") != expected_code:
             raise ValueError(f"Scientific run/code mismatch: {run_id}")
@@ -79,18 +78,14 @@ def audit_and_select(results):
             total = expected_steps(n, config["batch_size"])
             if status["optimizer_steps"] != total or status["update_opportunities"] != total:
                 raise ValueError(f"Incorrect optimizer budget: {run_id}")
-            records = read_json(directory / "validation.json")
-            if [r["epoch"] for r in records] != list(EPOCH_VALIDATIONS):
-                raise ValueError(f"Incomplete epoch-based selection records: {run_id}")
-            for r in records:
-                if not math.isfinite(float(r["mse"])) or float(r["mse"]) < 0:
-                    raise ValueError(f"Nonfinite selection MSE: {run_id}")
-                if r["optimizer_steps"] != r["epoch"] * math.ceil(n/config["batch_size"]):
-                    raise ValueError(f"Incorrect epoch selection optimizer step count: {run_id}")
             curve = read_json(directory / "update_curve.json")
             checkpoints = list(range(0, total+1, EVAL_UPDATE_PERIOD))
             if [r["optimizer_steps"] for r in curve] != checkpoints:
                 raise ValueError(f"Missing update-zero or periodic validation measurements: {run_id}")
+            for record in curve:
+                mse = float(record["mse_standardized"])
+                if not math.isfinite(mse) or mse < 0:
+                    raise ValueError(f"Nonfinite periodic validation MSE: {run_id}")
             for step in checkpoints:
                 if not (directory / "checkpoints" / f"step_{step:07d}.pt").is_file():
                     raise ValueError(f"Missing retained step-{step} checkpoint: {run_id}")
@@ -105,32 +100,36 @@ def audit_and_select(results):
                     raise ValueError(f"Training source hash/budget mismatch: {run_id}")
                 if round_record["optimizer_steps_cumulative"] != round_record["epoch"]*math.ceil(n/config["batch_size"]):
                     raise ValueError(f"Training optimizer count mismatch: {run_id}")
-            late = [float(r["mse"]) for r in records if r["epoch"] in SELECT_EPOCHS]
-            if len(late) != len(SELECT_EPOCHS):
-                raise ValueError(f"Missing late validation window: {run_id}")
-            score = statistics.mean(late)
-        by_hp[(config["method"], config["configuration"])].append(
+            eligible_updates = selection_update_steps(total)
+            score_lookup = {r["optimizer_steps"]: float(r["mse_standardized"])
+                            for r in curve}
+            if any(step not in score_lookup for step in eligible_updates):
+                raise ValueError(f"Missing final-quarter validation evidence: {run_id}")
+            score = statistics.mean(score_lookup[step] for step in eligible_updates)
+        by_hp[(config["method"], config["batch_size"], config["configuration"])].append(
             dict(config=config, state=state, score=score))
-    for (method, setting), members in sorted(by_hp.items()):
+    for (method, batch_size, setting), members in sorted(by_hp.items()):
         members.sort(key=lambda m: m["config"]["seed"])
         if [m["config"]["seed"] for m in members] != list(SEEDS):
-            raise ValueError(f"Missing one of five seeds: {method}, h{setting}")
+            raise ValueError(f"Missing one of five seeds: {method}, B{batch_size}, h{setting}")
         chosen_config = members[0]["config"]
         pooled = statistics.mean(m["score"] for m in members) if all(
             math.isfinite(m["score"]) for m in members) else math.inf
-        scores.append(dict(method=method, configuration=setting,
+        scores.append(dict(method=method, batch_size=batch_size, configuration=setting,
                            alpha=chosen_config["alpha"], beta=chosen_config["beta"],
                            score=pooled, failed_seeds=[m["config"]["seed"] for m in members
                                                       if m["state"] == "numerical_failure"],
                            run_ids=[m["config"]["run_id"] for m in members]))
     for method in METHODS:
         options = [r for r in scores if r["method"] == method]
-        winning = min(options, key=lambda r: (r["score"],r["alpha"],r["beta"] or 0))
+        winning = min(options, key=lambda r: (
+            r["score"], r["alpha"], r["beta"] or 0, r["batch_size"]))
         if not math.isfinite(winning["score"]):
             raise ValueError(f"No finite five-seed configuration for {method}; no test report produced")
         choices.append(winning)
-    selected = dict(protocol_id=PROTOCOL_ID, selection_epochs=list(SELECT_EPOCHS),
-                    criterion="five-seed mean validation MSE at full epochs 80,90,100",
+    selected = dict(protocol_id=PROTOCOL_ID, selection_fraction=SELECTION_FRACTION,
+                    criterion="five-seed mean standardized validation MSE over the final "
+                              "ceil(25%) of post-start 500-update evaluations; batch is selected jointly",
                     code_sha256=expected_code, manifest_sha256=digest(candidates),
                     data_sha256=seen_data["data_sha256"],
                     validation_sha256=seen_data["validation_sha256"],
@@ -163,13 +162,13 @@ def evaluate_selected(selection, root, data_dir, output):
             if (ckpt["identity"] != status["identity"]
                     or ckpt["config"] != config or status["state"] != "complete"
                     or ckpt["progress"]["epoch"] != EPOCHS+1
-                    or ckpt["progress"]["validation"] != read_json(directory / "validation.json")
                     or ckpt["progress"]["curve"] != read_json(directory / "update_curve.json")):
                 raise ValueError(f"Selected checkpoint sidecars disagree: {run_id}")
             for record in ckpt["progress"]["curve"]:
                 for metric in ("rmse_cycles", "mae_cycles", "rul_score_sum"):
                     learning.append(dict(method=config["method"], seed=config["seed"],
                                          alpha=config["alpha"], beta=config["beta"],
+                                         batch_size=config["batch_size"],
                                          epoch=record["epoch"], optimizer_steps=record["optimizer_steps"],
                                          metric=metric, value=record[metric]))
                 if config["method"].startswith("td_"):
@@ -200,7 +199,8 @@ def evaluate_selected(selection, root, data_dir, output):
                     if len(matched) != 1:
                         raise ValueError(f"Missing output metric: {split} {units}/{metric}")
                     record_rows.append(dict(run_id=run_id,method=config["method"],
-                       seed=config["seed"], split=split, metric=metric,
+                       seed=config["seed"], batch_size=config["batch_size"],
+                       split=split, metric=metric,
                        units=units, value=matched[0]["value"]))
             atomic_json(cache,dict(identity=key,rows=record_rows))
             per_seed.extend(record_rows)
@@ -275,6 +275,11 @@ def plot(output):
     figs.mkdir(parents=True,exist_ok=True)
     curves=load_csv(out/"validation_learning_curves.csv")
     tables=load_csv(out/"performance_summary.csv")
+    selected=load_csv(out/"selected_hyperparameters.csv")
+    display={row["method"]: f"{LABELS[row['method']]} (B{row['batch_size']})"
+             for row in selected}
+    if set(display) != set(METHODS):
+        raise ValueError("All four selected configurations are required for plotting")
     for metric,y_label in (("rmse_cycles","Validation RMSE (cycles)"),
                            ("mae_cycles","Validation MAE (cycles)"),
                            ("rul_score_sum","Validation summed RUL score")):
@@ -287,7 +292,7 @@ def plot(output):
             x=np.array([int(r["optimizer_steps"]) for r in rows])
             y=np.array([float(r["mean"]) for r in rows])
             se=np.array([float(r["standard_error"]) for r in rows])
-            ax.plot(x,y,marker="o",ms=2.5,label=LABELS[method])
+            ax.plot(x,y,marker="o",ms=2.5,label=display[method])
             if np.isfinite(y).all() and np.isfinite(se).all():
                 ax.fill_between(x,y-se,y+se,alpha=.1)
         ax.set_xlabel("Cumulative Adam optimizer updates")
@@ -310,7 +315,7 @@ def plot(output):
                 record=next(r for r in v if r["split"]==split)
                 value=float(record["mean"])
                 ax.bar(k+dx,value,width=.38,label=split if k==0 else None)
-        ax.set_xticks(range(len(METHODS)),[LABELS[k] for k in METHODS],rotation=15,ha="right")
+        ax.set_xticks(range(len(METHODS)),[display[k] for k in METHODS],rotation=15,ha="right")
         if metric=="rul_score_sum":ax.set_yscale("symlog",linthresh=1000)
         ax.set_ylabel(metric+" (cycles)" if metric!="rul_score_sum" else "Summed RUL score")
         ax.legend()
@@ -347,7 +352,7 @@ def run(mode):
         return
     selected,scores=audit_and_select(root)
     if mode=="check":
-        print("READY:", selected["counts"], "270 candidates audited")
+        print("READY:", selected["counts"], "600 candidates audited")
         return
     with file_lock(out/".analysis.lock"):
         atomic_json(out/"selections.json",selected)
@@ -360,17 +365,20 @@ def run(mode):
         write_csv(out/"validation_learning_curves.csv",summarize(curve,("method","metric","optimizer_steps")))
         write_csv(out/"selected_hyperparameters.csv",[
            dict(method=r["method"],alpha=r["alpha"],beta=r["beta"],
-                selection_mse=r["score"],run_ids=r["run_ids"])
+                batch_size=r["batch_size"], selection_mse=r["score"],
+                run_ids=r["run_ids"])
            for r in selected["selected"]])
         write_csv(out/"td_diagnostics"/"gamma_per_seed.csv",td)
         write_csv(out/"td_diagnostics"/"gamma_summary.csv",
                   summarize(td,("method","type","optimizer_steps"),value="mean"))
         atomic_json(out/"analysis_notes.json", dict(
-            selection="five-seed validation MSE epochs 80/90/100, no test tuning",
+            selection="last 25% of actual positive 500-update validation evaluations, "
+                      "five-seed pooled standardized MSE; batch selected jointly, no test tuning",
             trained_models="epoch-100 final checkpoints, no refit",
             metrics="RMSE/MAE cycles and summed RUL score on validation/test",
             curves="measured before training and every 500 Adam updates; no interpolation",
-            caveat="TD B128 vs baseline B256: unequal numbers of optimizer updates after 100 epochs"))
+            caveat="TD batch 128/256 selected using validation; 128 receives more optimizer "
+                   "updates in 100 epochs than baseline B256"))
         plot(out)
     print("FD001 four-method analysis complete:",out)
 
