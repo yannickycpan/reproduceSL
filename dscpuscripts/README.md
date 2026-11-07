@@ -159,9 +159,16 @@ runs trained successfully.
 bash dscpuscripts/analyze_fd001_gamma.sh check
 bash dscpuscripts/analyze_standard.sh fd001_baselines
 bash dscpuscripts/analyze_fd001_gamma_extension.sh check
-bash dscpuscripts/analyze_fd001_gamma_extension.sh run
+bash dscpuscripts/analyze_fd001_gamma_extension.sh run   # regenerates original Gamma outputs first
 bash dscpuscripts/compare_fd001.sh
 ```
+
+If the original `fd001_results/outputs/` was never moved, the extension
+`run` entrypoint automatically recreates the original Gamma analysis from
+the existing epoch-100 checkpoints. It does not start new training or refit.
+If some candidates are recorded as genuine numerical failures, their entire
+hyperparameter combinations receive infinite selection scores. Missing
+status files are not interpreted as divergence.
 
 The unified six-method figure is:
 `fd001_results/outputs/comparison/figures/fd001_six_methods_validation_rmse_updates.pdf`
