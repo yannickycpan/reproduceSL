@@ -1,8 +1,4 @@
-"""Focused regression tests for the fresh 270-run FD001 update-checkpoint sweep.
-
-No real-data training; tests use a tiny deterministic model and synthetic
-engine data to validate actual 500-update snapshots and exact mid-epoch resume.
-"""
+"""Regression tests for fresh 600-run FD001 sweep and 500-update recovery."""
 from __future__ import annotations
 
 from collections import Counter
@@ -51,15 +47,24 @@ class ToyPredictor(nn.Module):
 
 def test_v2_canonical_manifest_and_hp_grids():
     configs = protocol.make_manifest()
-    assert len(configs) == 270
+    assert len(configs) == 600
     assert Counter(c["method"] for c in configs) == {
-        "mse": 35, "gaussian_nll": 35, "td_typed": 75, "td_pairwise": 125}
+        "mse": 50, "gaussian_nll": 50, "td_typed": 250, "td_pairwise": 250}
     assert set(protocol.METHODS) == {"mse","gaussian_nll","td_typed","td_pairwise"}
-    assert protocol.BASELINE_ALPHAS == (.0002,.0003,.0005,.0007,.001,.003,.01)
+    assert protocol.BASELINE_ALPHAS == (
+        .0001, .0003, .0005, .0007, .0009, .001, .003, .005, .007, .01)
+    assert protocol.TD_ALPHAS == (.00003, .0001, .0003, .001, .003)
+    assert protocol.BATCH_SIZES["td_typed"] == (128, 256)
+    assert protocol.BATCH_SIZES["td_pairwise"] == (128, 256)
+    assert protocol.SELECTION_FRACTION == .25
+    assert protocol.selection_update_steps(5500) == (4500, 5000, 5500)
+    assert protocol.selection_update_steps(11000) == (
+        8500, 9000, 9500, 10000, 10500, 11000)
     assert protocol.BETAS == (.00003,.0001,.0003,.001,.003)
     assert all(c["learning_curve_updates"] == protocol.EVAL_UPDATE_PERIOD
                and c["snapshot_updates"] == protocol.EVAL_UPDATE_PERIOD
-               and c["selection_epochs"] == [80,90,100] for c in configs)
+               and c["selection_fraction"] == .25 for c in configs)
+    assert all(c["run_id"].startswith("fd001_v2b_") for c in configs)
     assert len(set(c["run_id"] for c in configs)) == len(configs)
 
 
@@ -91,10 +96,9 @@ def test_checkpointed_training_restores_exact_mid_epoch_trajectory(
         assert (folder / "checkpoints" / "step_0000500.pt").is_file()
         final = torch.load(folder / "final.pt", map_location="cpu", weights_only=False)
         assert [r["optimizer_steps"] for r in final["progress"]["curve"]] == [0,500]
-        assert [r["epoch"] for r in final["progress"]["validation"]] == list(range(10,101,10))
+        assert "validation" not in final["progress"]
     a = torch.load(folder_a / "final.pt", map_location="cpu", weights_only=False)
     b = torch.load(folder_b / "final.pt", map_location="cpu", weights_only=False)
-    assert a["progress"]["validation"] == b["progress"]["validation"]
     assert a["progress"]["curve"] == b["progress"]["curve"]
     assert a["progress"]["rounds"] == b["progress"]["rounds"]
     for key in a["objective"]:
@@ -120,7 +124,7 @@ def test_v2_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch):
         count = per_epoch * protocol.EPOCHS
         # The first pairwise HP has one genuinely divergent seed. Even if all
         # its remaining seeds are excellent it must receive infinite score.
-        fail = (config["method"] == "td_pairwise"
+        fail = (config["method"] == "td_pairwise" and config["batch_size"] == 128
                 and config["configuration"] == 0 and config["seed"] == 0)
         state = "numerical_failure" if fail else "complete"
         atomic_json(directory / "status.json", dict(
@@ -136,12 +140,11 @@ def test_v2_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch):
             continue
         (directory / "final.pt").touch()
         score = 0.1 + .01 * config["configuration"]
-        atomic_json(directory / "validation.json", [
-            dict(epoch=e, optimizer_steps=e*per_epoch, mse=score, mae=.2)
-            for e in protocol.EPOCH_VALIDATIONS])
         milestones = list(range(0, count + 1, protocol.EVAL_UPDATE_PERIOD))
         atomic_json(directory / "update_curve.json", [
-            dict(optimizer_steps=step) for step in milestones])
+            dict(epoch=min(protocol.EPOCHS, step//per_epoch+1),
+                 optimizer_steps=step, mse_standardized=score)
+            for step in milestones])
         atomic_json(directory / "rounds.json", [
             dict(epoch=e, source_draws=n,
                  source_sha256=shas[(config["seed"], e)],
@@ -152,15 +155,16 @@ def test_v2_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch):
         for step in milestones:
             (snapshot_dir / f"step_{step:07d}.pt").touch()
     selected, scores = analysis.audit_and_select(root)
-    assert len(scores) == 54
+    assert len(scores) == 120
     assert len(selected["selected"]) == 4
-    assert selected["counts"] == {"complete":269, "numerical_failure":1}
+    assert selected["counts"] == {"complete":599, "numerical_failure":1}
     excluded = next(r for r in scores if
-                    r["method"]=="td_pairwise" and r["configuration"] == 0)
+                    r["method"]=="td_pairwise" and r["configuration"] == 0
+                    and r["batch_size"] == 128)
     assert math.isinf(excluded["score"])
     assert excluded["failed_seeds"] == [0]
     choice = next(r for r in selected["selected"] if r["method"]=="td_pairwise")
-    assert choice["configuration"] != 0
+    assert (choice["batch_size"], choice["configuration"]) != (128, 0)
 
 
 def test_pairwise_td_uses_same_update_checkpoint_and_selection_protocol(
@@ -207,7 +211,7 @@ def test_pairwise_td_uses_same_update_checkpoint_and_selection_protocol(
                             map_location="cpu", weights_only=False)
     assert [r["optimizer_steps"] for r in checkpoint["progress"]["curve"]] == [0,500]
     assert all("gamma_probe" in r for r in checkpoint["progress"]["curve"])
-    assert [r["epoch"] for r in checkpoint["progress"]["validation"]] == list(range(10,101,10))
+    assert "validation" not in checkpoint["progress"]
 
 
 def test_v2_outputs_are_siblings_of_results(tmp_path, monkeypatch):
