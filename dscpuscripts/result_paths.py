@@ -1,7 +1,7 @@
 """Consistent dataset-specific results layout across direct CPU/HPC environments.
 
 Each dataset owns one <dataset>_results directory. Different algorithms use
-non-overlapping canonical run IDs in the same results/ directory; analysis
+non-overlapping canonical run IDs directly in <dataset>_results/; analysis
 outputs have separate subdirectories to avoid overwriting selections.
 No scientific code depends on this operational module.
 """
@@ -27,8 +27,9 @@ def dataset_root(dataset):
 def paths(dataset, output_kind=None):
     """Return (dataset-independent data directory, results, analysis outputs).
 
-    All methods for a dataset share results/ but their output folders differ.
-    Existing FD001 Gamma-v1 outputs intentionally stay directly in outputs/.
+    Canonical run directories live directly in <dataset>_results/ (flat),
+    as on the user's server. Only analysis output files live in outputs/.
+    The frozen run IDs are never renamed.
     """
     root = dataset_root(dataset)
     data = Path(os.environ.get("FULLTD_DATA_DIR", base_root() / "data")).expanduser().resolve()
@@ -37,7 +38,7 @@ def paths(dataset, output_kind=None):
         if not (output_kind.replace("_", "").isalnum() and "/" not in output_kind):
             raise ValueError("Invalid output directory kind")
         out = out / output_kind
-    return data, root / "results", out
+    return data, root, out
 
 
 def configure_environment():
