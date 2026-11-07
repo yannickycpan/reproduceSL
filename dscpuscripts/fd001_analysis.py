@@ -1,8 +1,8 @@
-"""Single FD001 four-method report; jointly select learning rates and TD batch.
+"""Unified FD001 comparison and TD diagnostics, using the sole current protocol.
 
-Selection uses five-seed mean validation MSE from the last 25% of *measured*
-post-initial update evaluations (never test). Reports use actual epoch-100
-weights and all measured update-zero/500-step observations.
+Select each method by five-seed mean standardized validation MSE over the last
+25% of actual positive-update evaluations. The zero-update baseline is plotted
+but excluded from selection. Test labels are never used for HP decisions.
 """
 from __future__ import annotations
 
@@ -13,16 +13,28 @@ import math
 from pathlib import Path
 import statistics
 
-from fd001_gamma.common import atomic_json, file_lock, read_json, write_csv, file_hash, data_identity
+from dscpuscripts.common import atomic_json, file_lock, read_json, write_csv, file_hash, data_identity
 from dscpuscripts.result_paths import paths as dataset_paths
-from .fd001_v2_protocol import (make_manifest, METHODS, SEEDS,
-                                 EPOCHS, EVAL_UPDATE_PERIOD, SELECTION_FRACTION,
-                                 selection_update_steps, PROTOCOL_ID, digest)
-from .fd001_v2_train import code_hash, build_objective
+from .fd001_protocol import (make_manifest, METHODS, SEEDS,
+                              EPOCHS, EVAL_UPDATE_PERIOD, PROTOCOL_ID, digest)
+from .fd001_train import code_hash, build_objective
 
 LABELS = dict(mse="MSE", gaussian_nll="Gaussian NLL",
               td_typed="TD typed", td_pairwise="TD pairwise")
 OUT_METRICS = (("cycles", "rmse"), ("cycles", "mae"), ("score", "rul_score_sum"))
+
+
+SELECTION_FRACTION = 0.25  # Analysis-only, never a training-protocol parameter.
+
+
+def selection_update_steps(total_updates, period=EVAL_UPDATE_PERIOD):
+    """Final ceil(25%) of actual positive-update evaluation checkpoints."""
+    if type(total_updates) is not int or total_updates < 1 or period < 1:
+        raise ValueError("Expected a positive update budget and evaluation period")
+    measured = list(range(period, total_updates + 1, period))
+    if not measured:
+        raise ValueError("No positive-update evaluations available for selection")
+    return tuple(measured[-math.ceil(SELECTION_FRACTION * len(measured)):])
 
 
 def load_csv(path):
@@ -46,7 +58,7 @@ def audit_and_select(results):
         directory = Path(results) / run_id
         status_path = directory / "status.json"
         if not status_path.exists():
-            raise ValueError(f"Missing fresh FD001 run status: {run_id}")
+            raise ValueError(f"Missing FD001 run status: {run_id}")
         status = read_json(status_path)
         if status.get("config") != config or status.get("identity", {}).get("code_sha256") != expected_code:
             raise ValueError(f"Scientific run/code mismatch: {run_id}")

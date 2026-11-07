@@ -1,21 +1,18 @@
-"""Fresh FD001 four-method sweep, revision v2b: 600 independent runs.
+"""The sole current FD001 experiment protocol: four methods and 600 runs.
 
-This new configuration namespace never overwrites old v2 or Gamma checkpoints.
-The only modifications to the original training procedure are the requested
-validation and full-checkpoint cadence; optimizer, objective, sampling, data,
-backbones, and number of training epochs remain fixed.
+Only the measurement/checkpoint cadence changes the original 100-epoch
+training procedure. HP selection is a *reporting* decision, not a
+training-configuration parameter.
 """
 from __future__ import annotations
 
-import math
 import os
 
 from fulltd.protocol import digest
 
-PROTOCOL_ID = "fd001-four-methods-update-v2b"
+PROTOCOL_ID = "fd001-four-methods"
 SEEDS = tuple(range(5))
 EPOCHS = 100
-SELECTION_FRACTION = 0.25
 # This is an immutable per-run scientific setting. Do not change it after
 # launching a campaign; every config and checkpoint identity includes it.
 EVAL_UPDATE_PERIOD = int(os.environ.get("FULLTD_FD001_EVAL_EVERY", "500"))
@@ -33,22 +30,6 @@ BATCH_SIZES = dict(mse=(256,), gaussian_nll=(256,),
                    td_typed=(128, 256), td_pairwise=(128, 256))
 
 
-def selection_update_steps(total_updates, period=EVAL_UPDATE_PERIOD):
-    """Last 25% of post-start 0/period/2period/... validation checkpoints.
-
-    Update zero is the initial diagnostic, never part of HP selection.
-    Selection is computed from actually scheduled observations, not interpolated
-    epochs or unevaluated final states.
-    """
-    if type(total_updates) is not int or total_updates < 1 or period < 1:
-        raise ValueError("Expected positive integer update count and period")
-    measured = list(range(period, total_updates + 1, period))
-    if not measured:
-        raise ValueError("Campaign must contain at least one post-start evaluation")
-    n = math.ceil(SELECTION_FRACTION * len(measured))
-    return tuple(measured[-n:])
-
-
 def make_manifest():
     runs = []
     for method in METHODS:
@@ -58,15 +39,13 @@ def make_manifest():
             for setting, (alpha, beta) in enumerate(rate_pairs):
                 for seed in SEEDS:
                     runs.append(dict(
-                        run_id=f"fd001_v2b_{method}_b{batch_size}_h{setting}_s{seed}",
+                        run_id=f"fd001_{method}_b{batch_size}_h{setting}_s{seed}",
                         protocol_id=PROTOCOL_ID, dataset="fd001", backbone="tcn",
                         method=method, alpha=alpha, beta=beta,
                         batch_size=batch_size, configuration=setting, seed=seed,
                         epochs=EPOCHS, source_sampling="random_reshuffling",
                         optimizer="adam", adam_betas=[0.9, 0.999], adam_eps=1e-8,
                         weight_decay=0, gradient_clipping=None, learning_rate_schedule=None,
-                        selection_fraction=SELECTION_FRACTION,
-                        selection="last_quarter_of_positive_update_evaluations",
                         learning_curve_updates=EVAL_UPDATE_PERIOD,
                         snapshot_updates=EVAL_UPDATE_PERIOD,
                         validation_sampling="full", lags=[1, 5],

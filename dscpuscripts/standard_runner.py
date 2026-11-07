@@ -1,9 +1,7 @@
-"""Direct CPU execution of unchanged legacy campaigns; no Slurm or time limit.
+"""Direct CPU dispatcher for FD001, Electricity and METR-LA.
 
-fd001_baselines = original MSE/NLL grid (60 runs, B256).
-electricity = original 300 runs; metr_la = original 210 runs.
-All dataset methods share run directories directly in ~/scratch/fulltd/<dataset>_results/;
-analysis outputs remain isolated by campaign.
+FD001 has one current four-method scientific protocol; other dataset
+experiments keep their own specified settings.
 """
 from __future__ import annotations
 
@@ -20,20 +18,17 @@ import sys
 import time
 import uuid
 
-CAMPAIGNS = ('fd001_baselines', 'electricity', 'metr_la', 'fd001_v2b')
-DEFAULTS = {'fd001_baselines': (16, 256), 'electricity': (8, 128), 'metr_la': (8, 32),
-            'fd001_v2b': (32, 256)}
+CAMPAIGNS = ('fd001', 'electricity', 'metr_la')
+DEFAULTS = {'fd001': (32, 256), 'electricity': (8, 128), 'metr_la': (8, 32)}
 
 
 def configurations(campaign):
     from fulltd.protocol import make_manifest
     if campaign not in CAMPAIGNS:
         raise ValueError(f'Unknown campaign: {campaign}')
-    if campaign == 'fd001_v2b':
-        from dscpuscripts.fd001_v2b_protocol import make_manifest as v2_manifest
-        return v2_manifest()
-    if campaign == 'fd001_baselines':
-        return [c for c in make_manifest() if c['dataset'] == 'fd001' and c['method'] in ('mse', 'gaussian_nll')]
+    if campaign == 'fd001':
+        from dscpuscripts.fd001_protocol import make_manifest as fd001_manifest
+        return fd001_manifest()
     return [c for c in make_manifest() if c['dataset'] == campaign]
 
 
@@ -41,12 +36,113 @@ def paths(campaign):
     from dscpuscripts.result_paths import paths as dataset_paths
     if campaign not in CAMPAIGNS:
         raise ValueError(f"Unknown campaign: {campaign}")
-    dataset = 'fd001' if campaign in ('fd001_baselines', 'fd001_v2b') else campaign
-    return dataset_paths(dataset, 'baselines' if campaign == 'fd001_baselines' else None)
+    return dataset_paths(campaign)
+
+
+def available_physical_cores() -> int:
+    """Count unique physical cores accessible through Linux CPU affinity."""
+    affinity = (os.sched_getaffinity(0) if hasattr(os, "sched_getaffinity")
+                else set(range(os.cpu_count() or 1)))
+    cores = set()
+    for cpu in affinity:
+        base = Path(f"/sys/devices/system/cpu/cpu{cpu}/topology")
+        try:
+            package = int((base / "physical_package_id").read_text().strip())
+            core = int((base / "core_id").read_text().strip())
+        except (OSError, ValueError):
+            # Linux sysfs is expected on Ubuntu; don't double-count SMT in a
+            # nonstandard environment where topology data are missing.
+            return max(1, len(affinity) // 2)
+        cores.add((package, core))
+    return max(1, len(cores))
+
+
+def cpu_idle_fraction(seconds: float = 0.75) -> float:
+    """Estimate idle *physical* cores from both SMT siblings of each core.
+
+    Using a system-wide fraction of 512 logical threads can overestimate free
+    cores when one thread on each of 256 physical cores is already busy.
+    Taking the minimum idle fraction across each core's siblings avoids that
+    particular overcommit. This is a short snapshot, not a scheduler.
+    """
+    affinity = (os.sched_getaffinity(0) if hasattr(os, "sched_getaffinity")
+                else set(range(os.cpu_count() or 1)))
+    groups = {}
+    for cpu in affinity:
+        base = Path(f"/sys/devices/system/cpu/cpu{cpu}/topology")
+        try:
+            package = int((base / "physical_package_id").read_text().strip())
+            core = int((base / "core_id").read_text().strip())
+        except (OSError, ValueError):
+            # Unknown topology: treat each allowed logical CPU as a group.
+            groups = {(cpu,): [cpu] for cpu in affinity}
+            break
+        groups.setdefault((package, core), []).append(cpu)
+
+    def snapshots():
+        counters = {}
+        with Path("/proc/stat").open(encoding="utf-8") as source:
+            for line in source:
+                fields = line.split()
+                if not fields or not fields[0].startswith("cpu"):
+                    break
+                if fields[0] == "cpu":
+                    continue
+                name = fields[0][3:]
+                if not name.isdigit():
+                    continue
+                values = [int(v) for v in fields[1:9]]
+                counters[int(name)] = (sum(values), values[3] + values[4])
+        return counters
+
+    before = snapshots()
+    time.sleep(seconds)
+    after = snapshots()
+    physical_idle = []
+    for sibling_cpus in groups.values():
+        sib_idle = []
+        for cpu in sibling_cpus:
+            if cpu not in before or cpu not in after:
+                continue
+            total0, idle0 = before[cpu]
+            total1, idle1 = after[cpu]
+            if total1 <= total0:
+                continue
+            sib_idle.append(max(0., min(1., (idle1 - idle0) / (total1 - total0))))
+        if sib_idle:
+            physical_idle.append(min(sib_idle))
+    if not physical_idle:
+        raise ValueError("Could not measure Linux per-core CPU idle time")
+    return sum(physical_idle) / len(physical_idle)
+
+
+def choose_workers(requested) -> tuple[int, int, float | None]:
+    """Auto uses at most 128 processes and ~75% of currently idle cores.
+
+    Explicit --workers N overrides the heuristic. It is a throughput starting
+    point, not an ongoing resource reservation or dynamic scheduler.
+    """
+    physical = available_physical_cores()
+    if str(requested) == "auto":
+        idle = cpu_idle_fraction()
+        workers = max(1, min(128, int(0.75 * physical * idle)))
+    else:
+        try:
+            workers = int(str(requested))
+        except ValueError as exc:
+            raise ValueError("--workers must be a positive integer or 'auto'") from exc
+        if workers < 1:
+            raise ValueError("--workers must be positive")
+        idle = None
+    logical = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
+    if workers > logical:
+        raise ValueError(f"Requested {workers} workers, but only {logical} logical CPUs are available")
+    return workers, physical, idle
+
 
 
 def classify(config, results, expected_code):
-    from fd001_gamma.common import read_json
+    from dscpuscripts.common import read_json
     from fulltd.protocol import digest
     directory = Path(results) / config['run_id']
     status_path = directory / 'status.json'
@@ -60,7 +156,7 @@ def classify(config, results, expected_code):
     if status.get('state') == 'numerical_failure':
         return 'numerical_failure'
     required = (('final.pt', 'update_curve.json', 'rounds.json')
-                if config.get('protocol_id') == 'fd001-four-methods-update-v2b'
+                if config['dataset'] == 'fd001'
                 else ('final.pt', 'validation.json', 'rounds.json'))
     if (status.get('state') == 'complete' and status.get('epochs_completed') == 100
             and all((directory / f).is_file() for f in required)):
@@ -96,11 +192,11 @@ def execute_worker(args):
         torch.set_num_threads(1)
         torch.set_num_interop_threads(1)
         from fulltd.data import load_dataset
-        if args.campaign == 'fd001_v2b':
-            from dscpuscripts.fd001_v2b_train import train_candidate, code_hash
+        if args.campaign == 'fd001':
+            from dscpuscripts.fd001_train import train_candidate, code_hash
         else:
             from fulltd.train import train_candidate, code_hash
-        from fd001_gamma.common import file_lock, read_json
+        from dscpuscripts.common import file_lock, read_json
         if code_hash() != args.expected_code:
             raise ValueError('Training implementation changed after launch; no fitting performed')
         configs = {c['run_id']: c for c in configurations(args.campaign)}
@@ -120,12 +216,11 @@ def execute_worker(args):
 
 
 def dispatch(args):
-    from fd001_gamma.common import atomic_json, file_lock
-    if args.campaign == 'fd001_v2b':
-        from dscpuscripts.fd001_v2b_train import code_hash
+    from dscpuscripts.common import atomic_json, file_lock
+    if args.campaign == 'fd001':
+        from dscpuscripts.fd001_train import code_hash
     else:
         from fulltd.train import code_hash
-    from dscpuscripts.direct_runner import choose_workers, cpu_idle_fraction
     data, results, _ = paths(args.campaign)
     configs = configurations(args.campaign)
     code = code_hash()
@@ -140,7 +235,7 @@ def dispatch(args):
     if args.mode in ('status', 'dry-run') or not pending:
         return 0
     from dscpuscripts.result_paths import (dataset_root, guard_unmigrated_runs)
-    dataset_name = 'fd001' if args.campaign in ('fd001_baselines', 'fd001_v2b') else args.campaign
+    dataset_name = args.campaign
     # Both the earlier nested layout and the old per-campaign direct layout
     # may contain checkpoints. Never silently start them over in the flat root.
     guard_unmigrated_runs(results, configs, (
@@ -151,7 +246,7 @@ def dispatch(args):
     from fulltd.sampling import training_universe
     from fulltd.protocol import LAGS
     from fulltd.train import data_identity
-    from fd001_gamma.common import read_json
+    from dscpuscripts.common import read_json
     dataset = configs[0]['dataset']
     verify_dataset(dataset, data)
     train, _, _ = training_universe(load_dataset(dataset, data, 'train'), LAGS[dataset])
@@ -241,7 +336,7 @@ def dispatch(args):
 
 
 def main():
-    from fd001_gamma.common import cpu_environment
+    from dscpuscripts.common import cpu_environment
     cpu_environment()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('campaign', choices=CAMPAIGNS)

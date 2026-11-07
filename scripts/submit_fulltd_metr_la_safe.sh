@@ -22,7 +22,7 @@ cd -- "$ROOT"
 RESULTS="${FULLTD_RESULTS_DIR:-$HOME/scratch/fulltd/results}"
 LOGS="$RESULTS/logs"
 
-# Do not overlap workers from an old mixed METR-LA/FD001 array. A deferred
+# Do not overlap workers from another METR-LA array. A deferred
 # coordinator waits until those arrays terminate before selecting pending runs.
 command -v squeue >/dev/null || { echo 'ERROR: squeue unavailable.' >&2; exit 1; }
 QUEUE="$(squeue --array --noheader --user "$USER" --format '%F|%50j|%T')" || {
@@ -36,7 +36,7 @@ while IFS='|' read -r job_id name state; do
     name="${name%"${name##*[![:space:]]}"}"
     [[ "$job_id" =~ ^[0-9]+$ ]] || continue
     case "$name" in
-      fulltd_cpu_metr_la|fulltd_cpu_metr_la_fd001|fulltd_cpu_all)
+      fulltd_cpu_metr_la|fulltd_cpu_all)
           LIVE+=("$job_id") ;;
       fulltd_submit_remaining|fulltd_gw_safe_submit)
           if [[ "$job_id" != "${SLURM_JOB_ID:-}" ]]; then COORD+=("$job_id"); fi ;;

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Safe, protocol-preserving restart of only unfinished fullTD candidates.
-# Default: METR-LA + FD001; set FULLTD_SCOPE=electricity for the other campaign.
+# Default: METR-LA; set FULLTD_SCOPE=electricity for the other campaign.
 # Usage: bash submit_fulltd_remaining.sh --dry-run | --submit
 # --submit automatically defers submission until existing fullTD training arrays end.
 set -euo pipefail
@@ -12,7 +12,7 @@ Usage: bash submit_fulltd_remaining.sh --dry-run
 
 Environment overrides (optional):
   FULLTD_REPO                 default: $HOME/reproduceSL (checked-out fullTD branch)
-  FULLTD_SCOPE                default: metr_la_fd001 (or electricity, metr_la, fd001, all)
+  FULLTD_SCOPE                default: metr_la (or electricity, all)
   FULLTD_REMAINING_TIME       default: 12:00:00 (e.g. 24:00:00)
   FULLTD_CONCURRENCY         default: 4
   FULLTD_TASKS_PER_NODE      default: 90
@@ -47,7 +47,7 @@ source "$ROOT/scripts/fulltd_environment.sh"
 cd -- "$ROOT"
 RESULTS="${FULLTD_RESULTS_DIR:-$HOME/scratch/fulltd/results}"
 LOGS="$RESULTS/logs"
-SCOPE="${FULLTD_SCOPE:-metr_la_fd001}"
+SCOPE="${FULLTD_SCOPE:-metr_la}"
 TIME="${FULLTD_REMAINING_TIME:-12:00:00}"
 CONCURRENCY="${FULLTD_CONCURRENCY:-4}"
 TASKS="${FULLTD_TASKS_PER_NODE:-90}"

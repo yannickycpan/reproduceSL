@@ -1,157 +1,137 @@
-# Direct-server experiments: FD001 fresh four-method sweep
+# FD001 — single current experiment
 
-This is the recommended workflow for the new, **600-run** FD001 comparison.
-The earlier 180-run Gamma, 140-run extension, and 60-run baseline experiments
-remain intact with their original checkpoint identities and run IDs.
-Only one launcher and one analyzer are used for the fresh sweep.
+**There is one FD001 scientific protocol:** `dscpuscripts/fd001_protocol.py`.
+Its training and analysis implementations are `dscpuscripts/fd001_train.py`
+and `dscpuscripts/fd001_analysis.py`. The two TD objectives (typed and
+pairwise) are in `dscpuscripts/fd001_objectives.py`. There are no historical
+FD001 source protocols, no extra FD001-specific launchers, and no baseline-only
+or extension-only reporting pipelines.
 
-## Files and directories
+Electricity and METR-LA use the existing `fulltd` implementations; their
+data preparation, networks, losses, sampling, and ordinary training procedures
+are separate from the FD001 experiment.
+
+## Experiment definition
+
+Dataset: NASA C-MAPSS FD001. Predictors: the existing four-block TCN.
+Optimization: Adam, constant learning rates, 100 full epochs, no weight
+decay, clipping, auxiliary penalty, learning-rate schedule, refit, or early
+stopping. Same five initialization/source seeds across methods. For TD, all
+gradients flow through both predictions and the operator.
+
+| Method | Predictor α values | Operator β values | Batch | Runs |
+|---|---|---|---|---:|
+| MSE | 0.0001, 0.0003, 0.0005, 0.0007, 0.0009, 0.001, 0.003, 0.005, 0.007, 0.01 | — | 256 | 50 |
+| Gaussian NLL | same 10 | — | 256 | 50 |
+| TD typed | 0.00003, 0.0001, 0.0003, 0.001, 0.003 | 0.00003, 0.0001, 0.0003, 0.001, 0.003 | 128, 256 | 250 |
+| TD pairwise | same 5 | same 5 | 128, 256 | 250 |
+| **Total** | | | | **600** |
+
+The method set includes no raw26, source-only representation, MAE-trained
+FD001, or other TD parameterization. All methods are evaluated using the
+**same** validation/test RMSE, MAE, and RUL score.
+
+## Measurements and hyperparameter selection
+
+Evaluation is performed before training at update **0**, then every **500
+actual Adam updates** by default. Measurements are on FD001 validation only.
+A corresponding full checkpoint (weights, Adam state, RNG, current source
+cursor, and measurements) is saved at each of those updates. The rolling
+epoch-end recovery checkpoint remains as operational fault tolerance.
+A stopped run resumes exactly from its saved cursor; this does not change
+the loss, optimizer, source order, batch, or sampling protocol.
+
+For future clean runs, `FULLTD_FD001_EVAL_EVERY` overrides the update period.
+Do not change it after starting; the interval belongs to the per-run
+scientific identity.
+
+**Analysis-only selection:** for each candidate, ignore update-zero and
+take the final `ceil(0.25 × number_of_positive_update_evaluations)`
+measured validation-MSE values. Average them per seed, then across all five
+seeds, and choose the best α/β/batch setting separately for each method.
+For the default 500-update interval and FD001 training sizes, these are
+updates 4500/5000/5500 for B256 and
+8500/9000/9500/10000/10500/11000 for B128. No test labels
+are opened until the four method-level selections are locked.
+A documented numerical failure of any seed gives that entire HP
+setting infinite selection score.
+
+Test results come from the five actual 100-epoch endpoints, with no
+retraining or refit. The output includes validation/test RMSE, MAE, and
+RUL score, matched-seed differences, update-based learning curves, and
+typed/pairwise Gamma diagnostics.
+
+## Results and outputs
 
 ```text
 ~/scratch/fulltd/
-    data/                       # previously verified processed datasets
-    fd001_results/              # ALL training runs; flat run-ID directories
-        fd001_v2b_mse_.../
-        fd001_v2b_gaussian_nll_.../
-        fd001_v2b_td_typed_b128_.../
-        fd001_v2b_td_typed_b256_.../
-        fd001_v2b_td_pairwise_b128_.../
-        fd001_v2b_td_pairwise_b256_.../
-        fd001_gamma_v1_.../     # historical data remain unchanged
-        fd001_gamma_ext_v1_.../
-    fd001_outputs/              # NEW shared FD001 analysis, SIBLING of results/
-        selections.json
-        hp_scores.csv
-        selected_hyperparameters.csv
-        per_seed_metrics.csv
-        performance_summary.csv
-        paired_comparisons.csv          # matched five-seed descriptive differences
-        validation_learning_curves.csv
-        validation_curve_per_seed.csv
-        figures/
-        td_diagnostics/
-        .cache/
+  data/
+  .venv-fulltd/
+  fd001_results/              # Flat run directories; fd001_<method>_b..._h..._s...
+    fd001_mse_b256_h0_s0/
+    fd001_gaussian_nll_b256_h0_s0/
+    fd001_td_typed_b128_h0_s0/
+    fd001_td_pairwise_b256_h0_s0/
+  fd001_outputs/              # Sibling analysis, NEVER inside fd001_results/
+    selections.json
+    hp_scores.csv
+    selected_hyperparameters.csv
+    per_seed_metrics.csv
+    performance_summary.csv
+    paired_comparisons.csv
+    validation_learning_curves.csv
+    figures/
+    td_diagnostics/
 ```
 
-No new nested result directory is created. Results and analysis are shared by
-the direct CPU server and HPC: host-specific differences are only environment
-setup and dispatch. `dscpuscripts/result_paths.py` resolves the root;
-`FULLTD_RESULTS_ROOT` and `FULLTD_FD001_ROOT` allow explicit overrides.
-Existing historical `fd001_results/outputs/` are *not deleted*.
+No script deletes or renames existing server-side results. If there are
+old run directories on your server, review and remove them separately after
+verifying backups; the current protocol has unversioned run IDs.
 
-## New FD001 scientific protocol
-
-One frozen TCN architecture, the same FD001 train/validation/test split, same
-train-data standardization, same deterministic source/partner sampling, 100
-full epochs, Adam with constant rates and no clipping, weight decay, learning
-schedule, refit, auxiliary supervised term, or early stopping.
-
-| Method | Predictor alpha sweep | Operator beta sweep | Total runs |
-| --- | --- | --- | ---: |
-| MSE, B256 | .0001, .0003, .0005, .0007, .0009, .001, .003, .005, .007, .01 | — | 50 |
-| Gaussian NLL, B256 | same ten alpha values | — | 50 |
-| TD typed, B128 + B256 | .00003, .0001, .0003, .001, .003 | .00003, .0001, .0003, .001, .003 | 250 |
-| TD pairwise, B128 + B256 | same five alpha values | same five beta values | 250 |
-| **Total** | | | **600** |
-
-All methods use five seeds. Raw26, source-only representation TD and MAE-trained
-FD001 algorithms are **absent**. The TD operators and baseline losses are reused
-from the frozen implementations.
-
-**Selection:** for each candidate, average standardized validation MSE over the
-last ceil(25%) of scheduled post-start evaluations (the initial evaluation at
-update 0 is excluded). Pool the resulting score across all five seeds,
-then select learning rates and, for TD, batch size jointly. With the current
-FD001 update counts, these are updates 4500,5000,5500 for B256 and
-8500,9000,9500,10000,10500,11000 for B128. Any genuine nonfinite numerical
-failure invalidates the *entire five-seed HP setting* with infinite score.
-Missing/incomplete checkpoints block analysis; they are not misclassified as
-divergence. Test data are loaded only after selection has been locked.
-
-**Learning-curve observations are independent of selection:** initial
-evaluation at update **0**, then at **500, 1000, 1500, ...** actual Adam
-optimizer updates. Each observation evaluates validation RMSE, MAE and summed
-RUL score, and each scheduled step retains a full checkpoint (model, Adam,
-RNG state, source cursor and records). There are also rolling epoch-end recovery checkpoints (no extra epoch-only
-validation measurements). Interrupted training
-resumes from the last durable source cursor within an epoch without changing
-the source/partner sampling stream. No interpolation of historical learning
-curves or evaluation on test during training is used.
-
-The default 500-update cadence is configurable for **future, distinct**
-experiments via `FULLTD_FD001_EVAL_EVERY`; this value is saved in every run's
-config and its checkpoint identity. **Do not change it after the sweep starts.**
-
-Original Graph WaveNet's reference training uses masked MAE. Its *historical*
-MAE baseline remains available solely for that cited-reference exception;
-the fresh FD001 sweep and all four current methods do not train using MAE.
-All four are nevertheless **evaluated using both MAE and RMSE**, plus FD001
-RUL score.
-
-## Launch on the AMD server
+## AMD server: run and analyze
 
 ```bash
 cd ~/reproduceSL
 git switch fullTD
 git pull --ff-only origin fullTD
-~/scratch/fulltd/.venv-fulltd/bin/python -m pytest -q \
-  dscpuscripts/test_fd001_v2.py \
+
+$HOME/scratch/fulltd/.venv-fulltd/bin/python -m pytest -q \
+  dscpuscripts/test_fd001.py \
   dscpuscripts/test_standard_workflow.py \
   dscpuscripts/test_result_paths.py
 
-# No jobs launched by --dry-run:
-bash dscpuscripts/run_standard.sh fd001_v2b --dry-run
-
-# Start the entire 600-run campaign with one direct scheduler:
-nohup bash dscpuscripts/run_standard.sh fd001_v2b \
+bash dscpuscripts/run_standard.sh fd001 --dry-run
+nohup bash dscpuscripts/run_standard.sh fd001 \
   --run --workers 48 --adaptive \
-  > "$HOME/fd001_v2.log" 2>&1 < /dev/null &
-echo $!
+  > $HOME/fd001.log 2>&1 < /dev/null &
+
+bash dscpuscripts/run_standard.sh fd001 --status
+tail -n 40 $HOME/fd001.log
+
+# Only after all candidates complete or document true numerical failures:
+bash dscpuscripts/analyze_standard.sh fd001 check
+bash dscpuscripts/analyze_standard.sh fd001 run
+# Figures only, from saved tables:
+bash dscpuscripts/analyze_standard.sh fd001 plots
 ```
 
-Check progress without launching additional jobs:
+The direct dispatcher is shared with Electricity and METR-LA, and admits
+workers based on real-time idle CPU capacity when `--adaptive` is given.
+No Slurm is required on the AMD host. Use `--workers auto` or a
+conservative maximum on a heavily shared server; do not run two dispatchers
+against the same result root.
+
+## Other datasets
+
+The unchanged processing and model implementations for Electricity and
+METR-LA are still available:
 
 ```bash
-bash dscpuscripts/run_standard.sh fd001_v2b --status
-tail -n 40 "$HOME/fd001_v2.log"
+bash dscpuscripts/run_standard.sh electricity --dry-run
+bash dscpuscripts/run_standard.sh metr_la --dry-run
 ```
 
-The shared server is heavily utilized. Start at most one launcher and use
-`--adaptive` rather than assuming all 256 physical cores are idle. Logs,
-snapshots, and training outputs are under the flat `fd001_results` tree.
-The launcher skips completed/numerically failed run IDs and resumes any
-compatible checkpoints. It refuses to overwrite a record from another
-protocol/code/data identity.
-
-## Unified results analysis (one command)
-
-Only after all 600 runs have finished successfully or have documented
-numerical failures:
-
-```bash
-bash dscpuscripts/analyze_standard.sh fd001_v2b check
-bash dscpuscripts/analyze_standard.sh fd001_v2b run
-```
-
-`check` audits all candidates and determines the four winners without
-opening test labels. `run` evaluates the **actual epoch-100 models**
-and produces one common FD001 report in `fd001_outputs/`: a validation/test
-table with RMSE, MAE and RUL score, matched-seed differences with\ndescriptive t intervals, one HP selection table, measured
-0/500/... learning curves on the real optimizer-update axis, and TD operator
-diagnostics. There is **no baseline-only analysis, extension-only analysis,
-or rmse_report** in the fresh workflow.
-
-Regenerate figures only without checkpoint evaluation:
-
-```bash
-bash dscpuscripts/analyze_standard.sh fd001_v2b plots
-```
-
-## Legacy experiments
-
-Older commands `run_fd001_gamma.sh`,
-`run_fd001_gamma_extension.sh`, and `analyze_fd001_gamma.sh` are retained
-for *historical checkpoint reproducibility*, not part of this fresh FD001
-comparison. The older Electricity/METR-LA runner and their published
-experimental protocols remain unchanged; they can use the direct-server
-`run_standard.sh electricity` or `run_standard.sh metr_la` commands.
+The non-FD001 protocol and corresponding manifests under `fulltd/` and
+`configs/fulltd/` now contain 510 Electricity/METR-LA runs only. The
+historical MAE objective is retained only where required by the reference
+Graph WaveNet training procedure; it is not part of FD001.

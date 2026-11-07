@@ -100,7 +100,7 @@ def group_id(config):
 
 
 def validate_manifest(manifest):
-    """Independent check of the prescribed 630 runs, not just their count."""
+    """Independent check of the prescribed 510 Electricity/METR-LA runs, not just their count."""
     if not isinstance(manifest, list):
         raise ValueError("Manifest must be a list of candidate configurations")
     expected = set()
@@ -133,7 +133,7 @@ def validate_manifest(manifest):
         actual.add(key)
         run_ids.add(run_id)
     if actual != expected:
-        raise ValueError(f"Campaign must contain all 630 prescribed candidates; {len(expected - actual)} missing")
+        raise ValueError(f"Campaign must contain all 510 prescribed Electricity/METR-LA candidates; {len(expected - actual)} missing")
     return manifest
 
 

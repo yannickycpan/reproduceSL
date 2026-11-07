@@ -286,54 +286,6 @@ class RecoveryTests(unittest.TestCase):
         self.scheduler.assert_not_called()
 
 
-class IntegratedWorkerTest(unittest.TestCase):
-    def test_real_training_endpoint_satisfies_worker_result_contract(self):
-        import torch
-        from agents.fulltd_objectives import make_objective
-        from tests.test_fulltd_training import SyntheticData, TinyMean, config_for
-        config = config_for(method="mse")
-        fitting, validation = SyntheticData(8), SyntheticData(5, split="validation")
-        old_threads = torch.get_num_threads()
-        old_deterministic = torch.are_deterministic_algorithms_enabled()
-        self.addCleanup(torch.set_num_threads, old_threads)
-        self.addCleanup(torch.use_deterministic_algorithms, old_deterministic)
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            manifest, mapping = root / "manifest.json", root / "mapping.json"
-            manifest.write_text(json.dumps([config]))
-            mapping.write_text("[0]")
-            args = argparse.Namespace(manifest=str(manifest), mapping=str(mapping),
-                submission_digest=digest(dict(manifest=[config], indices=[0])),
-                expected_code_hash="synthetic-training-fixture-v1", offset=0, task_count=1,
-                microbatch=4, data_dir=str(root / "unused-data"), results_dir=str(root / "results"),
-                attempt_dir=str(root / "attempt"))
-            def load_dataset(dataset, directory, split):
-                self.assertEqual(dataset, "fd001")
-                self.assertIn(split, ("train", "validation"))
-                return fitting if split == "train" else validation
-            def objective(config, dataset):
-                with torch.random.fork_rng(devices=[]):
-                    torch.manual_seed(1234)
-                    return make_objective(config["method"], TinyMean())
-            with patch.dict(os.environ, {"SLURM_PROCID": "0", "SLURM_CPUS_PER_TASK": "1"}), \
-                    patch("fulltd.train.code_hash", return_value=args.expected_code_hash), \
-                    patch("fulltd.train.make_objective_for", side_effect=objective), \
-                    patch("fulltd.train.subprocess.check_output", return_value="fixture-revision"), \
-                    patch("fulltd.train.platform.processor", return_value="fixture-cpu"), \
-                    patch("fulltd.data.load_dataset", side_effect=load_dataset), \
-                    patch("fulltd.hpc.signal.SIGUSR1", 777, create=True), \
-                    patch("fulltd.hpc.signal.signal", return_value=signal.SIG_DFL), \
-                    patch("fulltd.hpc.subprocess.run") as scheduler:
-                result = worker(args)
-            self.assertEqual(result["state"], "complete")
-            self.assertEqual(result["next_epoch"], 101)
-            checkpoint = Path(args.results_dir) / config["run_id"] / "final.pt"
-            final = torch.load(checkpoint, weights_only=False)
-            self.assertEqual(final["next_epoch"], 101)
-            self.assertEqual(final["counters"]["optimizer_steps"], 100)
-            self.assertEqual(len(final["validation"]), 10)
-            scheduler.assert_not_called()
-
 
 if __name__ == "__main__":
     unittest.main()

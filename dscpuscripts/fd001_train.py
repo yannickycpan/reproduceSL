@@ -1,8 +1,7 @@
-"""Fresh FD001: unchanged objectives and 100-epoch Adam, measured every 500 updates.
+"""Train the sole current FD001 four-method sweep, with update-based observations.
 
-Original scientific training modules are frozen. Independent fd001_v2b run IDs
-retain exact-update full-state checkpoints and a recoverable source cursor.
-HP selection uses the last quarter of periodic validation observations.
+100 epochs, unchanged Adam/objectives/sampling. Retained update snapshots
+include the source cursor so restarts never repeat or omit a pair sample.
 """
 from __future__ import annotations
 
@@ -17,24 +16,22 @@ import uuid
 import numpy as np
 import torch
 
-from fd001_gamma.common import atomic_json, read_json, data_identity
+from dscpuscripts.common import atomic_json, read_json, data_identity
 from fulltd.data import load_dataset
 from fulltd.metrics import evaluate
 from fulltd.models import build_model
 from fulltd.sampling import (rng_for, sources_for_round, sequence_hash,
                              training_universe)
 from fulltd.train import (seed_runtime, state_hash, logical_backward)
-from .fd001_v2_protocol import (PROTOCOL_ID, EPOCHS, EVAL_UPDATE_PERIOD,
+from .fd001_protocol import (PROTOCOL_ID, EPOCHS, EVAL_UPDATE_PERIOD,
                                  digest, validate_config)
 
 
 SCIENTIFIC_SOURCES = (
-    "dscpuscripts/fd001_v2_protocol.py", "dscpuscripts/fd001_v2_train.py",
+    "dscpuscripts/fd001_protocol.py", "dscpuscripts/fd001_train.py",
+    "dscpuscripts/fd001_objectives.py", "dscpuscripts/common.py",
     "agents/fulltd_objectives.py", "agents/fulltd_mse.py",
-    "agents/fulltd_gaussian_nll.py", "fd001_gamma_ext/objectives.py",
-    "fd001_gamma_ext/protocol.py", "fd001_gamma/objectives.py",
-    "fd001_gamma/protocol.py", "fd001_gamma/train.py",
-    "fd001_gamma/common.py", "fulltd/protocol.py", "fulltd/train.py",
+    "agents/fulltd_gaussian_nll.py", "fulltd/protocol.py", "fulltd/train.py",
     "fulltd/data.py", "fulltd/metrics.py", "fulltd/models.py",
     "fulltd/sampling.py",
 )
@@ -52,10 +49,10 @@ def code_hash():
 def build_objective(config):
     model = build_model("fd001", "tcn", config["seed"])
     if config["method"] == "td_typed":
-        from fd001_gamma.objectives import GammaTD
-        return GammaTD(model, "typed")
+        from dscpuscripts.fd001_objectives import TypedGammaTD
+        return TypedGammaTD(model)
     if config["method"] == "td_pairwise":
-        from fd001_gamma_ext.objectives import PairwiseGammaTD
+        from dscpuscripts.fd001_objectives import PairwiseGammaTD
         return PairwiseGammaTD(model)
     if config["method"] in ("mse", "gaussian_nll"):
         from agents.fulltd_objectives import make_objective
@@ -101,10 +98,53 @@ def json_safe(value):
     return value
 
 
+def gamma_diagnostics(objective, dataset, pair_law, microbatch, device, stop_requested):
+    """Fixed label-free training-pair probe; never consumes training RNG state."""
+    ids = np.unique(np.linspace(0, len(dataset) - 1, min(len(dataset), 512), dtype=np.int64))
+    partners, kinds, probabilities = pair_law.enumerate(ids)
+    source_row, slot = np.nonzero(probabilities > 0)
+    sources, targets = ids[source_row], partners[source_row, slot]
+    types, weights = kinds[source_row, slot], probabilities[source_row, slot]
+    values = []
+    was_training = objective.training
+    objective.eval()
+    try:
+        for start in range(0, len(sources), microbatch):
+            if stop_requested():
+                return None
+            sl = slice(start, start + microbatch)
+            x = torch.as_tensor(dataset.get_batch(sources[sl])["x"], device=device)
+            other = torch.as_tensor(dataset.get_batch(targets[sl])["x"], device=device)
+            t = torch.as_tensor(types[sl].copy(), device=device, dtype=torch.long)
+            values.append(objective.gamma_values(x, other, t).cpu().double().numpy())
+    finally:
+        objective.train(was_training)
+    values = np.concatenate(values)
+    # Logging must not change scientific stopping: preserve nonfinite probe
+    # values rather than turn an otherwise finite training update into a failure.
+    records = []
+    for kind, lag in enumerate((1, 5)):
+        take = types == kind
+        if not take.any():
+            continue
+        v, w = values[take], weights[take]
+        with np.errstate(invalid="ignore", over="ignore"):
+            mean = float(np.average(v, weights=w))
+            sd = float(np.sqrt(np.average((v - mean) ** 2, weights=w)))
+        records.append(dict(type=kind + 1, lag=lag, mean=mean,
+                            std=sd, finite_pair_count=int(np.isfinite(v).sum()),
+                            minimum=float(v.min()), maximum=float(v.max()),
+                            negative_fraction=float(np.average(v < 0, weights=w)),
+                            near_one_fraction=float(np.average(abs(v - 1) < .05, weights=w)),
+                            pair_count=int(take.sum())))
+    return dict(source_count=len(ids), source_indices_sha256=sequence_hash(ids),
+                weighting="exact conditional pair probabilities on fixed training-source probe",
+                types=records)
+
+
 def capture_validation(objective, validation, training, pair_law, batch_size,
                        optimizer_steps, epoch, td):
     """Observation-only, including full FD001 RUL metrics, with no RNG effects."""
-    from fd001_gamma.train import gamma_diagnostics
     was_training = objective.training
     state = rng_snapshot()
     try:
@@ -284,9 +324,3 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
         report["error"] = str(error)
         atomic_json(status_file, report)
         return report
-
-
-def run_config(config, data_dir, results_dir, **kwargs):
-    validate_config(config)
-    return train_candidate(config, load_dataset("fd001", data_dir, "train"),
-                           load_dataset("fd001", data_dir, "val"), results_dir, **kwargs)

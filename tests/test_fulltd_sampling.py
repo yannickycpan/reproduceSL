@@ -8,7 +8,7 @@ from fulltd.sampling import LocalPairLaw, rng_for, sources_for_round
 
 def test_prespecified_matrix_and_budget():
     manifest = make_manifest()
-    assert len(manifest) == 630
+    assert len(manifest) == 510
     assert sum(r["batch_size"] == 256 for r in manifest) == 450
     assert sum(r["batch_size"] == 128 for r in manifest) == 180
     assert {r["seed"] for r in manifest} == set(range(5))

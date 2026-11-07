@@ -9,9 +9,9 @@ import pytest
 import torch
 from torch import nn
 
-from dscpuscripts import fd001_v2_protocol as protocol
-from dscpuscripts import fd001_v2_train as train
-from dscpuscripts import fd001_v2_analysis as analysis
+from dscpuscripts import fd001_protocol as protocol
+from dscpuscripts import fd001_train as train
+from dscpuscripts import fd001_analysis as analysis
 from dscpuscripts import result_paths
 
 
@@ -45,7 +45,7 @@ class ToyPredictor(nn.Module):
         return self.linear(x[:,0,:])
 
 
-def test_v2_canonical_manifest_and_hp_grids():
+def test_fd001_canonical_manifest_and_hp_grids():
     configs = protocol.make_manifest()
     assert len(configs) == 600
     assert Counter(c["method"] for c in configs) == {
@@ -60,15 +60,16 @@ def test_v2_canonical_manifest_and_hp_grids():
     assert protocol.TD_ALPHAS == (.00003, .0001, .0003, .001, .003)
     assert protocol.BATCH_SIZES["td_typed"] == (128, 256)
     assert protocol.BATCH_SIZES["td_pairwise"] == (128, 256)
-    assert protocol.SELECTION_FRACTION == .25
-    assert protocol.selection_update_steps(5500) == (4500, 5000, 5500)
-    assert protocol.selection_update_steps(11000) == (
+    assert analysis.SELECTION_FRACTION == .25
+    assert analysis.selection_update_steps(5500) == (4500, 5000, 5500)
+    assert analysis.selection_update_steps(11000) == (
         8500, 9000, 9500, 10000, 10500, 11000)
     assert protocol.BETAS == (.00003,.0001,.0003,.001,.003)
     assert all(c["learning_curve_updates"] == protocol.EVAL_UPDATE_PERIOD
                and c["snapshot_updates"] == protocol.EVAL_UPDATE_PERIOD
-               and c["selection_fraction"] == .25 for c in configs)
-    assert all(c["run_id"].startswith("fd001_v2b_") for c in configs)
+               and "selection_fraction" not in c and "selection" not in c
+               for c in configs)
+    assert all(c["run_id"].startswith("fd001_") for c in configs)
     assert len(set(c["run_id"] for c in configs)) == len(configs)
 
 
@@ -77,7 +78,7 @@ def test_checkpointed_training_restores_exact_mid_epoch_trajectory(
     from agents.fulltd_mse import MSE
     config = next(c for c in protocol.make_manifest()
                   if c["method"] == "mse" and c["seed"] == 0)
-    monkeypatch.setattr(train, "code_hash", lambda: "test-scientific-code-v2")
+    monkeypatch.setattr(train, "code_hash", lambda: "test-scientific-code")
     monkeypatch.setattr(train, "build_objective", lambda config: MSE(ToyPredictor()))
     full, interrupted = tmp_path / "full", tmp_path / "interrupted"
     tr, va = ToyFD001("train"), ToyFD001("val", n=45)
@@ -110,11 +111,11 @@ def test_checkpointed_training_restores_exact_mid_epoch_trajectory(
                                    rtol=0, atol=0)
 
 
-def test_v2_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch):
+def test_fd001_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch):
     import math
-    from fd001_gamma.common import atomic_json
+    from dscpuscripts.common import atomic_json
     from fulltd.sampling import sources_for_round, sequence_hash
-    monkeypatch.setattr(analysis, "code_hash", lambda: "synthetic-v2")
+    monkeypatch.setattr(analysis, "code_hash", lambda: "synthetic-current")
     n = 1300
     root = tmp_path / "fd001_results"
     shas = {
@@ -138,14 +139,14 @@ def test_v2_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch):
             initial_mean_sha256=f"same-init-s{config['seed']}",
             identity=dict(protocol_id=protocol.PROTOCOL_ID,
                           config_sha256=protocol.digest(config),
-                          code_sha256="synthetic-v2",
+                          code_sha256="synthetic-current",
                           data_sha256="same-training", validation_sha256="same-validation")))
         if fail:
             continue
         (directory / "final.pt").touch()
         score = 0.1 + .01 * config["configuration"]
         milestones = list(range(0, count + 1, protocol.EVAL_UPDATE_PERIOD))
-        tail = set(protocol.selection_update_steps(count))
+        tail = set(analysis.selection_update_steps(count))
         # Earlier 75% deliberately scores better. The selector must ignore
         # that earlier performance and use only the recorded final quarter.
         atomic_json(directory / "update_curve.json", [
@@ -181,7 +182,7 @@ def test_v2_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch):
 
 def test_pairwise_td_uses_same_update_checkpoint_and_selection_protocol(
         tmp_path, monkeypatch):
-    from fd001_gamma_ext.objectives import PairwiseGammaTD
+    from dscpuscripts.fd001_objectives import PairwiseGammaTD
 
     class TinyPairwiseMean(nn.Module):
         feature_dim = 8
@@ -229,7 +230,7 @@ def test_pairwise_td_uses_same_update_checkpoint_and_selection_protocol(
 def test_fresh_campaign_status_requires_update_curve_not_old_epoch_validation(
         tmp_path):
     from dscpuscripts.standard_runner import classify
-    from fd001_gamma.common import atomic_json
+    from dscpuscripts.common import atomic_json
     from fulltd.protocol import digest
 
     config = next(c for c in protocol.make_manifest()
@@ -247,7 +248,7 @@ def test_fresh_campaign_status_requires_update_curve_not_old_epoch_validation(
     assert not (folder / "validation.json").exists()
 
 
-def test_v2_outputs_are_siblings_of_results(tmp_path, monkeypatch):
+def test_fd001_outputs_are_siblings_of_results(tmp_path, monkeypatch):
     monkeypatch.setenv("FULLTD_RESULTS_ROOT", str(tmp_path))
     monkeypatch.delenv("FULLTD_FD001_ROOT", raising=False)
     data, results, outputs = result_paths.paths("fd001")
@@ -272,8 +273,8 @@ def test_matched_seed_comparison_does_not_omit_any_seed():
     assert first["descriptive_t95_lower"]<=-1.<=first["descriptive_t95_upper"]
 
 
-def test_v2_reporting_never_trains_or_refits():
-    source = (Path(__file__).with_name("fd001_v2_analysis.py")).read_text()
+def test_fd001_reporting_never_trains_or_refits():
+    source = (Path(__file__).with_name("fd001_analysis.py")).read_text()
     assert "optimizer.step(" not in source
     assert "refit_readouts" not in source
     assert "train_candidate(" not in source

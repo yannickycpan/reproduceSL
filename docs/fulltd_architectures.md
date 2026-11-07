@@ -63,7 +63,7 @@ are zero-weight linear maps of the final hidden representation with bias
 `inverse_softplus(1-1e-6)`, giving variance one initially. Their construction
 does not alter the mean-network RNG stream.
 
-Each algorithm has its own file under `agents/fulltd_*.py`. TD-full and
+Electricity/METR-LA ordinary objectives live in `agents/fulltd_*.py`. The sole FD001 protocol uses the same common predictors and the typed/pairwise objectives in `dscpuscripts/fd001_objectives.py`. TD-full and
 TD-scalar share only the exact residual-loss implementation: unrestricted
 coefficients initialized at zero, full gradients through both endpoint means,
 and a half-squared scalar loss averaged using the actual valid-pair count.

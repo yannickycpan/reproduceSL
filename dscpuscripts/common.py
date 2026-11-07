@@ -1,4 +1,4 @@
-"""Atomic records, provenance and CPU resource setup for the separate campaign."""
+"""Shared atomic file I/O, dataset identity, and Linux process locks."""
 from __future__ import annotations
 
 import contextlib
@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import uuid
 
-from .protocol import digest
+from fulltd.protocol import digest
 
 THREAD_VARIABLES = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
                     "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "BLIS_NUM_THREADS")
@@ -73,19 +73,6 @@ def file_hash(path):
     return h.hexdigest()
 
 
-def scientific_hash():
-    root = Path(__file__).resolve().parents[1]
-    paths = ["fd001_gamma/" + name for name in
-             ("__init__.py", "protocol.py", "objectives.py", "common.py", "train.py")]
-    paths += ["fulltd/" + name for name in ("__init__.py", "data.py", "models.py", "sampling.py", "metrics.py")]
-    paths += ["agents/fulltd_objectives.py"]
-    h = hashlib.sha256()
-    for name in paths:
-        h.update(name.encode())
-        h.update((root / name).read_bytes().replace(b"\r\n", b"\n"))
-    return h.hexdigest()
-
-
 def data_identity(dataset):
     metadata = dataset.metadata
     return digest(dict(fingerprint=metadata.get("fingerprint", digest(metadata)),
@@ -112,8 +99,3 @@ def file_lock(path):
             fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
-def campaign_paths():
-    home = Path.home() / "scratch" / "fulltd"
-    return (Path(os.environ.get("FULLTD_DATA_DIR", home / "data")).expanduser().resolve(),
-            Path(os.environ.get("FULLTD_FD001_GAMMA_RESULTS_DIR", home / "fd001_gamma_v1" / "results")).expanduser().resolve(),
-            Path(os.environ.get("FULLTD_FD001_GAMMA_OUTPUT_DIR", home / "fd001_gamma_v1" / "outputs")).expanduser().resolve())

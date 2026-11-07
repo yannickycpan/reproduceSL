@@ -1,4 +1,4 @@
-"""The prespecified 630 runs. No data-dependent configuration generation."""
+"""Non-FD001 (Electricity and METR-LA) application experiments only."""
 import argparse
 import hashlib
 import json
@@ -13,16 +13,14 @@ RATES = (0.0001, 0.0002, 0.0003, 0.0005, 0.0007, 0.001)
 TD_RATES = ((.0001, .0001), (.0001, .001), (.0003, .0003),
             (.0003, .003), (.001, .001), (.001, .01))
 LAGS = {"electricity": (1, 24), "metr_la": (1, 3), "fd001": (1, 5)}
-DATASET_SCOPES = ("all", "electricity", "metr_la", "fd001", "metr_la_fd001")
+DATASET_SCOPES = ("all", "electricity", "metr_la")
 
 
 def datasets_for_scope(scope):
     """Execution/analysis grouping only; never alter candidates or their IDs."""
     if scope == "all":
-        return tuple(LAGS)
-    if scope == "metr_la_fd001":
-        return ("metr_la", "fd001")
-    if scope in LAGS:
+        return ("electricity", "metr_la")
+    if scope in ("electricity", "metr_la"):
         return (scope,)
     raise ValueError(f"Unknown dataset scope: {scope}")
 
@@ -32,7 +30,6 @@ MATRIX = (
     ("electricity", "patchtst", ("mse", "td_full")),
     ("electricity", "dlinear", ("dlinear_mse",)),
     ("metr_la", "graph_wavenet", ("mse", "td_full", "td_scalar", "gaussian_nll", "mae")),
-    ("fd001", "tcn", ("mse", "td_full", "gaussian_nll")),
 )
 
 
@@ -61,7 +58,7 @@ def make_manifest():
                             validation_sampling="customer_stratified_without_replacement" if dataset == "electricity" else "full",
                             validation_fraction=0.2 if dataset == "electricity" else 1.0,
                             validation_epochs=list(EVALUATIONS), selection_epochs=list(SELECTION_EPOCHS)))
-    assert len(runs) == 630
+    assert len(runs) == 510
     return runs
 
 
@@ -87,10 +84,10 @@ def main():
     destination = Path(args.output)
     destination.mkdir(parents=True, exist_ok=True)
     manifest = make_manifest()
-    for name in ("manifest", *LAGS):
+    for name in ("manifest", "electricity", "metr_la"):
         subset = manifest if name == "manifest" else [r for r in manifest if r["dataset"] == name]
         (destination / (name + ".json")).write_text(json.dumps(subset, indent=2) + "\n")
-    print(f"Wrote {len(manifest)} candidates (450 primary, 180 sensitivity)")
+    print(f"Wrote {len(manifest)} Electricity/METR-LA candidates")
 
 
 if __name__ == "__main__":
