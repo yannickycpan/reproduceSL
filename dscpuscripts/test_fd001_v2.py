@@ -219,6 +219,22 @@ def test_v2_outputs_are_siblings_of_results(tmp_path, monkeypatch):
     assert not results.exists() and not outputs.exists()
 
 
+def test_matched_seed_comparison_does_not_omit_any_seed():
+    records=[]
+    for method_index,method in enumerate(protocol.METHODS):
+        for seed in protocol.SEEDS:
+            records.append(dict(method=method, seed=seed, split="test",
+                                metric="rmse",units="cycles",
+                                value=10.+method_index+seed*.1))
+    paired=analysis.paired_differences(records)
+    assert len(paired)==6
+    first=next(r for r in paired
+               if r["first"]=="mse" and r["second"]=="gaussian_nll")
+    assert first["n"]==5
+    assert first["mean_difference"]==pytest.approx(-1.)
+    assert first["descriptive_t95_lower"]<=-1.<=first["descriptive_t95_upper"]
+
+
 def test_v2_reporting_never_trains_or_refits():
     source = (Path(__file__).with_name("fd001_v2_analysis.py")).read_text()
     assert "optimizer.step(" not in source
