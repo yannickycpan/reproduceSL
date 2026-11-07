@@ -66,6 +66,8 @@ def old_fixture(tmp_path):
     write_csv(source / "validation_records.csv", validation)
     write_csv(source / "scores.csv", scores)
     write_csv(source / "candidate_accounting.csv", accounting)
+    atomic_json(source / "baseline_archive_provenance.json",
+                dict(legacy_data_fingerprint="fixture-same-data"))
     return source
 
 
@@ -141,7 +143,12 @@ def test_selectors_and_legacy_scores_are_audited(tmp_path):
 
 
 def test_one_command_combines_five_algorithms_without_fitting(tmp_path, monkeypatch):
+    from fulltd import data as fulltd_data
+    from types import SimpleNamespace
     source, out = old_fixture(tmp_path), gamma_fixture(tmp_path)
+    monkeypatch.setattr(fulltd_data, "load_dataset",
+                        lambda *args, **kwargs: SimpleNamespace(
+                            metadata=dict(fingerprint="fixture-same-data")))
     results = tmp_path / "new_results"
     monkeypatch.setattr(combined, "campaign_paths",
                         lambda: (tmp_path / "data_not_needed", results, out))
