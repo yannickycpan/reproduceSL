@@ -227,6 +227,44 @@ def summarize(rows,keys,value="value"):
     return summary
 
 
+
+def paired_differences(rows):
+    """Descriptive matched-seed differences, never used for HP selection."""
+    from itertools import combinations
+    indexed=defaultdict(dict)
+    for row in rows:
+        key=(row["split"], row["metric"], row["units"])
+        method=row["method"]
+        seed=int(row["seed"])
+        if seed in indexed[key].setdefault(method,{}):
+            raise ValueError("Duplicate selected seed metric")
+        indexed[key][method][seed]=float(row["value"])
+    output=[]
+    # Five training seeds imply df=4; report descriptive intervals only.
+    t95_df4=2.7764451051977987
+    for (split,metric,units), methods in sorted(indexed.items()):
+        for first,second in combinations(METHODS,2):
+            if (first not in methods or second not in methods or
+                    sorted(methods[first])!=list(SEEDS) or
+                    sorted(methods[second])!=list(SEEDS)):
+                raise ValueError("Missing paired seed metrics")
+            differences=[methods[first][seed]-methods[second][seed] for seed in SEEDS]
+            if all(math.isfinite(x) for x in differences):
+                mean=statistics.mean(differences)
+                sd=statistics.stdev(differences)
+                se=sd/math.sqrt(len(SEEDS))
+                lo,hi=mean-t95_df4*se,mean+t95_df4*se
+            else:
+                mean,sd,se,lo,hi=math.nan,math.nan,math.nan,math.nan,math.nan
+            output.append(dict(split=split,metric=metric,units=units,
+                               first=first,second=second,
+                               difference="first minus second (lower favors first)",
+                               n=5,mean_difference=mean,
+                               sample_sd=sd,standard_error=se,
+                               descriptive_t95_lower=lo,descriptive_t95_upper=hi))
+    return output
+
+
 def plot(output):
     import matplotlib
     matplotlib.use("Agg")
@@ -317,6 +355,7 @@ def run(mode):
         rows,curve,td=evaluate_selected(selected,root,data,out)
         write_csv(out/"per_seed_metrics.csv",rows)
         write_csv(out/"performance_summary.csv",summarize(rows,("method","split","metric","units")))
+        write_csv(out/"paired_comparisons.csv",paired_differences(rows))
         write_csv(out/"validation_curve_per_seed.csv",curve)
         write_csv(out/"validation_learning_curves.csv",summarize(curve,("method","metric","optimizer_steps")))
         write_csv(out/"selected_hyperparameters.csv",[
