@@ -5,7 +5,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/fulltd_environment.sh"
 cd "$ROOT"
 "$FULLTD_ENV/bin/python" -m fd001_gamma.analysis check
-export FULLTD_FD001_GAMMA_RESULTS_DIR="${FULLTD_FD001_GAMMA_RESULTS_DIR:-$FULLTD_FD001_ROOT/results}"
+export FULLTD_FD001_GAMMA_RESULTS_DIR="${FULLTD_FD001_GAMMA_RESULTS_DIR:-$FULLTD_FD001_ROOT}"
 export FULLTD_FD001_GAMMA_OUTPUT_DIR="${FULLTD_FD001_GAMMA_OUTPUT_DIR:-$FULLTD_FD001_ROOT/outputs}"
 LOGS="$FULLTD_FD001_GAMMA_RESULTS_DIR/logs"
 mkdir -p -- "$LOGS"
