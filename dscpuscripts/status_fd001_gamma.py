@@ -57,6 +57,10 @@ def inspect(results_dir: Path, *, code_hash: str | None = None):
                 problem = f"{type(exc).__name__}: {exc}"
         elif (root / "recovery.pt").is_file():
             state = "checkpoint_without_status"
+        elif (root / "final.pt").is_file():
+            state = "final_checkpoint_without_status"
+        elif root.is_dir():
+            state = "directory_without_status"
         rows.append(dict(run_id=run_id, state=state,
                          epochs_completed=epochs if isinstance(epochs, int) else 0,
                          problem=problem))
