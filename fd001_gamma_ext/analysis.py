@@ -269,6 +269,8 @@ def figures(output_dir):
     plot_learning_curve(plot_rows, destination / "fd001_gamma_four_learning_curves")
 
 def run(mode):
+    from dscpuscripts.result_paths import configure_environment
+    configure_environment()
     cpu_environment()
     original_data, original_results, _ = original_paths()
     _, ext_results, ext_out = extension_paths()
