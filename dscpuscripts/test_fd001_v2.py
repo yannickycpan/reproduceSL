@@ -141,9 +141,13 @@ def test_v2_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch):
         (directory / "final.pt").touch()
         score = 0.1 + .01 * config["configuration"]
         milestones = list(range(0, count + 1, protocol.EVAL_UPDATE_PERIOD))
+        tail = set(protocol.selection_update_steps(count))
+        # Earlier 75% deliberately scores better. The selector must ignore
+        # that earlier performance and use only the recorded final quarter.
         atomic_json(directory / "update_curve.json", [
             dict(epoch=min(protocol.EPOCHS, step//per_epoch+1),
-                 optimizer_steps=step, mse_standardized=score)
+                 optimizer_steps=step,
+                 mse_standardized=score if step in tail else score*.1)
             for step in milestones])
         atomic_json(directory / "rounds.json", [
             dict(epoch=e, source_draws=n,
@@ -163,6 +167,9 @@ def test_v2_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch):
                     and r["batch_size"] == 128)
     assert math.isinf(excluded["score"])
     assert excluded["failed_seeds"] == [0]
+    viable = next(r for r in scores if r["method"] == "mse"
+                  and r["configuration"] == 0)
+    assert viable["score"] == pytest.approx(0.1)  # NOT ~0.025 from early evaluations
     choice = next(r for r in selected["selected"] if r["method"]=="td_pairwise")
     assert (choice["batch_size"], choice["configuration"]) != (128, 0)
 
@@ -212,6 +219,27 @@ def test_pairwise_td_uses_same_update_checkpoint_and_selection_protocol(
     assert [r["optimizer_steps"] for r in checkpoint["progress"]["curve"]] == [0,500]
     assert all("gamma_probe" in r for r in checkpoint["progress"]["curve"])
     assert "validation" not in checkpoint["progress"]
+
+
+def test_fresh_campaign_status_requires_update_curve_not_old_epoch_validation(
+        tmp_path):
+    from dscpuscripts.standard_runner import classify
+    from fd001_gamma.common import atomic_json
+    from fulltd.protocol import digest
+
+    config = next(c for c in protocol.make_manifest()
+                  if c["method"] == "td_typed" and c["batch_size"] == 256)
+    folder = tmp_path / config["run_id"]
+    folder.mkdir()
+    atomic_json(folder / "status.json", dict(
+        config=config, state="complete", epochs_completed=100,
+        identity=dict(config_sha256=digest(config), code_sha256="fixture-code")))
+    (folder / "final.pt").touch()
+    (folder / "rounds.json").touch()
+    assert classify(config, tmp_path, "fixture-code") == "resume"
+    (folder / "update_curve.json").touch()
+    assert classify(config, tmp_path, "fixture-code") == "complete"
+    assert not (folder / "validation.json").exists()
 
 
 def test_v2_outputs_are_siblings_of_results(tmp_path, monkeypatch):
