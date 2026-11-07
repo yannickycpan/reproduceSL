@@ -17,7 +17,7 @@ import uuid
 import numpy as np
 import torch
 
-from fd001_gamma.common import atomic_json, read_json, file_hash, data_identity
+from fd001_gamma.common import atomic_json, read_json, data_identity
 from fulltd.data import load_dataset
 from fulltd.metrics import evaluate
 from fulltd.models import build_model
