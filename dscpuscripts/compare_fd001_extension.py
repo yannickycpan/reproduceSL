@@ -127,6 +127,8 @@ def plot(out):
 
 
 def run(mode):
+    from dscpuscripts.result_paths import configure_environment
+    configure_environment()
     from fd001_gamma.common import cpu_environment
     cpu_environment()
     _, _, gamma_out = campaign_paths()
