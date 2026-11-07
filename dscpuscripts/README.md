@@ -15,21 +15,27 @@ All defaults are relative to `$HOME/scratch/fulltd`, or override the common
   data/                            # prepared datasets shared by campaigns
   .venv-fulltd/                   # direct CPU Python environment
   fd001_results/
-    results/                      # ALL FD001 run IDs: 180 original + 140 extension + 60 MSE/NLL
-    outputs/                      # existing FD001 original-Gamma outputs, unchanged
+    fd001_gamma_v1_typed_b128_a0_b0_s0/    # run IDs live HERE, not in results/
+    fd001_gamma_v1_raw26_b128_a0_b0_s0/
+    fd001_gamma_v1_representation_b128_a0_b0_s0/
+    ...                         # 180 original + 140 extension + 60 baseline IDs
+    direct_logs/                # worker logs
+    direct_launches/            # dispatcher receipts
+    initial_states/             # initial checkpoint states
+    outputs/                    # analysis output files are separate from run folders
       rmse_report/                # original three-Gamma RMSE report
       extension/                  # four-Gamma selection, tables and plots
       baselines/                  # direct MSE and Gaussian NLL analysis
       comparison/                 # single six-method test table and common RMSE figure
   electricity_results/
-    results/
+    <canonical-electricity-run-id>/
     outputs/
   metr_la_results/
-    results/
+    <canonical-metr_la-run-id>/
     outputs/
 ```
 
-FD001 groups share one `results/` because their frozen run IDs are disjoint.
+FD001 run folders live directly in `fd001_results/` because their frozen run IDs are disjoint.
 The run directories, statuses, checkpoints and original selection files must
 **not** be renamed. Different analysis outputs are separated to prevent
 overwriting each other's selection evidence.
@@ -40,7 +46,7 @@ overrides take precedence, including `FULLTD_FD001_ROOT`,
 `FULLTD_ELECTRICITY_ROOT`, `FULLTD_METR_LA_ROOT` and `FULLTD_DATA_DIR`.
 
 **Your moved original FD001 results are expected at**
-`/home/yangcpan/scratch/fulltd/fd001_results/results/`;
+`/home/yangcpan/scratch/fulltd/fd001_results/`;
 the original Gamma analysis outputs are expected at
 `/home/yangcpan/scratch/fulltd/fd001_results/outputs/`.
 No script will move, overwrite, or delete those trained results.
@@ -64,7 +70,9 @@ folders**.
 
 ## One-time migration of earlier baseline or extension runs, if needed
 
-You already moved the old `fd001_gamma_v1` folder: **do not move it again**.
+The original 180 run directories are **already directly inside**
+`fd001_results/`, as shown by your listing. **Do not move them again.**
+Only older baseline/extension runs saved in other directories may require copying.
 
 If the earlier separate paths still contain baseline or extension
 checkpoints, stop any associated dispatchers, then copy their run directories
@@ -72,16 +80,18 @@ into the common FD001 results folder **without overwriting files**:
 
 ```bash
 dest="$HOME/scratch/fulltd/fd001_results"
-mkdir -p "$dest/results" "$dest/outputs/baselines" "$dest/outputs/extension"
-# Only execute the following rsyncs for source directories that actually exist:
-rsync -av --ignore-existing "$HOME/scratch/fulltd/direct/fd001_baselines/results/" "$dest/results/"
-rsync -av --ignore-existing "$HOME/scratch/fulltd/direct/fd001_baselines/outputs/" "$dest/outputs/baselines/"
-rsync -av --ignore-existing "$HOME/scratch/fulltd/fd001_gamma_extension_v1/results/" "$dest/results/"
-rsync -av --ignore-existing "$HOME/scratch/fulltd/fd001_gamma_extension_v1/outputs/" "$dest/outputs/extension/"
+mkdir -p "$dest" "$dest/outputs/baselines" "$dest/outputs/extension"
+# ONLY run the following commands if the respective source exists.
+# Some runs may have been started using the mistaken nested layout:
+test ! -d "$dest/results" || rsync -av --ignore-existing "$dest/results/" "$dest/"
+test ! -d "$HOME/scratch/fulltd/direct/fd001_baselines/results" || rsync -av --ignore-existing "$HOME/scratch/fulltd/direct/fd001_baselines/results/" "$dest/"
+test ! -d "$HOME/scratch/fulltd/direct/fd001_baselines/outputs" || rsync -av --ignore-existing "$HOME/scratch/fulltd/direct/fd001_baselines/outputs/" "$dest/outputs/baselines/"
+test ! -d "$HOME/scratch/fulltd/fd001_gamma_extension_v1/results" || rsync -av --ignore-existing "$HOME/scratch/fulltd/fd001_gamma_extension_v1/results/" "$dest/"
+test ! -d "$HOME/scratch/fulltd/fd001_gamma_extension_v1/outputs" || rsync -av --ignore-existing "$HOME/scratch/fulltd/fd001_gamma_extension_v1/outputs/" "$dest/outputs/extension/"
 ```
 
 Use `test -d SOURCE_DIRECTORY` first: `rsync` errors on nonexistent sources.
-The runners detect existing old baseline/extension status files that were not
+The runners detect existing old/nested checkpoints that were not
 migrated and refuse to silently rerun those configurations. **Never delete
 the old directories until the new status and analysis checks pass.**
 
@@ -95,7 +105,8 @@ bash dscpuscripts/setup_server.sh
 bash dscpuscripts/download_data.sh fd001
 
 # Inspect the 180 original Gamma runs.
-bash dscpuscripts/status_fd001_gamma.sh --strict
+bash dscpuscripts/status_fd001_gamma.sh --terminal  # allows recorded numerical failures
+# Use --strict instead to require every single training run to have completed
 
 # The 60 previously defined MSE/NLL baselines (B256).
 bash dscpuscripts/run_standard.sh fd001_baselines --dry-run
@@ -125,6 +136,21 @@ bash dscpuscripts/download_data.sh metr_la
 bash dscpuscripts/run_standard.sh metr_la --dry-run
 # Then --run --workers 8 --microbatch 32 --adaptive
 ```
+
+## Numerical failures versus missing records
+
+The original Gamma selector assigns `+Infinity` to every hyperparameter
+combination for which **even one of the five seeds** reports a genuine
+`numerical_failure`. It cannot be chosen ahead of a finite five-seed
+configuration. The 320-run joint Gamma selector does the same. A missing
+`status.json`, incomplete checkpoint, code/data identity mismatch, or absent
+run folder is **not** a numerical divergence and must be repaired/audited;
+these must never silently be scored as failed HPs.
+
+`status_fd001_gamma.sh --strict` requires 180 actual successful completions.
+`status_fd001_gamma.sh --terminal` succeeds when all 180 have finished or
+documented numerical failure statuses; it does **not** pretend the failed
+runs trained successfully.
 
 ## Analyze and plot (exact same commands on either machine)
 
