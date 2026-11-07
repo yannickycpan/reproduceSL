@@ -50,7 +50,6 @@ def report(out):
     if not math.isclose(ext_scale, base_scale, rel_tol=1e-7):
         raise ValueError("Baseline and Gamma target scale disagree")
     # Strict same-data comparison: directly examine the saved training identities.
-    from fd001_gamma.common import read_json
     _, original_gamma_results, _ = original_gamma_paths()
     gamma_ident = set()
     for choice in choices:
@@ -118,41 +117,21 @@ def report(out):
     return values, curve, choices, base_selections, base_scale
 
 
+
 def plot(out):
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    table = csv_rows(out / "validation_rmse_updates.csv")
-    fig, ax = plt.subplots(figsize=(10, 5.5))
-    for method in METHODS:
-        rows = sorted((r for r in table if r["method"] == method),
-                      key=lambda r: int(r["optimizer_steps"]))
-        if len(rows) != 10:
-            raise ValueError(f"Cannot plot incomplete learning curve: {method}")
-        x = [int(r["optimizer_steps"]) for r in rows]
-        mean = [float(r["mean"]) for r in rows]
-        err = [float(r["standard_error"]) for r in rows]
-        ax.plot(x, mean, marker="o", ms=3, label=method)
-        ax.fill_between(x, [v-e for v,e in zip(mean,err)],
-                        [v+e for v,e in zip(mean,err)], alpha=.1)
-    ax.set_xlabel("Cumulative Adam optimizer updates (different batch sizes)")
-    ax.set_ylabel("Validation RMSE (engine cycles)")
-    ax.legend(fontsize=8, ncol=2)
-    ax.grid(alpha=.2)
-    fig.tight_layout()
-    figs = out / "figures"
-    figs.mkdir(exist_ok=True, parents=True)
-    for ext in ("pdf", "svg", "png"):
-        fig.savefig(figs / f"fd001_six_methods_validation_rmse_updates.{ext}",
-                    bbox_inches="tight", dpi=180)
-    plt.close(fig)
+    """All FD001 comparison plots reuse the same validated rendering function."""
+    from dscpuscripts.fd001_report import plot_learning_curve
+    curves = csv_rows(Path(out) / "validation_rmse_updates.csv")
+    plot_learning_curve(curves, Path(out) / "figures" /
+                        "fd001_six_methods_validation_rmse_updates")
 
 
 def run(mode):
     from fd001_gamma.common import cpu_environment
     cpu_environment()
     _, _, gamma_out = campaign_paths()
-    out = gamma_out / "comparison"
+    # Reporting is dataset-owned, not an extension- or machine-specific path.
+    out = gamma_out.parent / "comparison"
     if mode == "plots":
         if not (out / "validation_rmse_updates.csv").is_file():
             raise FileNotFoundError("Run combined analysis first")
