@@ -7,6 +7,7 @@ variant, learning rate, seed, or epoch. Legacy results are not read or rewritten
 from __future__ import annotations
 
 import argparse
+import csv
 from collections import defaultdict
 import itertools
 import math
@@ -230,7 +231,11 @@ def evaluate_selected(results_dir, output_dir, data_dir):
             cache_identity = dict(selection_sha256=digest(locked), scientific_identity=identity,
                                   final_sha256=file_hash(directory / "final.pt"), test_data_sha256=data_identity(test),
                                   analysis_sha256=analysis_hash)
-            cache = directory / "gamma_endpoint_metrics.json"
+            # Analysis outputs are separate from the immutable completed
+            # training records. Content-addressed cache keys allow analysis
+            # code to change without invalidating or overwriting old caches.
+            cache = out / "endpoint_cache" / f"{rid}_{digest(cache_identity)[:16]}.json"
+            predictions = out / "predictions" / rid / "test_engine_predictions.csv"
             if cache.exists():
                 saved = read_json(cache)
                 if saved["identity"] != cache_identity:
@@ -246,8 +251,10 @@ def evaluate_selected(results_dir, output_dir, data_dir):
                     run_rows.append(dict(run_id=rid, gamma_variant=config["gamma_variant"], seed=config["seed"],
                                          alpha=config["alpha"], beta=config["beta"], dataset="fd001", backbone="tcn",
                                          method="td_full", batch_size=128, variant="trained", split=split, **metric))
-                if endpoints:
-                    write_csv(directory / "test_engine_predictions.csv", endpoints)
+                if endpoints and split == "test":
+                    # Do not overwrite endpoint predictions with train/val
+                    # rows; the only engine-level CSV here is test-only.
+                    write_csv(predictions, endpoints)
             atomic_json(cache, dict(identity=cache_identity, rows=run_rows))
             rows.extend(run_rows)
     write_csv(out / "metrics.csv", rows)
@@ -347,16 +354,48 @@ def figures(output_dir, rows, gamma_rows):
         save(fig, f"gamma_fd001_lag{lag}", data)
 
 
+def saved_figure_inputs(output_dir):
+    """Reload completed analysis tables; never retrain or evaluate for plots."""
+    out = Path(output_dir)
+    files = (out / "selections.json", out / "validation_records.csv",
+             out / "metrics.csv", out / "gamma_records.csv")
+    missing = [str(p) for p in files if not p.is_file()]
+    if missing:
+        raise FileNotFoundError("Run the full Gamma analysis first; missing: " + ", ".join(missing))
+    # Recreate the numeric types of evaluate_selected, which returned native
+    # Python numbers before its results were serialized as CSV.
+    with (out / "metrics.csv").open(newline="", encoding="utf-8") as stream:
+        rows = list(csv.DictReader(stream))
+    with (out / "gamma_records.csv").open(newline="", encoding="utf-8") as stream:
+        gamma_rows = list(csv.DictReader(stream))
+    for row in rows:
+        row["seed"] = int(row["seed"])
+        row["value"] = float(row["value"])
+    for row in gamma_rows:
+        row["epoch"] = int(row["epoch"])
+        row["type"] = int(row["type"])
+        row["mean"] = float(row["mean"])
+    if not rows:
+        raise ValueError("Empty saved metrics: refusing to create misleading plots")
+    return rows, gamma_rows
+
+
 def main():
     cpu_environment()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("check", "run"))
+    parser.add_argument("command", choices=("check", "run", "plots"))
     args = parser.parse_args()
     data, results, out = campaign_paths()
     if args.command == "check":
         selected = select(results)
         print("READY: all 180 candidates terminal and audited.")
         print("Primary validation-selected Gamma configuration:", selected["primary_selection"])
+        return
+    if args.command == "plots":
+        with file_lock(out / ".analysis.lock"):
+            rows, gamma = saved_figure_inputs(out)
+            figures(out, rows, gamma)
+        print("Gamma figures regenerated from saved tables (no model evaluation):", out / "figures")
         return
     import torch
     torch.set_num_threads(1)
@@ -366,7 +405,7 @@ def main():
         select(results, out)
         rows, gamma = evaluate_selected(results, out, data)
         figures(out, rows, gamma)
-    print("Analysis complete:", out)
+    print("Gamma analysis and plotting complete, no refit or retraining:", out)
 
 
 if __name__ == "__main__":
