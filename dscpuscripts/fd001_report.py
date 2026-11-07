@@ -184,6 +184,8 @@ def run(gamma_source, output, baseline_source=None):
 
 
 def main():
+    from dscpuscripts.result_paths import configure_environment
+    configure_environment()
     from fd001_gamma.common import campaign_paths
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('mode', choices=('gamma', 'baselines'))
