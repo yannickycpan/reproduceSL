@@ -110,7 +110,12 @@ def selected_records(payload, family):
                 raise ValueError('MSE cannot be negative')
             rmses = [math.sqrt(v) * scale for v in mses]
             mean, sd = moments(rmses)
-            curves.append(dict(method=method, label=LABELS[method], epoch=epoch, metric='rmse', units='cycles',
+            update_values = {int(r["optimizer_steps"]) for r in validation
+                             if int(r["epoch"]) == epoch}
+            if len(update_values) != 1:
+                raise ValueError(f"{method}: missing or nonmatching optimizer update counts at epoch {epoch}")
+            curves.append(dict(method=method, label=LABELS[method], epoch=epoch,
+                               optimizer_steps=update_values.pop(), metric='rmse', units='cycles',
                                n=5, mean=mean, sample_sd=sd, standard_error=sd / math.sqrt(5)))
     return summary, curves, choices, scale
 
@@ -126,12 +131,12 @@ def plot_learning_curve(curves, destination):
         rows = sorted([r for r in curves if r['method'] == method], key=lambda r: r['epoch'])
         if not rows:
             continue
-        x, mean, se = [[r[k] for r in rows] for k in ('epoch', 'mean', 'standard_error')]
+        x, mean, se = [[r[k] for r in rows] for k in ('optimizer_steps', 'mean', 'standard_error')]
         ax.plot(x, mean, marker='o', markersize=3.5, linewidth=1.8, label=LABELS[method])
         ax.fill_between(x, [m-s for m,s in zip(mean,se)], [m+s for m,s in zip(mean,se)], alpha=.10)
-    ax.set_xlabel('Completed training epoch')
+    ax.set_xlabel('Cumulative Adam optimizer updates (B128 vs B256)')
     ax.set_ylabel('Validation RMSE (cycles)')
-    ax.set_xticks(range(10, 101, 10))
+
     ax.grid(alpha=.2)
     ax.legend(fontsize=9)
     ax.set_title('FD001: each method at its validation-selected hyperparameters')
@@ -159,7 +164,7 @@ def run(gamma_source, output, baseline_source=None):
     atomic_json(out / 'metric_conventions.json', dict(
         selection='mean validation MSE over epochs 80,90,100 and five seeds; unchanged',
         test='actual epoch-100 checkpoint; mean/SD of per-seed metrics',
-        curve='mean/SE of per-seed sqrt(validation MSE) times target scale',
+        curve='mean/SE of per-seed sqrt(validation MSE) times target scale, x=actual cumulative Adam updates',
         target_scale=scale, units='cycles (RMSE/MAE), dimensionless summed RUL score',
         baseline_batch=256, gamma_batch=128,
         caveat='Matching target scale is checked here; use the campaign audits for complete dataset identity verification'))
