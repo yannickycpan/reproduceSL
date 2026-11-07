@@ -126,19 +126,14 @@ def dispatch(args):
     print(f'Data: {data}\nResults: {results}\nNo Slurm, new optimizer settings, or time limit.', flush=True)
     if args.mode in ('status', 'dry-run') or not pending:
         return 0
-    # Prevent silently repeating previous baseline training after the results
-    # layout was changed. Move/copy the old run directories before continuing.
-    if args.campaign == 'fd001_baselines':
-        legacy = Path.home() / 'scratch/fulltd/direct/fd001_baselines/results'
-        if legacy.is_dir():
-            old_ids = [c['run_id'] for c in configs
-                       if (legacy / c['run_id'] / 'status.json').exists()]
-            missing = [rid for rid in old_ids if not (results / rid / 'status.json').exists()]
-            if missing:
-                raise RuntimeError(
-                    f'{len(missing)} existing FD001 baseline records found under {legacy}, '
-                    f'but missing under {results}. Migrate the existing result folders '
-                    'before launching; do not waste compute by retraining them.')
+    from dscpuscripts.result_paths import (dataset_root, guard_unmigrated_runs)
+    dataset_name = 'fd001' if args.campaign == 'fd001_baselines' else args.campaign
+    # Both the earlier nested layout and the old per-campaign direct layout
+    # may contain checkpoints. Never silently start them over in the flat root.
+    guard_unmigrated_runs(results, configs, (
+        dataset_root(dataset_name) / 'results',
+        Path.home() / 'scratch/fulltd/direct' / args.campaign / 'results',
+    ))
     from fulltd.data import verify_dataset, load_dataset
     from fulltd.sampling import training_universe
     from fulltd.protocol import LAGS
