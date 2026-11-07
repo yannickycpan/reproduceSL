@@ -20,17 +20,17 @@ import sys
 import time
 import uuid
 
-CAMPAIGNS = ('fd001_baselines', 'electricity', 'metr_la', 'fd001_v2')
+CAMPAIGNS = ('fd001_baselines', 'electricity', 'metr_la', 'fd001_v2b')
 DEFAULTS = {'fd001_baselines': (16, 256), 'electricity': (8, 128), 'metr_la': (8, 32),
-            'fd001_v2': (32, 256)}
+            'fd001_v2b': (32, 256)}
 
 
 def configurations(campaign):
     from fulltd.protocol import make_manifest
     if campaign not in CAMPAIGNS:
         raise ValueError(f'Unknown campaign: {campaign}')
-    if campaign == 'fd001_v2':
-        from dscpuscripts.fd001_v2_protocol import make_manifest as v2_manifest
+    if campaign == 'fd001_v2b':
+        from dscpuscripts.fd001_v2b_protocol import make_manifest as v2_manifest
         return v2_manifest()
     if campaign == 'fd001_baselines':
         return [c for c in make_manifest() if c['dataset'] == 'fd001' and c['method'] in ('mse', 'gaussian_nll')]
@@ -41,7 +41,7 @@ def paths(campaign):
     from dscpuscripts.result_paths import paths as dataset_paths
     if campaign not in CAMPAIGNS:
         raise ValueError(f"Unknown campaign: {campaign}")
-    dataset = 'fd001' if campaign in ('fd001_baselines', 'fd001_v2') else campaign
+    dataset = 'fd001' if campaign in ('fd001_baselines', 'fd001_v2b') else campaign
     return dataset_paths(dataset, 'baselines' if campaign == 'fd001_baselines' else None)
 
 
@@ -59,8 +59,11 @@ def classify(config, results, expected_code):
         raise ValueError(f'Incompatible prior result preserved: {directory}')
     if status.get('state') == 'numerical_failure':
         return 'numerical_failure'
+    required = (('final.pt', 'update_curve.json', 'rounds.json')
+                if config.get('protocol_id') == 'fd001-four-methods-update-v2b'
+                else ('final.pt', 'validation.json', 'rounds.json'))
     if (status.get('state') == 'complete' and status.get('epochs_completed') == 100
-            and all((directory / f).is_file() for f in ('final.pt', 'validation.json', 'rounds.json'))):
+            and all((directory / f).is_file() for f in required)):
         return 'complete'
     return 'resume'
 
@@ -93,8 +96,8 @@ def execute_worker(args):
         torch.set_num_threads(1)
         torch.set_num_interop_threads(1)
         from fulltd.data import load_dataset
-        if args.campaign == 'fd001_v2':
-            from dscpuscripts.fd001_v2_train import train_candidate, code_hash
+        if args.campaign == 'fd001_v2b':
+            from dscpuscripts.fd001_v2b_train import train_candidate, code_hash
         else:
             from fulltd.train import train_candidate, code_hash
         from fd001_gamma.common import file_lock, read_json
@@ -118,8 +121,8 @@ def execute_worker(args):
 
 def dispatch(args):
     from fd001_gamma.common import atomic_json, file_lock
-    if args.campaign == 'fd001_v2':
-        from dscpuscripts.fd001_v2_train import code_hash
+    if args.campaign == 'fd001_v2b':
+        from dscpuscripts.fd001_v2b_train import code_hash
     else:
         from fulltd.train import code_hash
     from dscpuscripts.direct_runner import choose_workers, cpu_idle_fraction
@@ -137,7 +140,7 @@ def dispatch(args):
     if args.mode in ('status', 'dry-run') or not pending:
         return 0
     from dscpuscripts.result_paths import (dataset_root, guard_unmigrated_runs)
-    dataset_name = 'fd001' if args.campaign in ('fd001_baselines', 'fd001_v2') else args.campaign
+    dataset_name = 'fd001' if args.campaign in ('fd001_baselines', 'fd001_v2b') else args.campaign
     # Both the earlier nested layout and the old per-campaign direct layout
     # may contain checkpoints. Never silently start them over in the flat root.
     guard_unmigrated_runs(results, configs, (
