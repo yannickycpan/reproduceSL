@@ -38,3 +38,23 @@ def paths(dataset, output_kind=None):
             raise ValueError("Invalid output directory kind")
         out = out / output_kind
     return data, root / "results", out
+
+
+def configure_environment():
+    """Populate old scientific APIs' path env variables without changing their hashes.
+
+    The frozen Gamma v1 and Gamma extension runtimes retain their original
+    historical default code for checkpoint provenance. Operational entrypoints
+    call this before using those APIs, so every machine obtains dataset_results.
+    Explicit user environment overrides always take precedence.
+    """
+    data, results, gamma_out = paths("fd001")
+    extension_out = dataset_root("fd001") / "outputs" / "extension"
+    values = dict(FULLTD_DATA_DIR=str(data),
+                  FULLTD_FD001_GAMMA_RESULTS_DIR=str(results),
+                  FULLTD_FD001_GAMMA_OUTPUT_DIR=str(gamma_out),
+                  FULLTD_FD001_GAMMA_EXT_RESULTS_DIR=str(results),
+                  FULLTD_FD001_GAMMA_EXT_OUTPUT_DIR=str(extension_out))
+    for name, value in values.items():
+        os.environ.setdefault(name, value)
+    return values
