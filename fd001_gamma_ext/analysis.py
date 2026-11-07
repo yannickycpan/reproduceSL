@@ -236,45 +236,37 @@ def save_tables(selection, scores, rows, gamma, output):
     return rmse
 
 
+
 def figures(output_dir):
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from fd001_gamma.analysis import aggregate
+    """Use the single FD001 optimizer-update learning-curve plotting utility."""
+    from dscpuscripts.fd001_report import plot_learning_curve
     out = Path(output_dir)
     rows = load_csv(out / "validation_rmse.csv")
-    dest = out / "figures"
-    dest.mkdir(exist_ok=True, parents=True)
-    fig, ax = plt.subplots(figsize=(8.8, 4.7))
+    destination = out / "figures"
+    destination.mkdir(exist_ok=True, parents=True)
+    plot_rows = []
     for variant in VARIANTS:
-        subset = [r for r in rows if r["gamma_variant"] == variant]
         groups = defaultdict(list)
-        for row in subset:
-            groups[int(row["optimizer_steps"])].append(row)
-        if len(groups) != 10:
-            raise ValueError(f"Expected 10 selected validation checkpoints for {variant}")
-        xx, mean, se, plot_rows = [], [], [], []
+        for row in rows:
+            if row["gamma_variant"] == variant:
+                groups[int(row["optimizer_steps"])].append(row)
+        if len(groups) != len(EVALUATIONS):
+            raise ValueError(f"Expected all ten validation checkpoints: {variant}")
         for updates, members in sorted(groups.items()):
             if sorted(int(m["seed"]) for m in members) != list(SEEDS):
-                raise ValueError("Incomplete five-seed curve")
+                raise ValueError(f"Five seed validation records required: {variant}")
+            epochs = {int(m["epoch"]) for m in members}
+            if len(epochs) != 1:
+                raise ValueError("Mismatched epoch for a validation update count")
             values = [float(m["rmse_cycles"]) for m in members]
-            xx.append(updates)
-            mean.append(statistics.mean(values))
-            se.append(statistics.stdev(values) / math.sqrt(5))
-            plot_rows.append(dict(gamma_variant=variant, optimizer_steps=updates,
-                                  mean=mean[-1], standard_error=se[-1], n=5))
-        ax.plot(xx, mean, marker="o", label="TD " + variant)
-        ax.fill_between(xx, [m-s for m,s in zip(mean,se)], [m+s for m,s in zip(mean,se)], alpha=.1)
-        write_csv(dest / f"validation_rmse_td_{variant}.csv", plot_rows)
-    ax.set_xlabel("Cumulative Adam optimizer updates")
-    ax.set_ylabel("Validation RMSE (engine cycles)")
-    ax.legend()
-    ax.grid(alpha=.2)
-    fig.tight_layout()
-    for ext in ("pdf", "svg", "png"):
-        fig.savefig(dest / f"fd001_gamma_four_learning_curves.{ext}", dpi=180, bbox_inches="tight")
-    plt.close(fig)
-
+            mean = statistics.mean(values)
+            se = statistics.stdev(values) / math.sqrt(len(SEEDS))
+            plot_rows.append(dict(method=variant, gamma_variant=variant,
+                                  optimizer_steps=updates, epoch=epochs.pop(),
+                                  mean=mean, standard_error=se, n=len(SEEDS)))
+        write_csv(destination / f"validation_rmse_td_{variant}.csv",
+                  [r for r in plot_rows if r["gamma_variant"] == variant])
+    plot_learning_curve(plot_rows, destination / "fd001_gamma_four_learning_curves")
 
 def run(mode):
     cpu_environment()
