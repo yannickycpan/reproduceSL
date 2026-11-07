@@ -35,8 +35,9 @@ def test_every_fd001_method_shares_one_result_directory(dataset_layout):
     assert out0 == base / "fd001_outputs"
     assert out1 == out0 / "baselines"
     result_paths.configure_environment()
-    assert original_gamma_paths() == (d0, results0, out0)
-    assert extension_gamma_paths() == (d0, results0, out0 / "extension")
+    legacy = base / "fd001_results" / "outputs"
+    assert original_gamma_paths() == (d0, results0, legacy)
+    assert extension_gamma_paths() == (d0, results0, legacy / "extension")
 
 
 def test_guard_prevents_retraining_runs_saved_in_previous_nested_layout(
