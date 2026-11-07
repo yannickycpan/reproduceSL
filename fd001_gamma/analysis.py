@@ -393,6 +393,8 @@ def saved_figure_inputs(output_dir):
 
 
 def main():
+    from dscpuscripts.result_paths import configure_environment
+    configure_environment()
     cpu_environment()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("check", "run", "plots"))
