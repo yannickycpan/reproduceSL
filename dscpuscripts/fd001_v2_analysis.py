@@ -129,7 +129,8 @@ def audit_and_select(results):
         choices.append(winning)
     selected = dict(protocol_id=PROTOCOL_ID, selection_fraction=SELECTION_FRACTION,
                     criterion="five-seed mean standardized validation MSE over the final "
-                              "ceil(25%) of post-start 500-update evaluations; batch is selected jointly",
+                              f"ceil(25%) of post-start {EVAL_UPDATE_PERIOD}-update evaluations; "
+                              "batch is selected jointly",
                     code_sha256=expected_code, manifest_sha256=digest(candidates),
                     data_sha256=seen_data["data_sha256"],
                     validation_sha256=seen_data["validation_sha256"],
@@ -174,6 +175,7 @@ def evaluate_selected(selection, root, data_dir, output):
                 if config["method"].startswith("td_"):
                     for typ in record["gamma_probe"]["types"]:
                         gamma_rows.append(dict(method=config["method"], seed=config["seed"],
+                                  batch_size=config["batch_size"],
                                   optimizer_steps=record["optimizer_steps"], **typ))
             if test is None:  # Selection complete BEFORE held-out targets are opened.
                 test = load_dataset("fd001", data_dir, "test")
@@ -334,7 +336,7 @@ def plot(output):
                 if values:
                     ax.plot([int(r["optimizer_steps"]) for r in values],
                             [float(r["mean"]) for r in values],
-                            label=method+f" type {typ}")
+                            label=display[method]+f" lag type {typ}")
         ax.set_xlabel("Cumulative Adam optimizer updates")
         ax.set_ylabel("Realized Gamma on fixed training probe")
         ax.legend()
@@ -372,8 +374,9 @@ def run(mode):
         write_csv(out/"td_diagnostics"/"gamma_summary.csv",
                   summarize(td,("method","type","optimizer_steps"),value="mean"))
         atomic_json(out/"analysis_notes.json", dict(
-            selection="last 25% of actual positive 500-update validation evaluations, "
-                      "five-seed pooled standardized MSE; batch selected jointly, no test tuning",
+            selection=f"last 25% of actual positive {EVAL_UPDATE_PERIOD}-update validation "
+                      "evaluations, five-seed pooled standardized MSE; "
+                      "batch selected jointly, no test tuning",
             trained_models="epoch-100 final checkpoints, no refit",
             metrics="RMSE/MAE cycles and summed RUL score on validation/test",
             curves="measured before training and every 500 Adam updates; no interpolation",
