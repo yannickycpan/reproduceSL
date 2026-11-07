@@ -53,6 +53,23 @@ def test_status_rejects_changed_scientific_identity(tmp_path, monkeypatch):
     assert not status_report.report(rows, show=0)
 
 
+def test_terminal_accepts_documented_divergence_but_strict_requires_all_success(
+        tmp_path, monkeypatch):
+    rows = [dict(run_id="a", state="complete", epochs_completed=100, problem=None),
+            dict(run_id="b", state="numerical_failure", epochs_completed=30, problem=None)]
+    monkeypatch.setattr(status_report, "inspect", lambda _: rows)
+    monkeypatch.setattr(status_report, "campaign_paths",
+                        lambda: (tmp_path / "data", tmp_path, tmp_path / "out"))
+    monkeypatch.setattr(sys, "argv", ["status_fd001_gamma.py", "--terminal"])
+    assert status_report.main() == 0
+    monkeypatch.setattr(sys, "argv", ["status_fd001_gamma.py", "--strict"])
+    assert status_report.main() == 1
+    rows[1] = dict(run_id="b", state="directory_without_status",
+                   epochs_completed=0, problem=None)
+    monkeypatch.setattr(sys, "argv", ["status_fd001_gamma.py", "--terminal"])
+    assert status_report.main() == 1
+
+
 def make_saved_csv_fixture(out):
     all_metrics, validation, gammas, per_variant = [], [], [], []
     for variant_i, variant in enumerate(VARIANTS):
