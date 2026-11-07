@@ -14,6 +14,8 @@ import io
 import json
 import math
 import os
+import shutil
+import uuid
 from pathlib import Path
 import statistics
 import zipfile
@@ -168,30 +170,41 @@ def archive_baselines(payload, results_dir):
         if canonical(old_metrics) != canonical(metrics) or canonical(old_validation) != canonical(validation):
             raise ValueError("Different baseline evidence already imported; refusing overwrite")
         return previous
-    destination.mkdir(parents=True, exist_ok=True)
-    # Baseline original tables remain untouched; copy *only* MSE/Gaussian-NLL,
-    # excluding old TD and refit artifacts.
-    atomic_json(destination / "selections.json", dict(
-        dataset_scope="fd001", selection_epochs=[80, 90, 100],
-        groups=[groups[name] for name in BASELINES]))
-    write_csv(destination / "metrics.csv", metrics)
-    write_csv(destination / "validation_records.csv",
-              [r for r in payload["validation"] if r["method"] in BASELINES])
-    write_csv(destination / "scores.csv",
-              [r for r in payload["scores"] if r["method"] in BASELINES])
-    write_csv(destination / "candidate_accounting.csv",
-              [r for r in payload["accounting"] if r["method"] in BASELINES])
-    old_source = payload["archive_provenance"] or {}
-    fingerprint = (old_source.get("legacy_data_fingerprint") or
-        ((payload["evaluation_manifest"] or {}).get("data_fingerprints", {})
-         .get("fd001", {}).get("fingerprint")))
-    atomic_json(destination / "import_provenance.json", dict(
-        legacy_source=payload["source"], original_file_sha256=payload["source_sha256"],
-        source_archive_sha256=old_source.get("source_archive_sha256"),
-        original_checkpoint_sha256=old_source.get("selected_checkpoint_sha256"),
-        legacy_data_fingerprint=fingerprint, imported_methods=list(BASELINES),
-        refit_included=False, old_td_included=False,
-        warning="Archived completed-model metrics, not freshly evaluated checkpoints"))
+    if destination.exists():
+        raise ValueError(f"Incomplete baseline import preserved: {destination}; inspect before retry")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    # Publish the whole baseline-only directory atomically. An interruption
+    # cannot leave a half-imported set of evidence labeled as complete.
+    stage = destination.with_name(f".legacy_baselines.{uuid.uuid4().hex}.tmp")
+    stage.mkdir()
+    try:
+        # Original files stay untouched; neither old TD nor refits are copied.
+        atomic_json(stage / "selections.json", dict(
+            dataset_scope="fd001", selection_epochs=[80, 90, 100],
+            groups=[groups[name] for name in BASELINES]))
+        write_csv(stage / "metrics.csv", metrics)
+        write_csv(stage / "validation_records.csv",
+                  [r for r in payload["validation"] if r["method"] in BASELINES])
+        write_csv(stage / "scores.csv",
+                  [r for r in payload["scores"] if r["method"] in BASELINES])
+        write_csv(stage / "candidate_accounting.csv",
+                  [r for r in payload["accounting"] if r["method"] in BASELINES])
+        old_source = payload["archive_provenance"] or {}
+        fingerprint = (old_source.get("legacy_data_fingerprint") or
+            ((payload["evaluation_manifest"] or {}).get("data_fingerprints", {})
+             .get("fd001", {}).get("fingerprint")))
+        atomic_json(stage / "import_provenance.json", dict(
+            legacy_source=payload["source"], original_file_sha256=payload["source_sha256"],
+            source_archive_sha256=old_source.get("source_archive_sha256"),
+            original_checkpoint_sha256=old_source.get("selected_checkpoint_sha256"),
+            legacy_data_fingerprint=fingerprint, imported_methods=list(BASELINES),
+            refit_included=False, old_td_included=False,
+            warning="Archived completed-model metrics, not freshly evaluated checkpoints"))
+        validate_legacy(read_source(stage))
+        os.replace(stage, destination)
+    finally:
+        if stage.exists():
+            shutil.rmtree(stage)
     return read_source(destination)
 
 
