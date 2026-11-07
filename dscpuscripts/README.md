@@ -166,25 +166,82 @@ only once; `--adaptive` checks every ten minutes and changes only the
 running. Do not launch a second dispatcher while an old one is active;
 restart the old one gracefully if you change scheduling modes.
 
-## Analyze after all 180 candidates finish
+## Check status and analyze after the 180 Gamma runs
+
+Check the campaign without loading datasets or opening checkpoints:
 
 ```bash
 cd ~/reproduceSL
+bash dscpuscripts/status_fd001_gamma.sh
+```
+
+This reports counts for `complete`, `numerical_failure`, `running`,
+`checkpointed`, `missing`, and incompatible/incomplete records, plus the
+most recent saved epoch. For scripting, add `--strict` to return a nonzero
+status unless **all 180 runs completed successfully**. A numerical failure
+is terminal but **not** a successful training result.
+
+```bash
+bash dscpuscripts/status_fd001_gamma.sh --strict
+```
+
+For a full integrity audit of all 180 candidate configurations, validation
+records, source draws, and compatible scientific code, run:
+
+```bash
+bash dscpuscripts/analyze_fd001_gamma.sh check
+```
+
+To run the complete Gamma analysis on the **same AMD server**, including
+validation-only hyperparameter selection, evaluation of the existing
+epoch-100 trained model on train/validation/test, descriptive five-seed
+statistics, paired comparisons and publication-ready PDF/SVG figures:
+
+```bash
 bash dscpuscripts/analyze_fd001_gamma.sh
 ```
 
-The existing analysis requires all candidates to have terminal records,
-checks the scientific/protocol hashes, and selects hyperparameters **only**
-from five-seed validation MSE at epochs 80, 90 and 100. It evaluates the
-five chosen seeds for each variant (15 trained models), saving score tables,
-test engine predictions, uncertainty summaries, and vector figures.
+This is **direct CPU execution with no Slurm submission, no new training, no
+readout refit, no OLS/TD refit and no test-based tuning**. Do not use the old
+`scripts/analyze_fulltd.sh` or `fulltd.evaluate` for this Gamma campaign:
+those are a different multi-dataset experiment and may invoke refit
+diagnostics. The Gamma-specific `fd001_gamma.analysis` is the correct
+analysis/plotting engine.
 
-Results:
+Once the tables exist, regenerate *only figures*, without opening training
+checkpoints or rerunning test inference:
+
+```bash
+bash dscpuscripts/analyze_fd001_gamma.sh plots
+```
+
+Results and outputs default to:
 
 ```text
 ~/scratch/fulltd/fd001_gamma_v1/results/
 ~/scratch/fulltd/fd001_gamma_v1/outputs/
 ```
+
+Key output files:
+
+- `outputs/selections.json` and `outputs/scores.csv`: validation-selected
+  Gamma/rate combinations; selection only uses epochs 80, 90 and 100
+- `outputs/candidate_accounting.csv`, `outputs/campaign_audit.json`:
+  accounting and scientific-identity audit for all 180 runs
+- `outputs/metrics.csv`, `outputs/summary_metrics.csv`,
+  `outputs/paired_comparisons.csv`: selected five-seed trained-model metrics
+- `outputs/gamma_records.csv`: realized Gamma values from training probes
+- `outputs/figures/`: vector PDF and SVG plots, each with its matching CSV
+- `outputs/predictions/<run_id>/test_engine_predictions.csv`: test-only
+  engine predictions for each selected seed
+- `outputs/endpoint_cache/`: resumable checkpoint-identified analysis cache,
+  without modifying completed training-result directories
+
+The full audit is more stringent than the fast status checker. It can reject
+a campaign that appears terminal if record identities, checkpoints,
+training-source sequences or validation evidence do not match. If the
+analysis reports an error, inspect it rather than rename, alter or delete
+any training results.
 
 No original FD001 or ongoing METR-LA results are changed or deleted. Do not
 delete `~/scratch/fulltd/results/`.
@@ -193,12 +250,14 @@ delete `~/scratch/fulltd/results/`.
 
 ```bash
 "$HOME/scratch/fulltd/.venv-fulltd/bin/python" -m pytest -q \
-  dscpuscripts/test_direct_servers.py
+  dscpuscripts/test_direct_servers.py \
+  dscpuscripts/test_gamma_reporting.py
 ```
 
-This verifies one-server manifest coverage, worker selection, checkpoint
-identities and dry-run behavior. Synthetic tests and code review do **not**
-replace a real-machine dry run and one-config smoke test.
+These tests cover one-server manifest coverage, checkpoint identity and status
+counting, as well as replotting existing Gamma tables without test inference
+or readout refitting. They do not replace the on-server audit and actual
+endpoint evaluation of your completed 180-run campaign.
 
 If the setup or performance is unclear, send the output of:
 
