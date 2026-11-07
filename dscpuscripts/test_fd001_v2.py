@@ -102,6 +102,67 @@ def test_checkpointed_training_restores_exact_mid_epoch_trajectory(
                                    rtol=0, atol=0)
 
 
+def test_v2_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch):
+    import math
+    from fd001_gamma.common import atomic_json
+    from fulltd.sampling import sources_for_round, sequence_hash
+    monkeypatch.setattr(analysis, "code_hash", lambda: "synthetic-v2")
+    n = 1300
+    root = tmp_path / "fd001_results"
+    shas = {
+        (seed, epoch): sequence_hash(sources_for_round("fd001", n, seed, epoch))
+        for seed in range(5) for epoch in range(1, 101)
+    }
+    for config in protocol.make_manifest():
+        directory = root / config["run_id"]
+        directory.mkdir(parents=True)
+        per_epoch = (n + config["batch_size"] - 1) // config["batch_size"]
+        count = per_epoch * protocol.EPOCHS
+        # The first pairwise HP has one genuinely divergent seed. Even if all
+        # its remaining seeds are excellent it must receive infinite score.
+        fail = (config["method"] == "td_pairwise"
+                and config["configuration"] == 0 and config["seed"] == 0)
+        state = "numerical_failure" if fail else "complete"
+        atomic_json(directory / "status.json", dict(
+            config=config, state=state, epochs_completed=100,
+            next_epoch=101, n_sources=n, optimizer_steps=count,
+            update_opportunities=count,
+            initial_mean_sha256=f"same-init-s{config['seed']}",
+            identity=dict(protocol_id=protocol.PROTOCOL_ID,
+                          config_sha256=protocol.digest(config),
+                          code_sha256="synthetic-v2",
+                          data_sha256="same-training", validation_sha256="same-validation")))
+        if fail:
+            continue
+        (directory / "final.pt").touch()
+        score = 0.1 + .01 * config["configuration"]
+        atomic_json(directory / "validation.json", [
+            dict(epoch=e, optimizer_steps=e*per_epoch, mse=score, mae=.2)
+            for e in protocol.EPOCH_VALIDATIONS])
+        milestones = list(range(0, count + 1, protocol.EVAL_UPDATE_PERIOD))
+        atomic_json(directory / "update_curve.json", [
+            dict(optimizer_steps=step) for step in milestones])
+        atomic_json(directory / "rounds.json", [
+            dict(epoch=e, source_draws=n,
+                 source_sha256=shas[(config["seed"], e)],
+                 optimizer_steps_cumulative=e*per_epoch)
+            for e in range(1, 101)])
+        snapshot_dir = directory / "checkpoints"
+        snapshot_dir.mkdir()
+        for step in milestones:
+            (snapshot_dir / f"step_{step:07d}.pt").touch()
+    selected, scores = analysis.audit_and_select(root)
+    assert len(scores) == 54
+    assert len(selected["selected"]) == 4
+    assert selected["counts"] == {"complete":269, "numerical_failure":1}
+    excluded = next(r for r in scores if
+                    r["method"]=="td_pairwise" and r["configuration"] == 0)
+    assert math.isinf(excluded["score"])
+    assert excluded["failed_seeds"] == [0]
+    choice = next(r for r in selected["selected"] if r["method"]=="td_pairwise")
+    assert choice["configuration"] != 0
+
+
 def test_v2_outputs_are_siblings_of_results(tmp_path, monkeypatch):
     monkeypatch.setenv("FULLTD_RESULTS_ROOT", str(tmp_path))
     monkeypatch.delenv("FULLTD_FD001_ROOT", raising=False)
