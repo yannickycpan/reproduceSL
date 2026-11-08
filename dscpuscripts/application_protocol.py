@@ -1,9 +1,9 @@
 """Current Electricity/METR-LA sweeps, aligned with the frozen FD001 design.
 
-Applications now use B256-only TD and a revised operator grid. FD001 remains
-frozen. Electricity's large source population necessitates:
-100 rounds of ceil(N/24) draws, and a shared 20% validation view every 5,000
-updates. Hyperparameter selection is a reporting decision, as it is in FD001.
+Applications use B256-only TD and a revised operator grid; FD001 is frozen.
+Electricity uses 240 independent stochastic rounds of ceil(N/24) source draws
+(~10 expected full-data passes). METR-LA still trains for 100 full epochs.
+Validation-based HP selection remains an analysis-only decision.
 This module deliberately does not import FD001's environment-dependent cadence.
 """
 from __future__ import annotations
@@ -14,9 +14,12 @@ import json
 import math
 from pathlib import Path
 
-PROTOCOL_ID = "applications-fd001-aligned-v2-b256-beta"
+import numpy as np
+
+PROTOCOL_ID = "applications-fd001-aligned-v3-electricity-10passes"
 SEEDS = tuple(range(5))
-EPOCHS = 100
+EPOCHS = 100  # METR-LA; FD001 is independently frozen at 100.
+ELECTRICITY_ROUNDS = 240  # ceil(N/24) iid draws per round gives ~10 passes.
 BETAS = (0.00003, 0.0001, 0.001, 0.003, 0.01)
 BASELINE_ALPHAS = (0.0001, 0.0003, 0.0005, 0.0007, 0.0009,
                    0.001, 0.003, 0.005, 0.007, 0.01)
@@ -26,7 +29,6 @@ LAGS = {"electricity": (1, 24), "metr_la": (1, 3)}
 DATASET_SCOPES = ("all", "electricity", "metr_la")
 PRINCIPAL_METHODS = ("mse", "gaussian_nll", "td_typed", "td_pairwise")
 MATRIX = (
-    ("electricity", "tcn", PRINCIPAL_METHODS),
     ("electricity", "patchtst", PRINCIPAL_METHODS),
     ("metr_la", "graph_wavenet", PRINCIPAL_METHODS + ("mae", "td_pairwise_mae")),
 )
@@ -59,7 +61,8 @@ def make_manifest():
                             run_id=f"{dataset}_{backbone}_{method}_b{batch_size}_h{setting}_s{seed}",
                             protocol_id=PROTOCOL_ID, dataset=dataset, backbone=backbone,
                             method=method, alpha=alpha, beta=beta, batch_size=batch_size,
-                            configuration=setting, seed=seed, epochs=EPOCHS,
+                            configuration=setting, seed=seed,
+                            epochs=ELECTRICITY_ROUNDS if dataset == "electricity" else EPOCHS,
                             training_unit="stochastic_round" if dataset == "electricity" else "full_epoch",
                             source_sampling="iid_uniform_with_replacement" if dataset == "electricity" else "random_reshuffling",
                             source_divisor=24 if dataset == "electricity" else 1,
@@ -71,8 +74,8 @@ def make_manifest():
                             validation_fraction=0.2 if dataset == "electricity" else 1.0,
                             lags=list(LAGS[dataset]),
                             checkpoint_policy="update_snapshots_and_resumable_cursor"))
-    if len(runs) != 1225 or len({r["run_id"] for r in runs}) != len(runs):
-        raise AssertionError("Expected 700 Electricity and 525 METR-LA candidates")
+    if len(runs) != 875 or len({r["run_id"] for r in runs}) != len(runs):
+        raise AssertionError("Expected 350 Electricity PatchTST and 525 METR-LA candidates")
     return runs
 
 
@@ -93,6 +96,24 @@ def load_manifest(path):
     for record in records:
         validate_config(record)
     return records
+
+
+def sources_for_application_round(dataset, n_sources, seed, round_number):
+    """Extend the frozen shared 100-round sampler without changing FD001.
+
+    For the first 100 Electricity rounds these draws are byte-identical to
+    fulltd.sampling.sources_for_round. Additional rounds use the same
+    independent SeedSequence streams and draw law, with no RNG carry-over.
+    METR-LA continues to use the frozen 100-epoch random reshuffling sampler.
+    """
+    from fulltd.sampling import rng_for, sources_for_round
+
+    if dataset == "metr_la":
+        return sources_for_round(dataset, n_sources, seed, round_number)
+    if dataset != "electricity" or n_sources < 1 or not 1 <= round_number <= ELECTRICITY_ROUNDS:
+        raise ValueError("Invalid application dataset, population or round number")
+    return rng_for(dataset, seed, round_number, 11).integers(
+        0, n_sources, size=math.ceil(n_sources / 24), dtype=np.int64)
 
 
 def update_budgets(config, n_sources):

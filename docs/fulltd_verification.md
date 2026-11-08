@@ -28,7 +28,7 @@ after all four validation-based choices are locked.
 
 ## Electricity and METR-LA
 
-The current application manifests have 700 Electricity and 525 METR-LA
+The current application manifests have 350 Electricity and 525 METR-LA
 candidates. The common model/data utilities are unchanged; application
 protocol, objectives, training and reporting live in `dscpuscripts/application_*.py`.
 The replaced application campaign's analysis/refit/Slurm entrypoints and its
@@ -44,8 +44,8 @@ OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
   python -m pytest -q tests dscpuscripts
 ```
 
-Previous revision (5597f90): **130 passed**. The full regression suite
-must be rerun on the current B256-only application revision before launching. Matplotlib/Pyparsing deprecation warnings did not
+The historical 130-test result belongs to revision 5597f90; the current
+PatchTST-only 240-round protocol must be tested on the AMD server before launch. Matplotlib/Pyparsing deprecation warnings did not
 cause failures. The suite includes:
 
 - Full-gradient finite-difference checks for typed, pairwise and pairwise-MAE
@@ -66,7 +66,7 @@ cause failures. The suite includes:
 
 The FD001 scientific identity remains
 `c6820c53e26b4ab47be164cb0e5e3a4c62a8f865e01a8b918148980ea840ef21`.
-At the preceding reference revision, all three direct dispatcher dry-runs succeeded (using one worker for FD001
+At the earlier 5597f90 revision, all three direct dispatcher dry-runs succeeded (using one worker for FD001
 in the smaller verification environment). Shell syntax and Git whitespace
 checks also passed.
 

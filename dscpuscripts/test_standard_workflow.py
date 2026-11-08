@@ -14,12 +14,12 @@ from dscpuscripts.application_protocol import make_manifest as other_manifest, d
 
 
 @pytest.mark.parametrize("name,count", [
-    ("fd001", 600), ("electricity", 700), ("metr_la", 525)])
+    ("fd001", 600), ("electricity", 350), ("metr_la", 525)])
 def test_one_manifest_per_dataset(name, count):
     runs=runner.configurations(name)
     assert len(runs)==count
     assert len({r["run_id"] for r in runs})==count
-    assert all(r["epochs"]==100 for r in runs)
+    assert all(r["epochs"]==(240 if name=="electricity" else 100) for r in runs)
     if name=="fd001":
         assert runs==fd001_manifest()
         assert set(r["method"] for r in runs)=={

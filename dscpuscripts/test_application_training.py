@@ -108,14 +108,17 @@ def assert_tree_equal(left, right):
 def test_application_manifest_matches_fd001_grids_without_legacy_methods():
     from dscpuscripts import fd001_protocol as fd001
     manifest = protocol.make_manifest()
-    assert len(manifest) == len({c["run_id"] for c in manifest}) == 1225
-    assert Counter(c["dataset"] for c in manifest) == {"electricity": 700, "metr_la": 525}
+    assert len(manifest) == len({c["run_id"] for c in manifest}) == 875
+    assert Counter(c["dataset"] for c in manifest) == {"electricity": 350, "metr_la": 525}
     assert protocol.BASELINE_ALPHAS == fd001.BASELINE_ALPHAS
     assert protocol.TD_ALPHAS == fd001.TD_ALPHAS
     assert protocol.BETAS == (0.00003, 0.0001, 0.001, 0.003, 0.01)
     assert protocol.SEEDS == fd001.SEEDS and protocol.EPOCHS == fd001.EPOCHS == 100
+    assert protocol.ELECTRICITY_ROUNDS == 240
     for config in manifest:
         assert config["batch_size"] == 256
+        assert config["epochs"] == (240 if config["dataset"] == "electricity" else 100)
+        assert not (config["dataset"] == "electricity" and config["backbone"] == "tcn")
         assert config["method"] not in ("td_full", "td_scalar", "dlinear_mse")
         assert config["backbone"] != "dlinear"
         assert "selection_epochs" not in config and "validation_epochs" not in config
@@ -134,12 +137,32 @@ def test_application_manifest_matches_fd001_grids_without_legacy_methods():
 
 
 def test_nondivisible_final_measurement_is_not_lost():
-    assert protocol.evaluation_steps(107100, 5000) == tuple(
-        [0, *range(5000, 107101, 5000), 107100])
-    config = config_for("electricity", "tcn")
+    assert protocol.evaluation_steps(257040, 5000) == tuple(
+        [0, *range(5000, 257041, 5000), 257040])
+    config = config_for("electricity", "patchtst")
     budget = protocol.update_budgets(config, 6578267)
     assert budget["draws_per_round"] == math.ceil(6578267 / 24)
-    assert budget["total_updates"] == budget["matched_updates"] == 107100
+    assert budget["total_updates"] == budget["matched_updates"] == 257040
+    assert config["epochs"] * budget["draws_per_round"] / 6578267 == pytest.approx(10, abs=1e-5)
+
+
+def test_extended_round_sampler_reuses_original_law_and_is_deterministic():
+    from fulltd.sampling import sources_for_round as frozen_source
+    n = 10123
+    for step in (1, 99, 100):
+        np.testing.assert_array_equal(
+            protocol.sources_for_application_round("electricity", n, 3, step),
+            frozen_source("electricity", n, 3, step))
+    for step in (101, 120, 240):
+        a = protocol.sources_for_application_round("electricity", n, 3, step)
+        b = protocol.sources_for_application_round("electricity", n, 3, step)
+        assert len(a) == math.ceil(n / 24)
+        np.testing.assert_array_equal(a, b)
+        assert (a >= 0).all() and (a < n).all()
+        assert not np.array_equal(a,
+            protocol.sources_for_application_round("electricity", n, 4, step))
+    with pytest.raises(ValueError, match="round"):
+        protocol.sources_for_application_round("electricity", n, 3, 241)
 
 
 def test_fixed_electricity_validation_is_shared_and_rng_independent():
@@ -167,7 +190,7 @@ def test_fixed_electricity_validation_is_shared_and_rng_independent():
     np.testing.assert_array_equal(first.get_batch(ids)["x"], data.get_batch(first.indices)["x"])
 
 
-@pytest.mark.parametrize("dataset,backbone,n", [("electricity", "tcn", 6240), ("metr_la", "graph_wavenet", 300)])
+@pytest.mark.parametrize("dataset,backbone,n", [("electricity", "patchtst", 6240), ("metr_la", "graph_wavenet", 300)])
 @pytest.mark.parametrize("method", ["td_typed", "td_pairwise"])
 def test_mid_round_resume_is_exact_and_retains_every_endpoint(tmp_path, monkeypatch, dataset, backbone, n, method):
     config = small_config(monkeypatch, dataset=dataset, backbone=backbone, method=method)
@@ -194,6 +217,29 @@ def test_mid_round_resume_is_exact_and_retains_every_endpoint(tmp_path, monkeypa
             assert snapshot["progress"]["curve"][-1]["optimizer_steps"] == step
             assert snapshot["progress"]["pending_evaluation"] is None
         assert len(read_json(directory / "rounds.json")) == 2
+
+
+def test_electricity_resumes_exactly_after_round_100(tmp_path, monkeypatch):
+    config = small_config(monkeypatch, dataset="electricity", backbone="patchtst",
+                          method="td_typed")
+    config.update(epochs=102, learning_curve_updates=200, snapshot_updates=200)
+    monkeypatch.setattr(train, "build_objective",
+                        lambda c, data: make_objective(c["method"], ToyMean()))
+    tr, va = ToyData("electricity", "train", n=48), ToyData("electricity", "val", n=30)
+    normal, interrupted = tmp_path / "normal", tmp_path / "interrupted"
+    completed = train.train_candidate(config, tr, va, normal, microbatch=2)
+    paused = train.train_candidate(config, tr, va, interrupted, microbatch=2,
+                                   stop_after_updates=101)
+    assert paused["state"] == "checkpointed"
+    assert paused["optimizer_steps"] == 101
+    resumed = train.train_candidate(config, tr, va, interrupted, microbatch=2)
+    assert completed["state"] == resumed["state"] == "complete"
+    assert resumed["epochs_completed"] == 102
+    assert resumed["optimizer_steps"] == 102
+    left = torch.load(normal / config["run_id"] / "final.pt", weights_only=False)
+    right = torch.load(interrupted / config["run_id"] / "final.pt", weights_only=False)
+    for key in ("objective", "optimizer", "progress"):
+        assert_tree_equal(left[key], right[key])
 
 
 def test_interrupted_validation_replays_observation_before_next_update(tmp_path, monkeypatch):
@@ -259,8 +305,8 @@ def test_initial_numerical_failure_is_preserved_without_restart(tmp_path, monkey
 
 
 @pytest.mark.parametrize("dataset,backbone,method", [
-    ("electricity", "tcn", "td_typed"),
-    ("electricity", "tcn", "td_pairwise"),
+    ("electricity", "patchtst", "td_typed"),
+    ("electricity", "patchtst", "td_pairwise"),
     ("electricity", "patchtst", "gaussian_nll"),
     ("electricity", "patchtst", "td_pairwise"),
     ("metr_la", "graph_wavenet", "gaussian_nll"),

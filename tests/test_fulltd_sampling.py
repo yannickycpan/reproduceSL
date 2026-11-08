@@ -2,27 +2,26 @@ import math
 import numpy as np
 import pytest
 
-from dscpuscripts.application_protocol import make_manifest, validate_config
+from dscpuscripts.application_protocol import make_manifest, validate_config, ELECTRICITY_ROUNDS, sources_for_application_round
 from fulltd.sampling import LocalPairLaw, rng_for, sources_for_round
 
 
 def test_prespecified_matrix_and_budget():
     manifest = make_manifest()
-    assert len(manifest) == 1225
-    assert sum(r["dataset"] == "electricity" for r in manifest) == 700
+    assert len(manifest) == 875
+    assert sum(r["dataset"] == "electricity" for r in manifest) == 350
     assert sum(r["dataset"] == "metr_la" for r in manifest) == 525
-    assert sum(r["batch_size"] == 256 for r in manifest) == 1225
+    assert sum(r["batch_size"] == 256 for r in manifest) == 875
     assert sum(r["batch_size"] == 128 for r in manifest) == 0
     assert {r["seed"] for r in manifest} == set(range(5))
     principal = {"mse", "gaussian_nll", "td_typed", "td_pairwise"}
     for dataset, backbone, expected in (
-        ("electricity", "tcn", principal),
         ("electricity", "patchtst", principal),
         ("metr_la", "graph_wavenet", principal | {"mae", "td_pairwise_mae"}),
     ):
         runs = [r for r in manifest if (r["dataset"], r["backbone"]) == (dataset, backbone)]
         assert {r["method"] for r in runs} == expected
-        assert all(r["epochs"] == 100 for r in runs)
+        assert all(r["epochs"] == (240 if dataset == "electricity" else 100) for r in runs)
         assert all(r["learning_curve_updates"] == (5000 if dataset == "electricity" else 500)
                    for r in runs)
         assert all("validation_epochs" not in r and "selection_epochs" not in r for r in runs)
@@ -37,6 +36,19 @@ def test_prespecified_matrix_and_budget():
 
 
 @pytest.mark.parametrize("name,lags", [("electricity", (1,24)), ("metr_la", (1,3)), ("fd001", (1,5))])
+def test_electricity_240_stochastic_round_source_stream():
+    n = 1029
+    assert ELECTRICITY_ROUNDS == 240
+    for r in (1, 100, 101, 240):
+        a = sources_for_application_round("electricity", n, 0, r)
+        assert len(a) == math.ceil(n / 24)
+        np.testing.assert_array_equal(a, sources_for_application_round("electricity", n, 0, r))
+        if r <= 100:
+            np.testing.assert_array_equal(a, sources_for_round("electricity", n, 0, r))
+    with pytest.raises(ValueError):
+        sources_for_application_round("electricity", n, 0, 241)
+
+
 def test_pair_metadata_boundaries_no_gaps_no_other_entities(name, lags):
     origins = np.r_[np.arange(60), np.arange(80,120), np.arange(60)]
     entities = np.r_[np.zeros(100), np.ones(60)].astype(int)

@@ -20,11 +20,12 @@ import torch
 from dscpuscripts.common import atomic_json, read_json, data_identity
 from fulltd.metrics import evaluate
 from fulltd.models import build_model
-from fulltd.sampling import rng_for, sources_for_round, sequence_hash, training_universe
+from fulltd.sampling import rng_for, sequence_hash, training_universe
 from fulltd.train import seed_runtime, state_hash, logical_backward
 from .application_objectives import make_objective
 from .application_protocol import (PROTOCOL_ID, digest, validate_config,
-                                   update_budgets, evaluation_steps)
+                                   update_budgets, evaluation_steps,
+                                   sources_for_application_round)
 
 SCIENTIFIC_SOURCES = (
     "dscpuscripts/application_protocol.py", "dscpuscripts/application_train.py",
@@ -310,7 +311,7 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
             return checkpoint("checkpointed")
         while progress["epoch"] <= config["epochs"]:
             epoch = progress["epoch"]
-            sources = sources_for_round(config["dataset"], n, config["seed"], epoch)
+            sources = sources_for_application_round(config["dataset"], n, config["seed"], epoch)
             if len(sources) != draws:
                 raise ValueError("Source sampler differs from the frozen draw budget")
             partners, types = law.sample(sources, rng_for(config["dataset"], config["seed"], epoch, 22)) if td else (None, None)

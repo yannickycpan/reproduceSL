@@ -10,7 +10,6 @@ identity and reporting commands unchanged.
 
 | Dataset / backbone | Methods | Candidates |
 |---|---|---:|
-| Electricity / TCN | MSE, Gaussian NLL, typed TD, pairwise TD | 350 |
 | Electricity / PatchTST | MSE, Gaussian NLL, typed TD, pairwise TD | 350 |
 | METR-LA / Graph WaveNet | same four, plus masked MAE and pairwise TD-MAE | 525 |
 
@@ -22,7 +21,7 @@ There is no stop-gradient path, target network, regularization, clipping,
 learning-rate schedule, early stopping, or post-training refit.
 
 All runs use Adam (betas 0.9/0.999, epsilon 1e-8, weight decay zero), seeds
-0–4, and 100 training units. Baselines use logical batch 256 and predictor
+0–4. METR-LA uses 100 full epochs and Electricity uses 240 stochastic rounds. Baselines use logical batch 256 and predictor
 rates 0.0001, 0.0003, 0.0005, 0.0007, 0.0009, 0.001, 0.003, 0.005,
 0.007 and 0.01. All application methods use logical batch 256 only. TD
 predictor rates are 0.00003, 0.0001, 0.0003, 0.001 and 0.003; TD operator
@@ -59,8 +58,12 @@ unequal final microbatches.
 ## Data exposure and justified dataset exceptions
 
 METR-LA uses 100 complete reshuffled passes, as FD001 does. Electricity
-retains 100 independent stochastic rounds, each drawing ceil(N/24) sources
-uniformly with replacement. Every method/backbone with a given seed sees
+uses 240 independent stochastic rounds, each drawing ceil(N/24) sources
+uniformly with replacement. This equals approximately 10 full training-set
+passes in total source draws (not 10 independent full permutations). The
+Electricity sampler extends the original seeded draws from rounds 101–240
+without changing the frozen shared FD001 sampler. At N=6,578,267, B256 gives
+about 257,040 total optimizer updates. Every method/backbone with a given seed sees
 the same source sequence; all TD variants share the same partner stream,
 independent of batch grouping. Partners come from the entire eligible
 training set. Isolated sources are excluded from every method equally.
@@ -125,7 +128,8 @@ shared helpers from them. They are frozen compatibility dependencies, not
 application entrypoints; do not regenerate manifests through `fulltd.protocol`
 or launch `fulltd.train`. Import-only retired class names remain solely
 because the frozen FD001 baseline factory imports them eagerly.
-The application scientific identity has changed; existing incompatible
-application checkpoints must be preserved under a separate result root.
+The application scientific identity has changed for the new PatchTST-only
+240-round Electricity campaign; old application checkpoints must be preserved
+under a different result root rather than reused. FD001 remains unchanged.
 `tests/test_checkpoint_identity.py` enforces the original FD001 file hashes
 and aggregate scientific hash from commit 24b9296.

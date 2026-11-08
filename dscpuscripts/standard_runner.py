@@ -156,7 +156,7 @@ def classify(config, results, expected_code):
     if status.get('state') == 'numerical_failure':
         return 'numerical_failure'
     required = ('final.pt', 'update_curve.json', 'rounds.json')
-    if (status.get('state') == 'complete' and status.get('epochs_completed') == 100
+    if (status.get('state') == 'complete' and status.get('epochs_completed') == config['epochs']
             and all((directory / f).is_file() for f in required)):
         return 'complete'
     return 'resume'

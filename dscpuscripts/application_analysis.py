@@ -17,8 +17,9 @@ import statistics
 from dscpuscripts.common import (atomic_json, data_identity, file_hash,
                                   file_lock, read_json, write_csv)
 from dscpuscripts.result_paths import paths as result_paths
-from .application_protocol import (EPOCHS, PROTOCOL_ID, SEEDS, digest,
-                                     evaluation_steps, make_manifest, update_budgets)
+from .application_protocol import (PROTOCOL_ID, SEEDS, digest, evaluation_steps,
+                                     make_manifest, update_budgets,
+                                     sources_for_application_round)
 
 ANALYSIS_VERSION = "application-comparison-v1"
 EVALUATION_VERSION = "application-point-metrics-v1"
@@ -74,7 +75,7 @@ def _snapshot_path(folder, endpoint, total):
 
 
 def _audit_candidate(config, results, expected_code, shared, source_hashes):
-    from fulltd.sampling import sequence_hash, sources_for_round
+    from fulltd.sampling import sequence_hash
 
     run_id = config["run_id"]
     folder = Path(results) / run_id
@@ -132,14 +133,14 @@ def _audit_candidate(config, results, expected_code, shared, source_hashes):
             raise FileNotFoundError(f"Missing retained measurement checkpoint: {path}")
     rounds = read_json(folder / "rounds.json")
     if ([r.get("epoch") for r in rounds] != list(range(1, len(rounds) + 1))
-            or len(rounds) > EPOCHS):
+            or len(rounds) > config["epochs"]):
         raise ValueError(f"Missing/duplicated source-round evidence: {run_id}")
     td = config["method"].startswith("td_")
     for record in rounds:
         epoch = record["epoch"]
         key = (config["dataset"], n, config["seed"], epoch)
         if key not in source_hashes:
-            source_hashes[key] = sequence_hash(sources_for_round(config["dataset"], n,
+            source_hashes[key] = sequence_hash(sources_for_application_round(config["dataset"], n,
                                                                 config["seed"], epoch))
         if (record.get("source_draws") != budgets["draws_per_round"]
                 or record.get("source_sha256") != source_hashes[key]):
@@ -153,11 +154,11 @@ def _audit_candidate(config, results, expected_code, shared, source_hashes):
             if len(counts) != 2 or sum(counts) != budgets["draws_per_round"]:
                 raise ValueError(f"Incorrect temporal-pair accounting: {run_id}")
     if state == "complete":
-        if (status.get("epochs_completed") != EPOCHS or status.get("next_epoch") != EPOCHS + 1
-                or status.get("cursor") != 0 or len(rounds) != EPOCHS
+        if (status.get("epochs_completed") != config["epochs"] or status.get("next_epoch") != config["epochs"] + 1
+                or status.get("cursor") != 0 or len(rounds) != config["epochs"]
                 or status.get("optimizer_steps") != total
                 or status.get("update_opportunities") != total
-                or status.get("source_draws") != EPOCHS * budgets["draws_per_round"]
+                or status.get("source_draws") != config["epochs"] * budgets["draws_per_round"]
                 or measured != list(schedule) or not (folder / "final.pt").is_file()):
             raise ValueError(f"Incomplete final budget/evidence: {run_id}")
     evidence = dict(identity=identity, initial_mean_sha256=status["initial_mean_sha256"],
@@ -427,8 +428,9 @@ def write_tables(plan, summary, output):
                     formatted.append(_format_metric(measurement["mean"], measurement["standard_error"]))
                 lines.append("| " + " | ".join([row["algorithm"], *formatted]) + " |")
                 table.append(row)
-            lines.extend(["", "Unmarked rows report the final iterate after 100 "
-                          + ("stochastic rounds" if plan["dataset"] == "electricity" else "epochs") + ".",
+            lines.extend(["", "Rows report the final iterate after "
+                          + ("240 stochastic rounds (~10 effective passes)" if plan["dataset"] == "electricity"
+                             else "100 full epochs") + ".",
                           "Hyperparameters are selected by standardized validation MSE, never test performance."])
             if plan["dataset"] == "electricity":
                 lines.append("Metrics average within each customer and then across customers. "

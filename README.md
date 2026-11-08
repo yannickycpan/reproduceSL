@@ -26,8 +26,9 @@ Test labels are never used for hyperparameter tuning.
 
 Electricity and METR-LA use the FD001-aligned application protocol in
 [`dscpuscripts/application_protocol.py`](dscpuscripts/application_protocol.py).
-Electricity has 700 candidates (TCN and PatchTST, each with MSE, Gaussian
-NLL, typed TD and pairwise TD); METR-LA has 525 Graph WaveNet candidates,
+Electricity has 350 PatchTST-only candidates (MSE, Gaussian NLL, typed TD,
+and pairwise TD), trained for 240 stochastic rounds (~10 effective epochs).
+METR-LA has 525 Graph WaveNet candidates,
 adding masked MAE and pairwise TD with an absolute-error objective.
 The current manifests replace the earlier application campaign.
 

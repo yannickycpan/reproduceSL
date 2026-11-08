@@ -129,10 +129,13 @@ against the same result root.
 ## Electricity and METR-LA on the AMD CPU server
 
 The current application sweeps replace the older TD-full/TD-scalar campaign.
-Each Electricity backbone (TCN and PatchTST) has the same four principal
-methods as FD001. DLinear is a separate architecture and is not in the sweep.
+All Electricity results from 100 rounds or a TCN campaign are incompatible
+with this 240-round PatchTST scientific identity.
+The Electricity PatchTST backbone has the same four principal methods as FD001. DLinear is a separate architecture and is not in the sweep.
 METR-LA uses Graph WaveNet for all methods, including additional masked-MAE
-and pairwise-TD-MAE comparators. The totals are 700 and 525 candidates.
+and pairwise-TD-MAE comparators. Electricity now uses PatchTST only, with
+240 independent N/24 source-draw rounds (~10 effective passes), for 350
+candidates; METR-LA stays at 100 complete epochs and 525 candidates.
 
 Use the existing pinned CPU environment; only run setup if it is not ready.
 The download script verifies existing prepared data without overwriting it.
@@ -149,9 +152,9 @@ bash dscpuscripts/download_data.sh metr_la
 bash dscpuscripts/run_electricity.sh --dry-run
 bash dscpuscripts/run_metr_la.sh --dry-run
 
-nohup bash dscpuscripts/run_electricity.sh --run --workers 8 --adaptive \
+nohup bash dscpuscripts/run_electricity.sh --run --workers 128 --adaptive \
   > "$HOME/electricity.log" 2>&1 < /dev/null &
-nohup bash dscpuscripts/run_metr_la.sh --run --workers 8 --adaptive \
+nohup bash dscpuscripts/run_metr_la.sh --run --workers 64 --adaptive \
   > "$HOME/metr_la.log" 2>&1 < /dev/null &
 
 bash dscpuscripts/run_electricity.sh --status
@@ -168,6 +171,7 @@ errors. A new launch never silently adopts incompatible old checkpoints.
 If an earlier application sweep occupies these result paths, preserve it and
 choose a fresh path with `FULLTD_ELECTRICITY_ROOT` or `FULLTD_METR_LA_ROOT`.
 The revised scientific identity cannot resume earlier application checkpoints.
+Use new result roots if previous application runs already exist.
 Do not mix the old campaign with this one or change settings halfway through.
 
 After the corresponding sweep is complete:
@@ -210,12 +214,16 @@ is enabled, but has no RAM, memory-bandwidth or cgroup-admission check.
 `--workers auto` is capped at 128. Do not equate 80% idle CPU with a safe
 number of application processes.
 
-Measure aggregate completed optimizer updates/second and peak memory at 8,
-16, 32 and, if supported, 48/64 Electricity workers before choosing a higher
-cap; monitor MemAvailable, page faults and swap activity. Concurrent FD001 and
-METR-LA campaigns must share the same core/RAM budget. For example,
-`run_electricity.sh --run --workers 32 --adaptive` is a trial, not a
-measured production recommendation.
+The user reports two EPYC 9754 sockets (256 physical cores, 512 SMT threads),
+1.5 TiB of available RAM and approximately 100% idle CPU in a short sample.
+If FD001 is idle, an upper starting configuration is 128 Electricity and
+64 METR-LA single-threaded workers (192/256 physical cores, or 75%).
+Monitor throughput, MemAvailable, page faults, disk space and NUMA effects;
+128+64 is not yet benchmarked. Start at 64+32 for a lower-risk pilot if
+FD001 is still running or if the shared machine has other active jobs. Concurrent FD001 and
+METR-LA campaigns must share the same core/RAM budget. Use explicit `--workers` caps for the two campaigns; `--workers auto` has a
+128-worker cap and is not a combined scheduler. Two separate dispatchers
+can compete, so do not exceed a combined safe concurrency budget.
 
 ## FD001 fixed-selection batch and matched-update report
 

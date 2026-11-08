@@ -159,7 +159,6 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
     for config in configs:
         config.update(epochs=2, learning_curve_updates=5, snapshot_updates=5)
     monkeypatch.setattr(analysis, "manifest_for", lambda campaign: configs)
-    monkeypatch.setattr(analysis, "EPOCHS", 2)
     monkeypatch.setattr(analysis, "training_code_hash", lambda: "fixture-real-io")
     monkeypatch.setattr(train, "code_hash", lambda: "fixture-real-io")
     monkeypatch.setattr(train, "validate_config", lambda c: c)
