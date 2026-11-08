@@ -294,9 +294,15 @@ def plot(output):
              for row in selected}
     if set(display) != set(METHODS):
         raise ValueError("All four selected configurations are required for plotting")
-    # Full curves include update zero for auditability. Primary figures zoom into
-    # the latter half of the shortest run's update range to make differences legible.
-    # Neither the training records nor any selection/evaluation result is changed.
+    # The x-axis always includes the entire training history, including update 0.
+    # Limit only the main figures' y-axis: early initialization outliers should
+    # not make later RMSE/MAE/RUL differences visually indistinguishable.
+    # Each main figure has an unzoomed '_full' companion for auditability.
+    y_zoom = {
+        "rmse_cycles": (25.0, 40.0),
+        "mae_cycles": (18.0, 35.0),
+        "rul_score_sum": (5_000.0, 250_000.0),
+    }  # Edit these bounds to adjust the vertical range without truncating x.
     for metric,y_label in (("rmse_cycles","Validation RMSE (cycles)"),
                            ("mae_cycles","Validation MAE (cycles)"),
                            ("rul_score_sum","Validation summed RUL score")):
@@ -307,44 +313,23 @@ def plot(output):
             if not rows or int(rows[0]["optimizer_steps"]) != 0:
                 raise ValueError(f"Missing measured update-zero evaluation: {metric}/{method}")
             by_method[method]=rows
-        common_last=min(int(rows[-1]["optimizer_steps"]) for rows in by_method.values())
-        first_positive=min(int(r["optimizer_steps"]) for r in by_method["mse"]
-                           if int(r["optimizer_steps"]) > 0)
-        late_start=math.ceil((common_last/2)/first_positive)*first_positive
-        for view in ("late","full"):
+        for view in ("zoom","full"):
             fig,ax=plt.subplots(figsize=(9,4.8))
-            limits=[]
             for method in METHODS:
-                rows=[r for r in by_method[method]
-                      if view=="full" or int(r["optimizer_steps"]) >= late_start]
-                if not rows:
-                    raise ValueError(f"No late-training points: {metric}/{method}")
+                rows=by_method[method]  # Never drop early updates from the x-axis.
                 x=np.array([int(r["optimizer_steps"]) for r in rows])
                 y=np.array([float(r["mean"]) for r in rows])
                 se=np.array([float(r["standard_error"]) for r in rows])
                 ax.plot(x,y,marker="o",ms=2.5,label=display[method])
                 if np.isfinite(y).all() and np.isfinite(se).all():
                     ax.fill_between(x,y-se,y+se,alpha=.12)
-                if view=="late":
-                    lo=np.where(np.isfinite(se),y-se,y)
-                    hi=np.where(np.isfinite(se),y+se,y)
-                    limits.extend(float(v) for v in np.r_[lo,hi] if np.isfinite(v))
             ax.set_xlabel("Cumulative Adam optimizer updates")
             ax.set_ylabel(y_label)
-            if view=="late":
-                low,high=min(limits),max(limits)
-                if metric=="rul_score_sum" and low>0:
-                    ax.set_yscale("log")
-                    ax.set_ylim(low/1.15,high*1.15)
-                else:
-                    if metric=="rul_score_sum":
-                        ax.set_yscale("symlog",linthresh=1000)
-                    margin=max(.25,.07*(high-low))
-                    ax.set_ylim(low-margin,high+margin)
-                ax.set_xlim(left=late_start)
-                ax.set_title(f"Late-training view (updates >= {late_start:,}); mean +/- 1 SE",fontsize=10)
-            elif metric=="rul_score_sum":
+            if metric=="rul_score_sum":
                 ax.set_yscale("symlog",linthresh=1000)
+            if view=="zoom":
+                ax.set_ylim(*y_zoom[metric])  # Zoom ONLY y, not x.
+                ax.set_title("Y-axis zoom (all training updates retained)",fontsize=10)
             ax.legend(fontsize=8)
             ax.grid(alpha=.2)
             fig.tight_layout()
