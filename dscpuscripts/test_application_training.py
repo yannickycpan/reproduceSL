@@ -143,7 +143,12 @@ def test_nondivisible_final_measurement_is_not_lost():
     budget = protocol.update_budgets(config, 6578267)
     assert budget["draws_per_round"] == math.ceil(6578267 / 24)
     assert budget["total_updates"] == budget["matched_updates"] == 257040
-    assert config["epochs"] * budget["draws_per_round"] / 6578267 == pytest.approx(10, abs=1e-5)
+    # ceil(N/24) draws adds less than one extra source per round.
+    # Exactly ten *effective* passes is not generally an integer draw count.
+    effective_passes = config["epochs"] * budget["draws_per_round"] / 6578267
+    target_passes = config["epochs"] / config["source_divisor"]
+    assert target_passes == 10
+    assert target_passes <= effective_passes < target_passes + config["epochs"] / 6578267
 
 
 def test_extended_round_sampler_reuses_original_law_and_is_deterministic():
@@ -282,7 +287,10 @@ def test_empty_masks_do_not_take_adam_steps_or_hide_budget_difference(tmp_path, 
     status = train.train_candidate(config, tr, va, tmp_path, microbatch=32)
     assert status["state"] == "complete"
     assert status["optimizer_steps"] == 0
-    assert status["empty_mask_batches"] == status["update_opportunities"] == status["total_updates"] == 2
+    # n=300, B256: two attempted batches per epoch, for two epochs.
+    expected_opportunities = config["epochs"] * math.ceil(len(tr) / config["batch_size"])
+    assert expected_opportunities == 4
+    assert status["empty_mask_batches"] == status["update_opportunities"] == status["total_updates"] == expected_opportunities
     ckpt = torch.load(tmp_path / config["run_id"] / "final.pt", weights_only=False)
     assert ckpt["optimizer"]["state"] == {}
     assert [r["optimizer_steps"] for r in ckpt["progress"]["curve"]] == [0]
