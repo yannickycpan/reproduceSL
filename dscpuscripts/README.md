@@ -135,3 +135,39 @@ The non-FD001 protocol and corresponding manifests under `fulltd/` and
 `configs/fulltd/` now contain 510 Electricity/METR-LA runs only. The
 historical MAE objective is retained only where required by the reference
 Graph WaveNet training procedure; it is not part of FD001.
+
+
+## FD001 fixed-selection batch and matched-update report
+
+This secondary **reporting-only** analysis does not change the canonical
+four-method selection, training configuration, optimizer, or trained weights.
+For full-budget performance it selects within each fixed TD batch size using
+the *same* five-seed final-quarter validation-MSE rule and evaluates the
+100-epoch final checkpoints. It also compares TD B128 at the exact B256
+100-epoch optimizer-update budget, reapplying the **same final-quarter rule**
+to the validation observations within that shorter budget and evaluating
+the retained B128 checkpoint at that matched update. In the current sweep
+B256 has 5,500 updates and B128 has 11,000; the matched selection uses
+validation observations at 4,500, 5,000 and 5,500 updates, then evaluates
+step 5,500 rather than the B128 epoch-100 model.
+
+This is **not** best-seed selection, test-tuned checkpoint selection,
+additional training, or replacement of the original primary report.
+
+On the server containing all original FD001 checkpoints, run:
+
+```bash
+cd ~/reproduceSL
+git switch fullTD
+git pull --ff-only origin fullTD
+bash dscpuscripts/analyze_fd001_batches.sh check
+bash dscpuscripts/analyze_fd001_batches.sh run
+cat ~/scratch/fulltd/fd001_outputs/batch_comparison/comparison_table.md
+```
+
+The check locks validation-only choices without opening test labels. The
+run reads the original final/step checkpoints and creates separate cached
+evaluations, raw per-seed values, mean ± standard error tables and a Markdown
+report under `~/scratch/fulltd/fd001_outputs/batch_comparison/`.
+It never writes in the training-results directories. If a required snapshot
+is missing, the command stops rather than replacing it.
