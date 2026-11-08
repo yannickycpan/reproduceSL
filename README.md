@@ -24,11 +24,25 @@ The model is evaluated initially and every 500 optimizer updates; the
 last 25% of positive-update validation evaluations select each method's HPs.
 Test labels are never used for hyperparameter tuning.
 
-Electricity and METR-LA retain their existing model/training implementations
-under `fulltd/` and `agents/`. Their 510 candidate configurations are
-maintained separately in `configs/fulltd/`. The FD001 data/model interfaces
-are shared with those implementations, but no obsolete FD001 method is
-offered by the older `fulltd` manifest.
+Electricity and METR-LA use the FD001-aligned application protocol in
+[`dscpuscripts/application_protocol.py`](dscpuscripts/application_protocol.py).
+Electricity has 1,200 candidates (TCN and PatchTST, each with MSE, Gaussian
+NLL, typed TD and pairwise TD); METR-LA has 900 Graph WaveNet candidates,
+adding masked MAE and pairwise TD with an absolute-error objective.
+The current manifests replace the earlier application campaign.
+
+```bash
+bash dscpuscripts/run_electricity.sh --dry-run
+bash dscpuscripts/run_metr_la.sh --dry-run
+# Production launch: replace --dry-run with --run --workers 8 --adaptive.
+bash dscpuscripts/analyze_standard.sh electricity run
+bash dscpuscripts/analyze_standard.sh metr_la run
+```
+
+The [application protocol](docs/fulltd_protocol.md) explains the common
+selection rule, Electricity's computational exceptions, exact matched-update
+comparisons, and FD001 compatibility. Application reports contain RMSE/MAE
+tables and validation/test learning curves only; they do not train or refit.
 
 The sources include code, dataset verification, regression tests, and
 licensing metadata. Training checkpoints and generated reports are stored

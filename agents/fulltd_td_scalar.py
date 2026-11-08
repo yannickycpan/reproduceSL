@@ -1,7 +1,12 @@
-"""Full-gradient TD with one coefficient for the same two temporal pair sets."""
-from agents.fulltd_objectives import TDObjective
+"""Retired application name; import-only compatibility for frozen FD001.
+
+The frozen common factory imports this symbol when constructing MSE/NLL.
+No current campaign can construct this removed objective.
+"""
 
 
-class TDScalar(TDObjective):
-    def __init__(self, model):
-        super().__init__(model, coordinates=1)
+class TDScalar:
+    def __init__(self, *args, **kwargs):
+        raise ValueError(
+            "td_scalar was removed. Use td_pairwise through "
+            "dscpuscripts.application_objectives and application_protocol.")

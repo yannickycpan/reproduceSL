@@ -2,18 +2,35 @@ import math
 import numpy as np
 import pytest
 
-from fulltd.protocol import make_manifest, validate_config
+from dscpuscripts.application_protocol import make_manifest, validate_config
 from fulltd.sampling import LocalPairLaw, rng_for, sources_for_round
 
 
 def test_prespecified_matrix_and_budget():
     manifest = make_manifest()
-    assert len(manifest) == 510
-    assert sum(r["batch_size"] == 256 for r in manifest) == 450
-    assert sum(r["batch_size"] == 128 for r in manifest) == 180
+    assert len(manifest) == 2100
+    assert sum(r["dataset"] == "electricity" for r in manifest) == 1200
+    assert sum(r["dataset"] == "metr_la" for r in manifest) == 900
+    assert sum(r["batch_size"] == 256 for r in manifest) == 1225
+    assert sum(r["batch_size"] == 128 for r in manifest) == 875
     assert {r["seed"] for r in manifest} == set(range(5))
-    assert all(r["validation_epochs"] == list(range(10, 101, 10)) for r in manifest)
-    assert all(r["selection_epochs"] == [80, 90, 100] for r in manifest)
+    principal = {"mse", "gaussian_nll", "td_typed", "td_pairwise"}
+    for dataset, backbone, expected in (
+        ("electricity", "tcn", principal),
+        ("electricity", "patchtst", principal),
+        ("metr_la", "graph_wavenet", principal | {"mae", "td_pairwise_mae"}),
+    ):
+        runs = [r for r in manifest if (r["dataset"], r["backbone"]) == (dataset, backbone)]
+        assert {r["method"] for r in runs} == expected
+        assert all(r["epochs"] == 100 for r in runs)
+        assert all(r["learning_curve_updates"] == (5000 if dataset == "electricity" else 500)
+                   for r in runs)
+        assert all("validation_epochs" not in r and "selection_epochs" not in r for r in runs)
+        for method in expected:
+            method_runs = [r for r in runs if r["method"] == method]
+            assert len({(r["alpha"], r["beta"]) for r in method_runs}) == (25 if method.startswith("td_") else 10)
+            assert {r["batch_size"] for r in method_runs} == ({128, 256} if method.startswith("td_") else {256})
+    assert not any(r["backbone"] == "dlinear" for r in manifest)
     invalid = dict(manifest[0], epochs=99)
     with pytest.raises(ValueError):
         validate_config(invalid)

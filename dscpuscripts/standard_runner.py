@@ -1,7 +1,7 @@
 """Direct CPU dispatcher for FD001, Electricity and METR-LA.
 
-FD001 has one current four-method scientific protocol; other dataset
-experiments keep their own specified settings.
+FD001 is frozen. Electricity and METR-LA use the aligned application
+protocol, with update-based checkpoints and typed/pairwise TD.
 """
 from __future__ import annotations
 
@@ -23,12 +23,12 @@ DEFAULTS = {'fd001': (32, 256), 'electricity': (8, 128), 'metr_la': (8, 32)}
 
 
 def configurations(campaign):
-    from fulltd.protocol import make_manifest
     if campaign not in CAMPAIGNS:
         raise ValueError(f'Unknown campaign: {campaign}')
     if campaign == 'fd001':
         from dscpuscripts.fd001_protocol import make_manifest as fd001_manifest
         return fd001_manifest()
+    from dscpuscripts.application_protocol import make_manifest
     return [c for c in make_manifest() if c['dataset'] == campaign]
 
 
@@ -155,9 +155,7 @@ def classify(config, results, expected_code):
         raise ValueError(f'Incompatible prior result preserved: {directory}')
     if status.get('state') == 'numerical_failure':
         return 'numerical_failure'
-    required = (('final.pt', 'update_curve.json', 'rounds.json')
-                if config['dataset'] == 'fd001'
-                else ('final.pt', 'validation.json', 'rounds.json'))
+    required = ('final.pt', 'update_curve.json', 'rounds.json')
     if (status.get('state') == 'complete' and status.get('epochs_completed') == 100
             and all((directory / f).is_file() for f in required)):
         return 'complete'
@@ -186,7 +184,7 @@ def stop_flag():
 
 def execute_worker(args):
     # Install handlers before importing torch, so an interrupt during imports
-    # is remembered and passed to the existing epoch-checkpoint trainer.
+    # is remembered and passed to the cursor-resumable trainer.
     with stop_flag() as stopped:
         import torch
         torch.set_num_threads(1)
@@ -195,7 +193,7 @@ def execute_worker(args):
         if args.campaign == 'fd001':
             from dscpuscripts.fd001_train import train_candidate, code_hash
         else:
-            from fulltd.train import train_candidate, code_hash
+            from dscpuscripts.application_train import train_candidate, code_hash
         from dscpuscripts.common import file_lock, read_json
         if code_hash() != args.expected_code:
             raise ValueError('Training implementation changed after launch; no fitting performed')
@@ -220,7 +218,7 @@ def dispatch(args):
     if args.campaign == 'fd001':
         from dscpuscripts.fd001_train import code_hash
     else:
-        from fulltd.train import code_hash
+        from dscpuscripts.application_train import code_hash
     data, results, _ = paths(args.campaign)
     configs = configurations(args.campaign)
     code = code_hash()
@@ -244,12 +242,10 @@ def dispatch(args):
     ))
     from fulltd.data import verify_dataset, load_dataset
     from fulltd.sampling import training_universe
-    from fulltd.protocol import LAGS
-    from fulltd.train import data_identity
-    from dscpuscripts.common import read_json
+    from dscpuscripts.common import read_json, data_identity
     dataset = configs[0]['dataset']
     verify_dataset(dataset, data)
-    train, _, _ = training_universe(load_dataset(dataset, data, 'train'), LAGS[dataset])
+    train, _, _ = training_universe(load_dataset(dataset, data, 'train'), tuple(configs[0]['lags']))
     val = load_dataset(dataset, data, 'val')
     expected_data, expected_val = data_identity(train), data_identity(val)
     for config in configs:

@@ -12,7 +12,7 @@ training scripts or their benchmark scores. Source revisions inspected on
 | FD001 TCN | same TCN reference | 92,801 |
 | Electricity PatchTST | [yuqinie98/PatchTST](https://github.com/yuqinie98/PatchTST/tree/204c21efe0b39603ad6e2ca640ef5896646ab1a9) | 100,056 |
 | METR-LA Graph WaveNet | [nnzhan/Graph-WaveNet](https://github.com/nnzhan/Graph-WaveNet/tree/6b162e80c59a1d494809252eca055cff93dc66b1) | 134,200 |
-| Electricity DLinear | [cure-lab/LTSF-Linear](https://github.com/cure-lab/LTSF-Linear/tree/0c113668a3b88c4c4ee586b8c5ec3e539c4de5a6) | 8,112 |
+| DLinear utility (outside current sweep) | [cure-lab/LTSF-Linear](https://github.com/cure-lab/LTSF-Linear/tree/0c113668a3b88c4c4ee586b8c5ec3e539c4de5a6) | 8,112 |
 
 TCN uses two causal kernel-3 convolutions and ReLU per residual block, plus a
 ReLU after the residual addition. Electricity has six 64-channel blocks with
@@ -49,7 +49,8 @@ The point-prediction function is unchanged and every registered parameter
 participates in prediction. Adaptive node embeddings use independent
 standard-normal draws.
 
-DLinear uses endpoint-replicated moving averages with fixed kernel 25. Two
+DLinear is excluded from the current same-backbone application comparisons.
+Its frozen utility uses endpoint-replicated moving averages with fixed kernel 25. Two
 shared 168-to-24 temporal projections predict seasonal and trend components
 and their outputs sum. There are no customer-specific parameters.
 
@@ -63,11 +64,16 @@ are zero-weight linear maps of the final hidden representation with bias
 `inverse_softplus(1-1e-6)`, giving variance one initially. Their construction
 does not alter the mean-network RNG stream.
 
-Electricity/METR-LA ordinary objectives live in `agents/fulltd_*.py`. The sole FD001 protocol uses the same common predictors and the typed/pairwise objectives in `dscpuscripts/fd001_objectives.py`. TD-full and
-TD-scalar share only the exact residual-loss implementation: unrestricted
-coefficients initialized at zero, full gradients through both endpoint means,
-and a half-squared scalar loss averaged using the actual valid-pair count.
-Type indices are zero-based 0/1 internally. The traffic intersection mask
-qualifies the equality of zero-operator TD and ordinary MSE: equality holds on
-complete data or the same explicitly chosen scalar support, while the ordinary
-baseline retains every valid source label.
+Electricity/METR-LA objectives are selected through
+`dscpuscripts/application_objectives.py`; ordinary MSE/Gaussian NLL/MAE
+implementations are shared from `agents/`. FD001 keeps its protected
+`dscpuscripts/fd001_objectives.py`. The current applications reuse its exact
+pairwise Gamma head and typed two-coefficient definition, with full gradients
+and zero initialization. Graph WaveNet's hidden sensor dimension is flattened
+only for the Gamma head, and its common mean prediction head is unchanged.
+The extra METR-LA pairwise-TD-MAE loss replaces the half-square with absolute
+error. See `fulltd_protocol.md` for shape, masking, and valid-count details.
+
+The traffic intersection mask qualifies equality of zero-operator TD and
+ordinary MSE/MAE: equality holds on complete data or the same explicitly
+chosen scalar support; ordinary baselines retain every valid source label.

@@ -1,4 +1,4 @@
-# FD001 — single current experiment
+# Direct CPU experiments — FD001, Electricity and METR-LA
 
 **There is one FD001 scientific protocol:** `dscpuscripts/fd001_protocol.py`.
 Its training and analysis implementations are `dscpuscripts/fd001_train.py`
@@ -7,9 +7,13 @@ pairwise) are in `dscpuscripts/fd001_objectives.py`. There are no historical
 FD001 source protocols, no extra FD001-specific launchers, and no baseline-only
 or extension-only reporting pipelines.
 
-Electricity and METR-LA use the existing `fulltd` implementations; their
-data preparation, networks, losses, sampling, and ordinary training procedures
-are separate from the FD001 experiment.
+Electricity and METR-LA now use `application_protocol.py`,
+`application_train.py`, `application_objectives.py`, and `application_analysis.py`
+in this directory. They share the frozen data/model/sampling utilities with
+FD001, and match its optimizer, grids, seeds, TD definitions and selection rule.
+See [the application protocol](../docs/fulltd_protocol.md) for the explicit
+Electricity computation exceptions. FD001's scientific files and hash are
+unchanged.
 
 ## Experiment definition
 
@@ -121,20 +125,79 @@ No Slurm is required on the AMD host. Use `--workers auto` or a
 conservative maximum on a heavily shared server; do not run two dispatchers
 against the same result root.
 
-## Other datasets
+## Electricity and METR-LA on the AMD CPU server
 
-The unchanged processing and model implementations for Electricity and
-METR-LA are still available:
+The current application sweeps replace the older TD-full/TD-scalar campaign.
+Each Electricity backbone (TCN and PatchTST) has the same four principal
+methods as FD001. DLinear is a separate architecture and is not in the sweep.
+METR-LA uses Graph WaveNet for all methods, including additional masked-MAE
+and pairwise-TD-MAE comparators. The totals are 1,200 and 900 candidates.
+
+Use the existing pinned CPU environment; only run setup if it is not ready.
+The download script verifies existing prepared data without overwriting it.
 
 ```bash
-bash dscpuscripts/run_standard.sh electricity --dry-run
-bash dscpuscripts/run_standard.sh metr_la --dry-run
+cd ~/reproduceSL
+git switch fullTD
+git pull --ff-only origin fullTD
+# Only if the environment has not yet been installed:
+# bash dscpuscripts/setup_server.sh
+bash dscpuscripts/download_data.sh electricity
+bash dscpuscripts/download_data.sh metr_la
+
+bash dscpuscripts/run_electricity.sh --dry-run
+bash dscpuscripts/run_metr_la.sh --dry-run
+
+nohup bash dscpuscripts/run_electricity.sh --run --workers 8 --adaptive \
+  > "$HOME/electricity.log" 2>&1 < /dev/null &
+nohup bash dscpuscripts/run_metr_la.sh --run --workers 8 --adaptive \
+  > "$HOME/metr_la.log" 2>&1 < /dev/null &
+
+bash dscpuscripts/run_electricity.sh --status
+bash dscpuscripts/run_metr_la.sh --status
 ```
 
-The non-FD001 protocol and corresponding manifests under `fulltd/` and
-`configs/fulltd/` now contain 510 Electricity/METR-LA runs only. The
-historical MAE objective is retained only where required by the reference
-Graph WaveNet training procedure; it is not part of FD001.
+Eight single-threaded workers per campaign are a conservative starting point,
+not a measured throughput optimum. Electricity's default physical microbatch
+is 128 and METR-LA's is 32; gradients accumulate to the prescribed logical
+128/256 batch using the global valid-target count. `--microbatch` controls
+memory only. Both launchers resume compatible incomplete runs and skip
+completed runs and recorded numerical failures. They stop on operational
+errors. A new launch never silently adopts incompatible old checkpoints.
+If an earlier application sweep occupies these result paths, preserve it and
+choose a fresh path with `FULLTD_ELECTRICITY_ROOT` or `FULLTD_METR_LA_ROOT`.
+Do not mix the old campaign with this one or change settings halfway through.
+
+After the corresponding sweep is complete:
+
+```bash
+bash dscpuscripts/analyze_standard.sh electricity check
+bash dscpuscripts/analyze_standard.sh electricity run
+bash dscpuscripts/analyze_standard.sh metr_la check
+bash dscpuscripts/analyze_standard.sh metr_la run
+# Regenerate the requested tables/plots from cached measurements:
+bash dscpuscripts/analyze_standard.sh electricity plots
+bash dscpuscripts/analyze_standard.sh metr_la plots
+```
+
+Training states live in `~/scratch/fulltd/electricity_results/` and
+`~/scratch/fulltd/metr_la_results/`; reports are in the sibling
+`electricity_outputs/` and `metr_la_outputs/` directories. Each backbone
+gets an RMSE table and an MAE table with algorithms as rows and Test /
+Validation columns (five-seed mean ± standard error). TD B128 and B256 have
+separate validation-selected HPs, with additional B128 matched-update rows.
+Learning curves use the same selected settings, with test and validation
+panels, complete update axes and standard-error bands. Electricity metrics
+are standardized and equally weighted by customer; its validation column
+and curves use the fixed 20% customer-stratified view, while test uses the
+full held-out split. METR-LA uses masked all-horizon RMSE/MAE in mph.
+`selected_hyperparameters.csv` records the chosen rates and budgets.
+
+No test data are opened until validation-only selections are locked. No
+additional model fitting, persistence baselines, diagnostic plots, or refits
+are part of this report. Generating full test learning curves is more costly
+than endpoint evaluation; measurements are cached so rerunning the command
+does not repeat completed evaluations.
 
 
 ## FD001 fixed-selection batch and matched-update report

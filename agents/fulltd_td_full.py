@@ -1,7 +1,12 @@
-"""Full-gradient TD with two unrestricted signed temporal coefficients."""
-from agents.fulltd_objectives import TDObjective
+"""Retired application name; import-only compatibility for frozen FD001.
+
+The frozen common factory imports this symbol when constructing MSE/NLL.
+No current campaign can construct this removed objective.
+"""
 
 
-class TDFull(TDObjective):
-    def __init__(self, model):
-        super().__init__(model, coordinates=2)
+class TDFull:
+    def __init__(self, *args, **kwargs):
+        raise ValueError(
+            "td_full was removed. Use td_typed through "
+            "dscpuscripts.application_objectives and application_protocol.")

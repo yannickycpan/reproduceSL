@@ -28,12 +28,50 @@ after all four validation-based choices are locked.
 
 ## Electricity and METR-LA
 
-The `fulltd` study's two remaining dataset manifests contain 300 and
-210 runs respectively. Their data preparation and architecture modules,
-validation strategies, full-gradient TD objectives, and analysis routines
-remain available. Run relevant `tests/test_fulltd_*.py` plus the
-direct-server regression suite before production use.
+The current application manifests have 1,200 Electricity and 900 METR-LA
+candidates. The common model/data utilities are unchanged; application
+protocol, objectives, training and reporting live in `dscpuscripts/application_*.py`.
+The replaced application campaign's analysis/refit/Slurm entrypoints and its
+obsolete tests have been removed. Current coverage is in
+`dscpuscripts/test_application_training.py`,
+`dscpuscripts/test_application_analysis.py`, and `tests/test_fulltd_*.py`.
 
-Do not claim that an unexecuted test suite passed. Source changes and
-GitHub commit status alone cannot confirm on-server checkpoint validity
-or cross-hardware numerical equivalence.
+Verification on 2026-11-08 used Python 3.12 and the repository's pinned
+PyTorch 2.5.1 CPU / NumPy 1.26.4 requirements:
+
+```bash
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+  python -m pytest -q tests dscpuscripts
+```
+
+Result: **130 passed**. Matplotlib/Pyparsing deprecation warnings did not
+cause failures. The suite includes:
+
+- Full-gradient finite-difference checks for typed, pairwise and pairwise-MAE
+  objectives; full logical batch versus microbatch gradient equivalence.
+- Real TCN, PatchTST and Graph WaveNet forward/backward and short training
+  tests, including Gaussian NLL and the 207-sensor Graph WaveNet shape.
+- Exact interrupted-versus-uninterrupted recovery on both application
+  datasets, interrupted validation, empty masks, nonfinite failures and
+  non-grid final/matched checkpoint retention.
+- Fixed common customer-stratified validation, complete grids, common source
+  and partner streams, and data preparation/leakage checks.
+- Five-seed final-quarter selection, independent matched-budget HP choices,
+  missing/incomplete/altered-evidence rejection, correct standard errors,
+  validation lock before test access, cached test measurements and actual
+  table/PNG/PDF generation.
+- Existing FD001 regression tests and byte-for-byte checks of all thirteen
+  protected scientific sources against commit 24b9296.
+
+The FD001 scientific identity remains
+`c6820c53e26b4ab47be164cb0e5e3a4c62a8f865e01a8b918148980ea840ef21`.
+All three direct dispatcher dry-runs succeeded (using one worker for FD001
+in the smaller verification environment). Shell syntax and Git whitespace
+checks also passed.
+
+This verification uses synthetic fixtures, including the real network
+implementations; it does not claim that the full application sweeps have
+run, that the AMD host was benchmarked, or that unseen server checkpoints
+have been inspected. On the server, prepare/verify data, inspect the dry-run,
+then launch the current scripts. The selection check verifies the complete
+candidate campaign before reporting tests.

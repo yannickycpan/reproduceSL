@@ -10,11 +10,11 @@ import pytest
 from dscpuscripts import standard_runner as runner
 from dscpuscripts.common import atomic_json
 from dscpuscripts.fd001_protocol import make_manifest as fd001_manifest
-from fulltd.protocol import make_manifest as other_manifest, digest
+from dscpuscripts.application_protocol import make_manifest as other_manifest, digest
 
 
 @pytest.mark.parametrize("name,count", [
-    ("fd001", 600), ("electricity", 300), ("metr_la", 210)])
+    ("fd001", 600), ("electricity", 1200), ("metr_la", 900)])
 def test_one_manifest_per_dataset(name, count):
     runs=runner.configurations(name)
     assert len(runs)==count
