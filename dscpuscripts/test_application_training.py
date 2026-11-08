@@ -74,7 +74,7 @@ class ToyMean(nn.Module):
         return self.head(self.features(x))
 
 
-def config_for(dataset="metr_la", backbone="graph_wavenet", method="td_pairwise", batch_size=128):
+def config_for(dataset="metr_la", backbone="graph_wavenet", method="td_pairwise", batch_size=256):
     return copy.deepcopy(next(c for c in protocol.make_manifest() if
         (c["dataset"], c["backbone"], c["method"], c["batch_size"], c["seed"], c["configuration"]) ==
         (dataset, backbone, method, batch_size, 0, 0)))
@@ -108,13 +108,14 @@ def assert_tree_equal(left, right):
 def test_application_manifest_matches_fd001_grids_without_legacy_methods():
     from dscpuscripts import fd001_protocol as fd001
     manifest = protocol.make_manifest()
-    assert len(manifest) == len({c["run_id"] for c in manifest}) == 2100
-    assert Counter(c["dataset"] for c in manifest) == {"electricity": 1200, "metr_la": 900}
+    assert len(manifest) == len({c["run_id"] for c in manifest}) == 1225
+    assert Counter(c["dataset"] for c in manifest) == {"electricity": 700, "metr_la": 525}
     assert protocol.BASELINE_ALPHAS == fd001.BASELINE_ALPHAS
     assert protocol.TD_ALPHAS == fd001.TD_ALPHAS
-    assert protocol.BETAS == fd001.BETAS
+    assert protocol.BETAS == (0.00003, 0.0001, 0.001, 0.003, 0.01)
     assert protocol.SEEDS == fd001.SEEDS and protocol.EPOCHS == fd001.EPOCHS == 100
     for config in manifest:
+        assert config["batch_size"] == 256
         assert config["method"] not in ("td_full", "td_scalar", "dlinear_mse")
         assert config["backbone"] != "dlinear"
         assert "selection_epochs" not in config and "validation_epochs" not in config
@@ -124,7 +125,7 @@ def test_application_manifest_matches_fd001_grids_without_legacy_methods():
     for dataset, backbone, methods in protocol.MATRIX:
         selected = [c for c in manifest if (c["dataset"], c["backbone"]) == (dataset, backbone)]
         counts = Counter(c["method"] for c in selected)
-        assert counts == {method: 250 if method.startswith("td_") else 50 for method in methods}
+        assert counts == {method: 125 if method.startswith("td_") else 50 for method in methods}
     bad = dict(manifest[0], learning_curve_updates=500)
     with pytest.raises(ValueError, match="current"):
         protocol.validate_config(bad)
@@ -132,15 +133,13 @@ def test_application_manifest_matches_fd001_grids_without_legacy_methods():
         protocol.validate_config(dict(manifest[0], method="td_full"))
 
 
-def test_nondivisible_final_and_matched_measurements_are_not_lost():
-    assert protocol.evaluation_steps(107100, 5000) == tuple([0, *range(5000, 107101, 5000), 107100])
-    steps = protocol.evaluation_steps(214200, 5000, 107100)
-    assert steps.count(107100) == 1 and steps[-1] == 214200
+def test_nondivisible_final_measurement_is_not_lost():
+    assert protocol.evaluation_steps(107100, 5000) == tuple(
+        [0, *range(5000, 107101, 5000), 107100])
     config = config_for("electricity", "tcn")
     budget = protocol.update_budgets(config, 6578267)
     assert budget["draws_per_round"] == math.ceil(6578267 / 24)
-    assert budget["matched_updates"] == 107100
-    assert budget["total_updates"] == 214200
+    assert budget["total_updates"] == budget["matched_updates"] == 107100
 
 
 def test_fixed_electricity_validation_is_shared_and_rng_independent():
@@ -176,11 +175,11 @@ def test_mid_round_resume_is_exact_and_retains_every_endpoint(tmp_path, monkeypa
     tr, va = ToyData(dataset, "train", n=n), ToyData(dataset, "val", n=35)
     full, resumed = tmp_path / "full", tmp_path / "resumed"
     done = train.train_candidate(config, tr, va, full, microbatch=19)
-    paused = train.train_candidate(config, tr, va, resumed, microbatch=19, stop_after_updates=2)
+    paused = train.train_candidate(config, tr, va, resumed, microbatch=19, stop_after_updates=1)
     assert paused["state"] == "checkpointed" and paused["cursor"] == 256
     again = train.train_candidate(config, tr, va, resumed, microbatch=19)
     assert done["state"] == again["state"] == "complete"
-    assert done["optimizer_steps"] == again["optimizer_steps"] == 6
+    assert done["optimizer_steps"] == again["optimizer_steps"] == 4
     assert done["matched_updates"] == 4 and done["epochs_completed"] == 2
     a = torch.load(full / config["run_id"] / "final.pt", weights_only=False)
     b = torch.load(resumed / config["run_id"] / "final.pt", weights_only=False)
@@ -188,8 +187,8 @@ def test_mid_round_resume_is_exact_and_retains_every_endpoint(tmp_path, monkeypa
         assert_tree_equal(a[key], b[key])
     for root in (full, resumed):
         directory = root / config["run_id"]
-        assert [r["optimizer_steps"] for r in read_json(directory / "update_curve.json")] == [0, 4, 5, 6]
-        for step in (0, 4, 5, 6):
+        assert [r["optimizer_steps"] for r in read_json(directory / "update_curve.json")] == [0, 4]
+        for step in (0, 4):
             snapshot = torch.load(directory / "checkpoints" / f"step_{step:07d}.pt", weights_only=False)
             assert snapshot["progress"]["optimizer_steps"] == step
             assert snapshot["progress"]["curve"][-1]["optimizer_steps"] == step
@@ -237,7 +236,7 @@ def test_empty_masks_do_not_take_adam_steps_or_hide_budget_difference(tmp_path, 
     status = train.train_candidate(config, tr, va, tmp_path, microbatch=32)
     assert status["state"] == "complete"
     assert status["optimizer_steps"] == 0
-    assert status["empty_mask_batches"] == status["update_opportunities"] == status["total_updates"] == 6
+    assert status["empty_mask_batches"] == status["update_opportunities"] == status["total_updates"] == 2
     ckpt = torch.load(tmp_path / config["run_id"] / "final.pt", weights_only=False)
     assert ckpt["optimizer"]["state"] == {}
     assert [r["optimizer_steps"] for r in ckpt["progress"]["curve"]] == [0]
@@ -270,7 +269,7 @@ def test_initial_numerical_failure_is_preserved_without_restart(tmp_path, monkey
 ])
 def test_real_backbones_train_and_save_usable_final_state(tmp_path, monkeypatch, dataset, backbone, method):
     config = small_config(monkeypatch, dataset=dataset, backbone=backbone, method=method,
-                          batch_size=128 if method.startswith("td_") else 256)
+                          batch_size=256)
     config["epochs"] = 1
     tr, va = ToyData(dataset, "train", n=4, real=True), ToyData(dataset, "val", n=4, real=True)
     status = train.train_candidate(config, tr, va, tmp_path, microbatch=2)

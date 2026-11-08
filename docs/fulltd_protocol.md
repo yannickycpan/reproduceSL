@@ -10,9 +10,9 @@ identity and reporting commands unchanged.
 
 | Dataset / backbone | Methods | Candidates |
 |---|---|---:|
-| Electricity / TCN | MSE, Gaussian NLL, typed TD, pairwise TD | 600 |
-| Electricity / PatchTST | MSE, Gaussian NLL, typed TD, pairwise TD | 600 |
-| METR-LA / Graph WaveNet | same four, plus masked MAE and pairwise TD-MAE | 900 |
+| Electricity / TCN | MSE, Gaussian NLL, typed TD, pairwise TD | 350 |
+| Electricity / PatchTST | MSE, Gaussian NLL, typed TD, pairwise TD | 350 |
+| METR-LA / Graph WaveNet | same four, plus masked MAE and pairwise TD-MAE | 525 |
 
 Every comparison within a backbone uses the same initialized mean predictor
 for a given seed. DLinear is a distinct seasonal/trend linear forecaster, not
@@ -24,9 +24,10 @@ learning-rate schedule, early stopping, or post-training refit.
 All runs use Adam (betas 0.9/0.999, epsilon 1e-8, weight decay zero), seeds
 0–4, and 100 training units. Baselines use logical batch 256 and predictor
 rates 0.0001, 0.0003, 0.0005, 0.0007, 0.0009, 0.001, 0.003, 0.005,
-0.007 and 0.01. Each TD method uses both logical batches 128 and 256 and the
-full 5×5 grid of predictor/operator rates 0.00003, 0.0001, 0.0003, 0.001
-and 0.003. These are exactly the frozen FD001 grids.
+0.007 and 0.01. All application methods use logical batch 256 only. TD
+predictor rates are 0.00003, 0.0001, 0.0003, 0.001 and 0.003; TD operator
+rates are 0.00003, 0.0001, 0.001, 0.003 and 0.01, as a full 5×5 grid.
+FD001 retains its original beta grid and both TD batch sizes unchanged.
 
 ## TD definitions and Graph WaveNet adaptation
 
@@ -67,8 +68,7 @@ Native lag types remain (1,24) hours for Electricity and (1,3) five-minute
 steps for METR-LA, with dataset gaps and entity boundaries respected.
 
 Electricity evaluates every 5,000 actual Adam updates, METR-LA every 500.
-Both also evaluate update zero and the actual final state. Every B128 TD
-run explicitly evaluates and retains its B256-budget endpoint even when it
+Both evaluate update zero and the actual final state even when the endpoint
 falls between regular measurements. Checkpoints contain the complete
 optimizer, RNG, source cursor and measurement state; interruptions resume
 without replaying or skipping sampled pairs.
@@ -83,26 +83,22 @@ the complete test split in both datasets.
 
 ## Selection and requested reports
 
-For each backbone, method and fixed logical batch size, ignore update zero,
-take the final ceil(25% × number of positive-update measurements), average
-validation MSE within a seed and then across all five seeds, and select the
-best common rate setting. This is FD001's current selection rule. It is
-applied independently to the B128 curve truncated at the exact B256 update
-budget for the matched-update comparison. The baseline's actual recorded
-update counts must agree with that budget; skipped updates cannot silently
-be labelled an exact matched-update comparison.
+For each backbone and method at B256, ignore update zero, take the final
+ceil(25% × number of positive-update measurements), average validation MSE
+within a seed and then across all five seeds, and select the best common
+rate setting. This keeps FD001's validation selection principle. The
+candidate must reach the recorded actual update budget.
 
 Every candidate must be complete or have a recorded numerical failure.
 An unfinished run is not a poor score and does not permit selection. A
 numerical failure invalidates the full-budget setting across all five seeds;
-a matched endpoint can still be used if all five valid endpoint states were
-saved before a later failure. Selection never reads test results. The actual
+no separate matched-budget application reports are produced. Selection never reads test results. The actual
 last iterate at the chosen budget is evaluated, not a best validation epoch.
 
 Reports are deliberately restricted to RMSE/MAE tables and learning curves.
 Each metric/backbone table has algorithms as rows and Test / Validation
-columns, mean ± sample-standard-deviation/sqrt(5). B128/B256 TD rows and
-B128 matched-update rows are explicit. Selected rates are written to CSV.
+columns, mean ± sample-standard-deviation/sqrt(5). Every row uses B256;
+selected rates are written to CSV.
 Electricity uses standardized equal-customer errors; METR-LA uses masked
 all-horizon errors in mph. Curves have test/validation panels and standard
 errors, retain the complete update axis, and are reconstructed from saved
@@ -129,5 +125,7 @@ shared helpers from them. They are frozen compatibility dependencies, not
 application entrypoints; do not regenerate manifests through `fulltd.protocol`
 or launch `fulltd.train`. Import-only retired class names remain solely
 because the frozen FD001 baseline factory imports them eagerly.
+The application scientific identity has changed; existing incompatible
+application checkpoints must be preserved under a separate result root.
 `tests/test_checkpoint_identity.py` enforces the original FD001 file hashes
 and aggregate scientific hash from commit 24b9296.

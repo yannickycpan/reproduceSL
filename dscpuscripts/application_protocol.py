@@ -1,6 +1,7 @@
 """Current Electricity/METR-LA sweeps, aligned with the frozen FD001 design.
 
-The only exposure/cadence exception is Electricity's large source population:
+Applications now use B256-only TD and a revised operator grid. FD001 remains
+frozen. Electricity's large source population necessitates:
 100 rounds of ceil(N/24) draws, and a shared 20% validation view every 5,000
 updates. Hyperparameter selection is a reporting decision, as it is in FD001.
 This module deliberately does not import FD001's environment-dependent cadence.
@@ -13,10 +14,10 @@ import json
 import math
 from pathlib import Path
 
-PROTOCOL_ID = "applications-fd001-aligned-v1"
+PROTOCOL_ID = "applications-fd001-aligned-v2-b256-beta"
 SEEDS = tuple(range(5))
 EPOCHS = 100
-BETAS = (0.00003, 0.0001, 0.0003, 0.001, 0.003)
+BETAS = (0.00003, 0.0001, 0.001, 0.003, 0.01)
 BASELINE_ALPHAS = (0.0001, 0.0003, 0.0005, 0.0007, 0.0009,
                    0.001, 0.003, 0.005, 0.007, 0.01)
 TD_ALPHAS = (0.00003, 0.0001, 0.0003, 0.001, 0.003)
@@ -51,7 +52,7 @@ def make_manifest():
             td = method.startswith("td_")
             rates = [(a, b) for a in (TD_ALPHAS if td else BASELINE_ALPHAS)
                      for b in (BETAS if td else (None,))]
-            for batch_size in ((128, 256) if td else (256,)):
+            for batch_size in (256,):
                 for setting, (alpha, beta) in enumerate(rates):
                     for seed in SEEDS:
                         runs.append(dict(
@@ -70,8 +71,8 @@ def make_manifest():
                             validation_fraction=0.2 if dataset == "electricity" else 1.0,
                             lags=list(LAGS[dataset]),
                             checkpoint_policy="update_snapshots_and_resumable_cursor"))
-    if len(runs) != 2100 or len({r["run_id"] for r in runs}) != len(runs):
-        raise AssertionError("Expected 1,200 Electricity and 900 METR-LA candidates")
+    if len(runs) != 1225 or len({r["run_id"] for r in runs}) != len(runs):
+        raise AssertionError("Expected 700 Electricity and 525 METR-LA candidates")
     return runs
 
 

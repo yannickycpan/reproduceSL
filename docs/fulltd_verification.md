@@ -28,7 +28,7 @@ after all four validation-based choices are locked.
 
 ## Electricity and METR-LA
 
-The current application manifests have 1,200 Electricity and 900 METR-LA
+The current application manifests have 700 Electricity and 525 METR-LA
 candidates. The common model/data utilities are unchanged; application
 protocol, objectives, training and reporting live in `dscpuscripts/application_*.py`.
 The replaced application campaign's analysis/refit/Slurm entrypoints and its
@@ -44,7 +44,8 @@ OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
   python -m pytest -q tests dscpuscripts
 ```
 
-Result: **130 passed**. Matplotlib/Pyparsing deprecation warnings did not
+Previous revision (5597f90): **130 passed**. The full regression suite
+must be rerun on the current B256-only application revision before launching. Matplotlib/Pyparsing deprecation warnings did not
 cause failures. The suite includes:
 
 - Full-gradient finite-difference checks for typed, pairwise and pairwise-MAE
@@ -53,10 +54,10 @@ cause failures. The suite includes:
   tests, including Gaussian NLL and the 207-sensor Graph WaveNet shape.
 - Exact interrupted-versus-uninterrupted recovery on both application
   datasets, interrupted validation, empty masks, nonfinite failures and
-  non-grid final/matched checkpoint retention.
+  non-grid final checkpoint retention.
 - Fixed common customer-stratified validation, complete grids, common source
   and partner streams, and data preparation/leakage checks.
-- Five-seed final-quarter selection, independent matched-budget HP choices,
+- Five-seed final-quarter selection,
   missing/incomplete/altered-evidence rejection, correct standard errors,
   validation lock before test access, cached test measurements and actual
   table/PNG/PDF generation.
@@ -65,7 +66,7 @@ cause failures. The suite includes:
 
 The FD001 scientific identity remains
 `c6820c53e26b4ab47be164cb0e5e3a4c62a8f865e01a8b918148980ea840ef21`.
-All three direct dispatcher dry-runs succeeded (using one worker for FD001
+At the preceding reference revision, all three direct dispatcher dry-runs succeeded (using one worker for FD001
 in the smaller verification environment). Shell syntax and Git whitespace
 checks also passed.
 

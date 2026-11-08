@@ -1,10 +1,9 @@
 """Validation-locked Electricity/METR-LA tables and learning curves only.
 
-Each method/batch selects one learning-rate setting across all five seeds by
-the mean validation MSE over the final ceil(25%) of positive-update
-measurements. B128 matched-update comparisons truncate that timeline first.
-The actual final (or matched) iterate is reported; test labels never select a
-hyperparameter or a checkpoint. FD001 analysis and training are untouched.
+Each application method at B256 selects one rate setting across five seeds
+by the mean validation MSE over the final ceil(25%) of positive-update
+measurements. Only final-iterate metrics are reported; test labels never
+select hyperparameters or checkpoints. FD001 remains untouched.
 """
 from __future__ import annotations
 
@@ -111,8 +110,7 @@ def _audit_candidate(config, results, expected_code, shared, source_hashes):
             or universe.get("validation_subset") != subset):
         raise ValueError(f"Source-budget sidecar mismatch: {run_id}")
     total, matched = budgets["total_updates"], budgets["matched_updates"]
-    schedule = evaluation_steps(total, config["learning_curve_updates"],
-                                matched if config["batch_size"] == 128 else None)
+    schedule = evaluation_steps(total, config["learning_curve_updates"])
     curve = read_json(folder / "update_curve.json")
     measured = [record.get("optimizer_steps") for record in curve]
     if ((not curve and state == "complete") or measured != list(schedule[:len(curve)])
@@ -170,7 +168,9 @@ def _audit_candidate(config, results, expected_code, shared, source_hashes):
 
 
 def _candidate_score(candidate, endpoint, regime):
-    if regime == "full_budget" and candidate["state"] != "complete":
+    if regime != "full_budget":
+        raise ValueError("Application comparisons support full-budget B256 only")
+    if candidate["state"] != "complete":
         return math.inf, ()
     curve = candidate["curve"]
     steps = [record["optimizer_steps"] for record in curve]
@@ -195,16 +195,13 @@ def compute_plan(campaign, results):
     for config in manifest:
         candidate = _audit_candidate(config, results, expected_code, shared, source_hashes)
         candidates.append(candidate)
-        regimes = ["full_budget"]
-        if config["method"].startswith("td_") and config["batch_size"] == 128:
-            regimes.append("matched_updates")
-        for regime in regimes:
-            endpoint = candidate["budgets"]["total_updates" if regime == "full_budget" else "matched_updates"]
-            score, window = _candidate_score(candidate, endpoint, regime)
-            key = (config["backbone"], regime, config["method"],
-                   config["batch_size"], config["configuration"])
-            by_hp[key].append(dict(candidate=candidate, score=score,
-                                  optimizer_steps=endpoint, selection_steps=window))
+        regime = "full_budget"
+        endpoint = candidate["budgets"]["total_updates"]
+        score, window = _candidate_score(candidate, endpoint, regime)
+        key = (config["backbone"], regime, config["method"],
+               config["batch_size"], config["configuration"])
+        by_hp[key].append(dict(candidate=candidate, score=score,
+                              optimizer_steps=endpoint, selection_steps=window))
     scores = []
     for key, members in by_hp.items():
         members.sort(key=lambda row: row["candidate"]["config"]["seed"])
@@ -394,8 +391,7 @@ def summarize(rows, keys):
 
 
 def _row_label(choice):
-    suffix = " — matched updates" if choice["regime"] == "matched_updates" else ""
-    return f"{LABELS[choice['method']]} B{choice['batch_size']}{suffix}"
+    return f"{LABELS[choice['method']]} B{choice['batch_size']}"
 
 
 def _format_metric(mean, se):
@@ -433,8 +429,6 @@ def write_tables(plan, summary, output):
                 table.append(row)
             lines.extend(["", "Unmarked rows report the final iterate after 100 "
                           + ("stochastic rounds" if plan["dataset"] == "electricity" else "epochs") + ".",
-                          "Matched-update B128 rows use the B256 update budget and select hyperparameters "
-                          "using only measurements up to that endpoint.",
                           "Hyperparameters are selected by standardized validation MSE, never test performance."])
             if plan["dataset"] == "electricity":
                 lines.append("Metrics average within each customer and then across customers. "
@@ -450,6 +444,7 @@ def write_tables(plan, summary, output):
 
 
 def plot_curves(plan, summary, output):
+    """One test and one validation panel per backbone and metric."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -458,47 +453,37 @@ def plot_curves(plan, summary, output):
     figures = Path(output) / "figures"
     figures.mkdir(parents=True, exist_ok=True)
     units = "standardized" if plan["dataset"] == "electricity" else "mph"
-    for backbone in dict.fromkeys(choice["backbone"] for choice in plan["choices"]):
-        full = [row for row in plan["choices"] if row["backbone"] == backbone and row["regime"] == "full_budget"]
-        matched = [row for row in plan["choices"] if row["backbone"] == backbone and row["regime"] == "matched_updates"]
-        comparisons = [full, [row for row in full if row["batch_size"] == 256] + matched]
+    for backbone in dict.fromkeys(c["backbone"] for c in plan["choices"]):
+        choices = [c for c in plan["choices"] if c["backbone"] == backbone]
         for metric in METRICS:
-            fig, axes = plt.subplots(2, 2, figsize=(14, 9), sharex="col", squeeze=False)
-            for column, choices in enumerate(comparisons):
-                for row_index, split in enumerate(("test", "validation")):
-                    ax = axes[row_index, column]
-                    for choice in choices:
-                        records = [r for r in summary if r["backbone"] == backbone and r["metric"] == metric
-                                   and r["split"] == split and r["regime"] == choice["regime"]
-                                   and r["method"] == choice["method"] and int(r["batch_size"]) == choice["batch_size"]]
-                        records.sort(key=lambda r: int(r["optimizer_steps"]))
-                        x = np.array([int(r["optimizer_steps"]) for r in records])
-                        y = np.array([float(r["mean"]) for r in records])
-                        se = np.array([float(r["standard_error"]) for r in records])
-                        color = f"C{list(LABELS).index(choice['method'])}"
-                        label = f"{LABELS[choice['method']]} B{choice['batch_size']}"
-                        # NaN gaps retain failures in the CSV/table and never shorten the seed denominator.
-                        finite = np.isfinite(y)
-                        ax.plot(x, np.where(finite, y, np.nan), color=color,
-                                linestyle="--" if choice["batch_size"] == 128 else "-", label=label)
-                        ax.fill_between(x, np.maximum(0., y - se), y + se,
-                                        where=finite & np.isfinite(se), color=color, alpha=.12)
-                    limit = max(choice["optimizer_steps"] for choice in choices)
-                    ax.set_xlim(0, limit)
-                    ax.margins(y=.06)
-                    ax.grid(alpha=.2)
-                    split_label = ("Validation (fixed 20%)" if split == "validation"
-                                   and plan["dataset"] == "electricity" else split.title())
-                    ax.set_ylabel(f"{split_label} {metric.upper()} ({units})")
-                    if row_index == 0:
-                        ax.set_title("Full training budget" if column == 0 else "Matched optimizer updates")
-                    else:
-                        ax.set_xlabel("Optimizer updates")
-                    ax.legend(fontsize=8, loc="best")
-            fig.suptitle(f"{DATASET_LABELS[plan['dataset']]} · {BACKBONES[backbone]} — mean ± standard error (5 seeds)")
-            fig.tight_layout(rect=(0, 0, 1, .97))
-            for extension in ("png", "pdf"):
-                fig.savefig(figures / f"{backbone}_{metric}_learning_curves.{extension}", dpi=160)
+            fig, axes = plt.subplots(1, 2, figsize=(13, 4.6), sharex=True)
+            for ax, split in zip(axes, ("test", "validation")):
+                for choice in choices:
+                    records = [r for r in summary
+                               if r["backbone"] == backbone and r["metric"] == metric
+                               and r["split"] == split and r["regime"] == "full_budget"
+                               and r["method"] == choice["method"] and int(r["batch_size"]) == 256]
+                    records.sort(key=lambda r: int(r["optimizer_steps"]))
+                    x = np.asarray([int(r["optimizer_steps"]) for r in records])
+                    y = np.asarray([float(r["mean"]) for r in records])
+                    se = np.asarray([float(r["standard_error"]) for r in records])
+                    finite = np.isfinite(y)
+                    color = f"C{list(LABELS).index(choice['method'])}"
+                    ax.plot(x, np.where(finite, y, np.nan), color=color,
+                            label=LABELS[choice["method"]])
+                    ax.fill_between(x, np.maximum(0., y-se), y+se,
+                                    where=finite & np.isfinite(se), color=color, alpha=.12)
+                ax.grid(alpha=.2)
+                ax.set_xlabel("Optimizer updates")
+                label = ("Validation (fixed 20%)" if split == "validation"
+                         and plan["dataset"] == "electricity" else split.title())
+                ax.set_ylabel(f"{label} {metric.upper()} ({units})")
+                ax.legend(fontsize=8, loc="best")
+            fig.suptitle(f"{DATASET_LABELS[plan['dataset']]} · {BACKBONES[backbone]} — "
+                         f"mean ± standard error (5 seeds, B256)")
+            fig.tight_layout(rect=(0, 0, 1, .93))
+            for ext in ("png", "pdf"):
+                fig.savefig(figures / f"{backbone}_{metric}_learning_curves.{ext}", dpi=160)
             plt.close(fig)
 
 

@@ -8,11 +8,11 @@ from fulltd.sampling import LocalPairLaw, rng_for, sources_for_round
 
 def test_prespecified_matrix_and_budget():
     manifest = make_manifest()
-    assert len(manifest) == 2100
-    assert sum(r["dataset"] == "electricity" for r in manifest) == 1200
-    assert sum(r["dataset"] == "metr_la" for r in manifest) == 900
+    assert len(manifest) == 1225
+    assert sum(r["dataset"] == "electricity" for r in manifest) == 700
+    assert sum(r["dataset"] == "metr_la" for r in manifest) == 525
     assert sum(r["batch_size"] == 256 for r in manifest) == 1225
-    assert sum(r["batch_size"] == 128 for r in manifest) == 875
+    assert sum(r["batch_size"] == 128 for r in manifest) == 0
     assert {r["seed"] for r in manifest} == set(range(5))
     principal = {"mse", "gaussian_nll", "td_typed", "td_pairwise"}
     for dataset, backbone, expected in (
@@ -29,7 +29,7 @@ def test_prespecified_matrix_and_budget():
         for method in expected:
             method_runs = [r for r in runs if r["method"] == method]
             assert len({(r["alpha"], r["beta"]) for r in method_runs}) == (25 if method.startswith("td_") else 10)
-            assert {r["batch_size"] for r in method_runs} == ({128, 256} if method.startswith("td_") else {256})
+            assert {r["batch_size"] for r in method_runs} == {256}
     assert not any(r["backbone"] == "dlinear" for r in manifest)
     invalid = dict(manifest[0], epochs=99)
     with pytest.raises(ValueError):

@@ -10,7 +10,8 @@ or extension-only reporting pipelines.
 Electricity and METR-LA now use `application_protocol.py`,
 `application_train.py`, `application_objectives.py`, and `application_analysis.py`
 in this directory. They share the frozen data/model/sampling utilities with
-FD001, and match its optimizer, grids, seeds, TD definitions and selection rule.
+FD001, and match its optimizer, baseline grids, seeds, TD definitions and selection
+rule. Application TD has its own beta range and B256-only training.
 See [the application protocol](../docs/fulltd_protocol.md) for the explicit
 Electricity computation exceptions. FD001's scientific files and hash are
 unchanged.
@@ -131,7 +132,7 @@ The current application sweeps replace the older TD-full/TD-scalar campaign.
 Each Electricity backbone (TCN and PatchTST) has the same four principal
 methods as FD001. DLinear is a separate architecture and is not in the sweep.
 METR-LA uses Graph WaveNet for all methods, including additional masked-MAE
-and pairwise-TD-MAE comparators. The totals are 1,200 and 900 candidates.
+and pairwise-TD-MAE comparators. The totals are 700 and 525 candidates.
 
 Use the existing pinned CPU environment; only run setup if it is not ready.
 The download script verifies existing prepared data without overwriting it.
@@ -160,12 +161,13 @@ bash dscpuscripts/run_metr_la.sh --status
 Eight single-threaded workers per campaign are a conservative starting point,
 not a measured throughput optimum. Electricity's default physical microbatch
 is 128 and METR-LA's is 32; gradients accumulate to the prescribed logical
-128/256 batch using the global valid-target count. `--microbatch` controls
+256 batch using the global valid-target count. `--microbatch` controls
 memory only. Both launchers resume compatible incomplete runs and skip
 completed runs and recorded numerical failures. They stop on operational
 errors. A new launch never silently adopts incompatible old checkpoints.
 If an earlier application sweep occupies these result paths, preserve it and
 choose a fresh path with `FULLTD_ELECTRICITY_ROOT` or `FULLTD_METR_LA_ROOT`.
+The revised scientific identity cannot resume earlier application checkpoints.
 Do not mix the old campaign with this one or change settings halfway through.
 
 After the corresponding sweep is complete:
@@ -184,8 +186,7 @@ Training states live in `~/scratch/fulltd/electricity_results/` and
 `~/scratch/fulltd/metr_la_results/`; reports are in the sibling
 `electricity_outputs/` and `metr_la_outputs/` directories. Each backbone
 gets an RMSE table and an MAE table with algorithms as rows and Test /
-Validation columns (five-seed mean ± standard error). TD B128 and B256 have
-separate validation-selected HPs, with additional B128 matched-update rows.
+Validation columns (five-seed mean ± standard error). All application algorithms use B256; no matched-update rows are generated.
 Learning curves use the same selected settings, with test and validation
 panels, complete update axes and standard-error bands. Electricity metrics
 are standardized and equally weighted by customer; its validation column
@@ -199,6 +200,22 @@ are part of this report. Generating full test learning curves is more costly
 than endpoint evaluation; measurements are cached so rerunning the command
 does not repeat completed evaluations.
 
+
+## Electricity CPU concurrency
+
+The worker uses a single PyTorch CPU thread, but each Electricity candidate
+builds large temporal pair/search structures even though input arrays are
+memory-mapped. The dispatcher measures idle *physical* cores when `--adaptive`
+is enabled, but has no RAM, memory-bandwidth or cgroup-admission check.
+`--workers auto` is capped at 128. Do not equate 80% idle CPU with a safe
+number of application processes.
+
+Measure aggregate completed optimizer updates/second and peak memory at 8,
+16, 32 and, if supported, 48/64 Electricity workers before choosing a higher
+cap; monitor MemAvailable, page faults and swap activity. Concurrent FD001 and
+METR-LA campaigns must share the same core/RAM budget. For example,
+`run_electricity.sh --run --workers 32 --adaptive` is a trial, not a
+measured production recommendation.
 
 ## FD001 fixed-selection batch and matched-update report
 

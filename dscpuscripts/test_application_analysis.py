@@ -53,16 +53,12 @@ def _fake_campaign(root, monkeypatch):
         atomic_json(folder / "status.json", status)
         atomic_json(folder / "source_universe.json", dict(n_sources=n, evaluation_period=70,
                                                            validation_subset=subset, **budget))
-        steps = evaluation_steps(budget["total_updates"], 70,
-                                 budget["matched_updates"] if config["batch_size"] == 128 else None)
+        steps = evaluation_steps(budget["total_updates"], 70)
         curve = []
         for step in steps:
             setting = config["configuration"]
-            # For B128, setting 1 wins before the matched endpoint and
-            # setting 0 wins only afterwards. Zero must never affect selection.
-            mse = (1e6 if step == 0 else
-                   (0.8 if setting == 0 else 0.2) if step <= budget["matched_updates"] else
-                   (0.1 if setting == 0 else 0.3))
+            # Setting 1 wins; update zero does not enter selection.
+            mse = 1e6 if step == 0 else (0.8 if setting == 0 else 0.2)
             curve.append(dict(optimizer_steps=step, epoch=min(100, step), mse_standardized=mse,
                               rmse_standardized=math.sqrt(mse), mae_standardized=math.sqrt(mse) * .8,
                               rmse_raw=math.sqrt(mse) * 2, mae_raw=math.sqrt(mse) * 1.6,
@@ -82,21 +78,19 @@ def _fake_campaign(root, monkeypatch):
     return manifest
 
 
-def test_full_and_matched_choose_different_hps_without_reading_tests(tmp_path, monkeypatch):
+def test_only_b256_full_budget_is_selected_without_reading_tests(tmp_path, monkeypatch):
     manifest = _fake_campaign(tmp_path, monkeypatch)
     plan, _ = analysis.compute_plan("metr_la", tmp_path)
     choices = {(c["method"], c["batch_size"], c["regime"]): c for c in plan["choices"]}
-    full = choices["td_pairwise", 128, "full_budget"]
-    matched = choices["td_pairwise", 128, "matched_updates"]
-    assert full["configuration"] == 0 and full["optimizer_steps"] == 300
-    assert full["selection_steps"] == [280, 300]
-    assert matched["configuration"] == 1 and matched["optimizer_steps"] == 200
-    assert matched["selection_steps"] == [200]
-    assert len(full["run_ids"]) == len(matched["run_ids"]) == 5
+    assert {c["batch_size"] for c in plan["choices"]} == {256}
+    assert {c["regime"] for c in plan["choices"]} == {"full_budget"}
+    chosen = choices["td_pairwise", 256, "full_budget"]
+    assert chosen["configuration"] == 1 and chosen["optimizer_steps"] == 200
+    assert chosen["selection_steps"] == [200]
+    assert len(chosen["run_ids"]) == 5
     for config in manifest:
-        # Arbitrary old test values must have no influence on the locked plan.
         atomic_json(tmp_path / config["run_id"] / "endpoint_metrics.json",
-                    {"test_rmse": 1e20 if config["configuration"] == 0 else 0.})
+                    {"test_rmse": 1e20 if config["configuration"] == 1 else 0.})
     same, _ = analysis.compute_plan("metr_la", tmp_path)
     assert same == plan
 
@@ -116,21 +110,21 @@ def test_incomplete_seed_and_wrong_actual_update_budget_refuse_selection(tmp_pat
 
 def test_missing_off_grid_snapshot_is_not_approximated(tmp_path, monkeypatch):
     manifest = _fake_campaign(tmp_path, monkeypatch)
-    config = next(c for c in manifest if c["batch_size"] == 128)
+    config = next(c for c in manifest if c["batch_size"] == 256)
     (tmp_path / config["run_id"] / "checkpoints" / "step_0000200.pt").unlink()
     with pytest.raises(FileNotFoundError, match="measurement checkpoint"):
         analysis.compute_plan("metr_la", tmp_path)
 
 
-def test_numerical_failure_disqualifies_full_but_not_finite_earlier_budget():
+def test_numerical_failure_disqualifies_full_budget():
     candidate = dict(state="numerical_failure", curve=[
         dict(optimizer_steps=0, mse_standardized=1e9),
         dict(optimizer_steps=70, mse_standardized=.4),
         dict(optimizer_steps=140, mse_standardized=.3),
         dict(optimizer_steps=200, mse_standardized=.2)])
-    assert analysis._candidate_score(candidate, 300, "full_budget")[0] == math.inf
-    assert analysis._candidate_score(candidate, 200, "matched_updates") == (.2, (200,))
-    assert analysis._candidate_score(candidate, 250, "matched_updates")[0] == math.inf
+    assert analysis._candidate_score(candidate, 200, "full_budget")[0] == math.inf
+    with pytest.raises(ValueError, match="full-budget"):
+        analysis._candidate_score(candidate, 200, "matched_updates")
 
 
 def test_standard_error_is_across_all_five_seeds_without_filtering():
@@ -161,7 +155,7 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
             return dict(x=self.x[indices], y=self.y[indices], mask=self.mask[indices])
 
     configs = [copy.deepcopy(c) for c in make_manifest() if c["dataset"] == "metr_la"
-               and c["method"] == "td_pairwise" and c["batch_size"] == 128 and c["configuration"] == 0]
+               and c["method"] == "td_pairwise" and c["batch_size"] == 256 and c["configuration"] == 0]
     for config in configs:
         config.update(epochs=2, learning_curve_updates=5, snapshot_updates=5)
     monkeypatch.setattr(analysis, "manifest_for", lambda campaign: configs)
@@ -203,19 +197,19 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
         assert not opened and not point_calls
         analysis.run("metr_la", "run", results_dir=results, data_dir=tmp_path, output=output, batch_size=16)
         assert opened == ["train", "val", "test"]
-        # Full points: 0,4,5,6. Matched points: 0,4. Common states run only once.
-        assert point_calls == ["test"] * 20
-        assert len(list((output / ".cache").rglob("*.json"))) == 20
+        # One B256 full-budget trajectory: update zero and final update four.
+        assert point_calls == ["test"] * 10
+        assert len(list((output / ".cache").rglob("*.json"))) == 10
         for metric in ("rmse", "mae"):
             text = (output / f"graph_wavenet_{metric}_table.md").read_text()
             assert "| Algorithm | Test | Validation |" in text
-            assert "±" in text and "matched updates" in text
+            assert "±" in text and "matched updates" not in text
             for extension in ("pdf", "png"):
                 figure = output / "figures" / f"graph_wavenet_{metric}_learning_curves.{extension}"
                 assert figure.stat().st_size > 1000
         # Rerunning evaluation reuses all point-metric caches, including endpoint overlap.
         analysis.run("metr_la", "evaluate", results_dir=results, data_dir=tmp_path, output=output, batch_size=16)
-        assert len(point_calls) == 20
+        assert len(point_calls) == 10
         artifact = output / "per_seed_metrics.csv"
         original = artifact.read_bytes()
         lines = original.decode().splitlines()
@@ -229,6 +223,6 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
         atomic_json(output / "selections.json", locked)
         with pytest.raises(ValueError, match="Locked validation-only selection changed"):
             analysis.run("metr_la", "run", results_dir=results, data_dir=tmp_path, output=output)
-        assert len(point_calls) == 20
+        assert len(point_calls) == 10
     finally:
         torch.set_num_threads(original_threads)

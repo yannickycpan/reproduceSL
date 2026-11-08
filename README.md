@@ -26,8 +26,8 @@ Test labels are never used for hyperparameter tuning.
 
 Electricity and METR-LA use the FD001-aligned application protocol in
 [`dscpuscripts/application_protocol.py`](dscpuscripts/application_protocol.py).
-Electricity has 1,200 candidates (TCN and PatchTST, each with MSE, Gaussian
-NLL, typed TD and pairwise TD); METR-LA has 900 Graph WaveNet candidates,
+Electricity has 700 candidates (TCN and PatchTST, each with MSE, Gaussian
+NLL, typed TD and pairwise TD); METR-LA has 525 Graph WaveNet candidates,
 adding masked MAE and pairwise TD with an absolute-error objective.
 The current manifests replace the earlier application campaign.
 
@@ -40,8 +40,8 @@ bash dscpuscripts/analyze_standard.sh metr_la run
 ```
 
 The [application protocol](docs/fulltd_protocol.md) explains the common
-selection rule, Electricity's computational exceptions, exact matched-update
-comparisons, and FD001 compatibility. Application reports contain RMSE/MAE
+selection rule, Electricity's computational exceptions, the B256-only
+application grid, and FD001 compatibility. Application reports contain RMSE/MAE
 tables and validation/test learning curves only; they do not train or refit.
 
 The sources include code, dataset verification, regression tests, and

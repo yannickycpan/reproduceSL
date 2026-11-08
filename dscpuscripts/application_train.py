@@ -206,8 +206,7 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
     td = config["method"].startswith("td_")
     budgets = update_budgets(config, n)
     draws = budgets["draws_per_round"]
-    scheduled = set(evaluation_steps(budgets["total_updates"], config["learning_curve_updates"],
-                                    budgets["matched_updates"] if batch_size == 128 else None))
+    scheduled = set(evaluation_steps(budgets["total_updates"], config["learning_curve_updates"]))
     root = Path(results_dir) / config["run_id"]
     root.mkdir(parents=True, exist_ok=True)
     identity = dict(protocol_id=PROTOCOL_ID, config_sha256=digest(config), code_sha256=code_hash(),
