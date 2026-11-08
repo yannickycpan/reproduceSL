@@ -35,7 +35,6 @@ def test_prespecified_matrix_and_budget():
         validate_config(invalid)
 
 
-@pytest.mark.parametrize("name,lags", [("electricity", (1,24)), ("metr_la", (1,3)), ("fd001", (1,5))])
 def test_electricity_240_stochastic_round_source_stream():
     n = 1029
     assert ELECTRICITY_ROUNDS == 240
@@ -49,6 +48,7 @@ def test_electricity_240_stochastic_round_source_stream():
         sources_for_application_round("electricity", n, 0, 241)
 
 
+@pytest.mark.parametrize("name,lags", [("electricity", (1,24)), ("metr_la", (1,3)), ("fd001", (1,5))])
 def test_pair_metadata_boundaries_no_gaps_no_other_entities(name, lags):
     origins = np.r_[np.arange(60), np.arange(80,120), np.arange(60)]
     entities = np.r_[np.zeros(100), np.ones(60)].astype(int)
