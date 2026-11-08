@@ -234,3 +234,37 @@ evaluations, raw per-seed values, mean ± standard error tables and a Markdown
 report under `~/scratch/fulltd/fd001_outputs/batch_comparison/`.
 It never writes in the training-results directories. If a required snapshot
 is missing, the command stops rather than replacing it.
+
+
+## One-command complete FD001 reporting (original + batches + TEST curves)
+
+After all 600 FD001 candidate runs and retained step-500 checkpoints exist
+on the AMD server, run from the checked-out `fullTD` branch:
+
+```bash
+bash fd001analysis.sh
+```
+
+The wrapper first executes synthetic regression tests, then regenerates the
+canonical four-method tables and validation plots, and finally performs the
+separate six-configuration batch-specific comparison and two matched-update
+B128 sensitivities. It also evaluates all recorded **TEST** checkpoints
+for the validation-selected **B256** HP of MSE, Gaussian NLL, TD typed,
+and TD pairwise at steps 0,500,...,5500 (five seeds each), drawing mean
+± SE test RMSE and test RUL learning curves.
+
+The extra TEST curves require evaluating saved intermediate model weights;
+the old ZIP's intermediate measurements are validation-only. This is
+test inference, not new training, and test scores never influence selection.
+
+Outputs:
+* `fd001_outputs/performance_summary.csv` and `fd001_outputs/figures/`: original results.
+* `fd001_outputs/batch_comparison/comparison_table.md`: eight-row (six full-budget + two matched-update) comparison.
+* `fd001_outputs/test_compute/test_learning_curve_per_seed.csv` and `test_learning_curve_summary.csv`: independent B256 held-out checkpoint measurements.
+* `fd001_outputs/figures/compute_proxy/fd001_b256_test_rmse_cycles_vs_compute_proxy.pdf` and analogous RUL-score/full-view figures.
+
+The x axis is an **approximate predictor example-pass compute proxy**, not
+actual training wall-clock seconds. The old runs do not record cumulative
+seconds at each checkpoint. These figures must not be described as
+time-in-seconds or exact FLOP comparisons. All new outputs are separate from
+training checkpoints and can be regenerated from the retained data.
