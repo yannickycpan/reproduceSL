@@ -294,32 +294,64 @@ def plot(output):
              for row in selected}
     if set(display) != set(METHODS):
         raise ValueError("All four selected configurations are required for plotting")
+    # Full curves include update zero for auditability. Primary figures zoom into
+    # the latter half of the shortest run's update range to make differences legible.
+    # Neither the training records nor any selection/evaluation result is changed.
     for metric,y_label in (("rmse_cycles","Validation RMSE (cycles)"),
                            ("mae_cycles","Validation MAE (cycles)"),
                            ("rul_score_sum","Validation summed RUL score")):
-        fig,ax=plt.subplots(figsize=(9,4.8))
+        by_method={}
         for method in METHODS:
             rows=sorted((r for r in curves if r["method"]==method and r["metric"]==metric),
                         key=lambda r:int(r["optimizer_steps"]))
             if not rows or int(rows[0]["optimizer_steps"]) != 0:
-                raise ValueError("Learning curve must contain measured update-zero evaluations")
-            x=np.array([int(r["optimizer_steps"]) for r in rows])
-            y=np.array([float(r["mean"]) for r in rows])
-            se=np.array([float(r["standard_error"]) for r in rows])
-            ax.plot(x,y,marker="o",ms=2.5,label=display[method])
-            if np.isfinite(y).all() and np.isfinite(se).all():
-                ax.fill_between(x,y-se,y+se,alpha=.1)
-        ax.set_xlabel("Cumulative Adam optimizer updates")
-        ax.set_ylabel(y_label)
-        if metric == "rul_score_sum":
-            ax.set_yscale("symlog",linthresh=1000)
-        ax.legend(fontsize=8)
-        ax.grid(alpha=.2)
-        fig.tight_layout()
-        stem="validation_"+metric+"_vs_updates"
-        for ext in ("pdf","svg"):
-            fig.savefig(figs/f"{stem}.{ext}",bbox_inches="tight")
-        plt.close(fig)
+                raise ValueError(f"Missing measured update-zero evaluation: {metric}/{method}")
+            by_method[method]=rows
+        common_last=min(int(rows[-1]["optimizer_steps"]) for rows in by_method.values())
+        first_positive=min(int(r["optimizer_steps"]) for r in by_method["mse"]
+                           if int(r["optimizer_steps"]) > 0)
+        late_start=math.ceil((common_last/2)/first_positive)*first_positive
+        for view in ("late","full"):
+            fig,ax=plt.subplots(figsize=(9,4.8))
+            limits=[]
+            for method in METHODS:
+                rows=[r for r in by_method[method]
+                      if view=="full" or int(r["optimizer_steps"]) >= late_start]
+                if not rows:
+                    raise ValueError(f"No late-training points: {metric}/{method}")
+                x=np.array([int(r["optimizer_steps"]) for r in rows])
+                y=np.array([float(r["mean"]) for r in rows])
+                se=np.array([float(r["standard_error"]) for r in rows])
+                ax.plot(x,y,marker="o",ms=2.5,label=display[method])
+                if np.isfinite(y).all() and np.isfinite(se).all():
+                    ax.fill_between(x,y-se,y+se,alpha=.12)
+                if view=="late":
+                    lo=np.where(np.isfinite(se),y-se,y)
+                    hi=np.where(np.isfinite(se),y+se,y)
+                    limits.extend(float(v) for v in np.r_[lo,hi] if np.isfinite(v))
+            ax.set_xlabel("Cumulative Adam optimizer updates")
+            ax.set_ylabel(y_label)
+            if view=="late":
+                low,high=min(limits),max(limits)
+                if metric=="rul_score_sum" and low>0:
+                    ax.set_yscale("log")
+                    ax.set_ylim(low/1.15,high*1.15)
+                else:
+                    if metric=="rul_score_sum":
+                        ax.set_yscale("symlog",linthresh=1000)
+                    margin=max(.25,.07*(high-low))
+                    ax.set_ylim(low-margin,high+margin)
+                ax.set_xlim(left=late_start)
+                ax.set_title(f"Late-training view (updates >= {late_start:,}); mean +/- 1 SE",fontsize=10)
+            elif metric=="rul_score_sum":
+                ax.set_yscale("symlog",linthresh=1000)
+            ax.legend(fontsize=8)
+            ax.grid(alpha=.2)
+            fig.tight_layout()
+            stem="validation_"+metric+("_full" if view=="full" else "")+"_vs_updates"
+            for ext in ("pdf","svg"):
+                fig.savefig(figs/f"{stem}.{ext}",bbox_inches="tight")
+            plt.close(fig)
     for metric in ("rmse","mae","rul_score_sum"):
         fig,ax=plt.subplots(figsize=(9,4.5))
         for k,method in enumerate(METHODS):
