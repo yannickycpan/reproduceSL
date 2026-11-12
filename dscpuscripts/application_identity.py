@@ -157,8 +157,8 @@ class _ScopeBranches(ast.NodeTransformer):
     def visit_ImportFrom(self, node):
         # Factory imports of unrelated baseline heads are not dependencies.
         if node.module and node.module.startswith("agents.fulltd_"):
-            actual = node.module + ".py"
-            return node if METHOD_FILES.get(self.config["method"]) == actual else None
+            expected = METHOD_FILES.get(self.config["method"], "")
+            return node if expected.removesuffix(".py").replace("/", ".") == node.module else None
         return node
 
     def visit_Assign(self, node):
