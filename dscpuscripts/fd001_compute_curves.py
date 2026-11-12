@@ -1,5 +1,6 @@
 """FD001 B256 *test* learning curves versus normalized training-compute proxy.
 
+Only the original {1,5} TD lags enter this existing B256 compute comparison.
 The primary HP selection remains FIVE-SEED, FINAL-QUARTER VALIDATION MSE,
 separately within the fixed batch-256 group. We lock these choices BEFORE
 loading test data. The selected models' saved step snapshots at 0, 500, ...
@@ -57,11 +58,12 @@ def validation_only_plan(results: Path):
     """Audit the campaign and choose the B256 HP of each method WITHOUT test."""
     canonical, scores = audit_and_select(results)
     if canonical["counts"].get("complete") != len(make_manifest()):
-        raise ValueError("Test curves require all 600 FD001 candidates complete")
+        raise ValueError("Test curves require all prescribed FD001 candidates complete")
     chosen = []
     for method in METHODS:
         choices = [row for row in scores
-                   if row["method"] == method and row["batch_size"] == 256]
+                   if row["method"] == method and row["lag_set"] == ("1-5" if method.startswith("td_") else "none")
+                    and row["batch_size"] == 256]
         if not choices:
             raise ValueError(f"Missing B256 HP grid for {method}")
         best = min(choices, key=lambda row: (
