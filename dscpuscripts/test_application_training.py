@@ -83,10 +83,15 @@ def config_for(dataset="metr_la", backbone="graph_wavenet", method="td_pairwise"
 def small_config(monkeypatch, **kwargs):
     config = config_for(**kwargs)
     config.update(epochs=2, learning_curve_updates=5, snapshot_updates=5)
+    # Preserve existing full-epoch training fixtures; sampled-mode resume has
+    # an independent test below.
+    if config["dataset"] == "metr_la":
+        config["source_fraction"] = 1.0
+        config["source_sampling"] = "random_reshuffling"
     # The production validator is tested separately; shortening only the
     # fixture keeps this a meaningful end-to-end restart test without a sweep.
     monkeypatch.setattr(train, "validate_config", lambda c: c)
-    monkeypatch.setattr(train, "code_hash", lambda: "fixture-current-scientific-code")
+    monkeypatch.setattr(train, "code_hash", lambda config: "fixture-current-scientific-code")
     return config
 
 
@@ -103,6 +108,19 @@ def assert_tree_equal(left, right):
             assert_tree_equal(a, b)
     else:
         assert left == right
+
+
+def test_mean_initialization_matches_original_unchanged_backbones():
+    from fulltd.models import build_model
+    from fulltd.train import state_hash
+    from dscpuscripts.electricity_model import build_model as elec
+    from dscpuscripts.metr_la_model import build_model as traffic
+    for seed in (0, 2):
+        assert state_hash(elec(seed).state_dict()) == state_hash(
+            build_model("electricity", "patchtst", seed).state_dict())
+        adjacency = np.eye(3, dtype=np.float32)
+        assert state_hash(traffic(seed, adjacency).state_dict()) == state_hash(
+            build_model("metr_la", "graph_wavenet", seed, adjacency=adjacency).state_dict())
 
 
 def test_application_manifest_matches_fd001_grids_without_legacy_methods():
@@ -122,7 +140,13 @@ def test_application_manifest_matches_fd001_grids_without_legacy_methods():
         assert config["method"] not in ("td_full", "td_scalar", "dlinear_mse")
         assert config["backbone"] != "dlinear"
         assert "selection_epochs" not in config and "validation_epochs" not in config
-        assert config["learning_curve_updates"] == (5000 if config["dataset"] == "electricity" else 500)
+        assert config["learning_curve_updates"] == (
+            5000 if config["dataset"] == "electricity" else protocol.METR_LA_EVAL_PERIOD)
+        if config["dataset"] == "metr_la":
+            assert config["source_fraction"] == protocol.METR_LA_SOURCE_FRACTION
+            assert config["source_sampling"] == (
+                "random_reshuffling" if config["source_fraction"] == 1.0
+                else "iid_uniform_with_replacement")
         assert config["optimizer"] == "adam" and config["weight_decay"] == 0
         assert config["gradient_clipping"] is None and config["learning_rate_schedule"] is None
     for dataset, backbone, methods in protocol.MATRIX:
@@ -168,6 +192,29 @@ def test_extended_round_sampler_reuses_original_law_and_is_deterministic():
             protocol.sources_for_application_round("electricity", n, 4, step))
     with pytest.raises(ValueError, match="round"):
         protocol.sources_for_application_round("electricity", n, 3, 241)
+
+
+@pytest.mark.parametrize("fraction", [0.10, 0.25, 1.0])
+def test_metr_fraction_sampling_budget_reproducibility_and_full_recovery(fraction):
+    from dscpuscripts import metr_la_sampling
+    from fulltd.sampling import sources_for_round
+    config = config_for()
+    config["source_fraction"] = fraction
+    n = 23967
+    budget = protocol.update_budgets(config, n)
+    expected = math.ceil(n * fraction)
+    assert budget["draws_per_round"] == expected
+    assert budget["total_updates"] == 100 * math.ceil(expected / 256)
+    sample = protocol.sources_for_application_round("metr_la", n, 2, 19, fraction)
+    np.testing.assert_array_equal(
+        sample, protocol.sources_for_application_round("metr_la", n, 2, 19, fraction))
+    assert len(sample) == expected and (sample >= 0).all() and (sample < n).all()
+    assert metr_la_sampling.fraction_tag(fraction) in ("f10pct", "f25pct", "f100pct")
+    if fraction == 1.0:
+        np.testing.assert_array_equal(sample, sources_for_round("metr_la", n, 2, 19))
+        np.testing.assert_array_equal(np.sort(sample), np.arange(n))
+    else:
+        assert len(np.unique(sample)) < len(sample)
 
 
 def test_fixed_electricity_validation_is_shared_and_rng_independent():
@@ -222,6 +269,28 @@ def test_mid_round_resume_is_exact_and_retains_every_endpoint(tmp_path, monkeypa
             assert snapshot["progress"]["curve"][-1]["optimizer_steps"] == step
             assert snapshot["progress"]["pending_evaluation"] is None
         assert len(read_json(directory / "rounds.json")) == 2
+
+
+def test_ten_percent_metr_la_resume_matches_uninterrupted(tmp_path, monkeypatch):
+    config = small_config(monkeypatch, method="td_pairwise")
+    config.update(source_fraction=0.10, source_sampling="iid_uniform_with_replacement",
+                  learning_curve_updates=1, snapshot_updates=1)
+    monkeypatch.setattr(train, "build_objective",
+                        lambda c, data: make_objective(c["method"], ToyMean()))
+    tr, va = ToyData("metr_la", "train", n=300), ToyData("metr_la", "val", n=24)
+    full, resumed = tmp_path / "full", tmp_path / "resumed"
+    done = train.train_candidate(config, tr, va, full, microbatch=16)
+    paused = train.train_candidate(config, tr, va, resumed,
+                                   microbatch=16, stop_after_updates=1)
+    assert paused["state"] == "checkpointed"
+    again = train.train_candidate(config, tr, va, resumed, microbatch=16)
+    assert done["state"] == again["state"] == "complete"
+    assert done["optimizer_steps"] == again["optimizer_steps"] == 2
+    assert done["source_draws"] == 2 * math.ceil(len(tr) * 0.10)
+    a = torch.load(full / config["run_id"] / "final.pt", weights_only=False)
+    b = torch.load(resumed / config["run_id"] / "final.pt", weights_only=False)
+    for key in ("objective", "optimizer", "progress"):
+        assert_tree_equal(a[key], b[key])
 
 
 def test_electricity_resumes_exactly_after_round_100(tmp_path, monkeypatch):

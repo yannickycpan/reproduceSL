@@ -21,8 +21,12 @@ def test_prespecified_matrix_and_budget():
     ):
         runs = [r for r in manifest if (r["dataset"], r["backbone"]) == (dataset, backbone)]
         assert {r["method"] for r in runs} == expected
+        if dataset == "metr_la":
+            from dscpuscripts.application_protocol import METR_LA_SOURCE_FRACTION
+            assert all(r["source_fraction"] == METR_LA_SOURCE_FRACTION for r in runs)
         assert all(r["epochs"] == (240 if dataset == "electricity" else 100) for r in runs)
-        assert all(r["learning_curve_updates"] == (5000 if dataset == "electricity" else 500)
+        assert all(r["learning_curve_updates"] == (5000 if dataset == "electricity" else
+               __import__("dscpuscripts.application_protocol", fromlist=["METR_LA_EVAL_PERIOD"]).METR_LA_EVAL_PERIOD)
                    for r in runs)
         assert all("validation_epochs" not in r and "selection_epochs" not in r for r in runs)
         for method in expected:

@@ -30,8 +30,14 @@ def test_each_dataset_has_its_own_sibling_output_folder(roots):
     for name in ("electricity", "metr_la"):
         data, results, out = standard_runner.paths(name)
         assert data == roots / "data"
-        assert results == roots / (name + "_results")
-        assert out == roots / (name + "_outputs")
+        if name == "metr_la":
+            from dscpuscripts.metr_la_sampling import SOURCE_FRACTION, fraction_tag
+            stem = "metr_la_" + fraction_tag(SOURCE_FRACTION)
+            assert results == roots / (stem + "_results")
+            assert out == roots / (stem + "_outputs")
+        else:
+            assert results == roots / (name + "_results")
+            assert out == roots / (name + "_outputs")
     with pytest.raises(ValueError, match="Unknown dataset"):
         result_paths.paths("unknown")
 

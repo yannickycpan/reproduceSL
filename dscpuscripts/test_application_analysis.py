@@ -30,9 +30,11 @@ def _fake_campaign(root, monkeypatch):
     manifest = [copy.deepcopy(c) for c in make_manifest() if c["dataset"] == "metr_la"
                 and c["method"] in ("mse", "td_pairwise") and c["configuration"] in (0, 1)]
     for config in manifest:
+        config["source_fraction"] = 1.0
+        config["source_sampling"] = "random_reshuffling"
         config["learning_curve_updates"] = config["snapshot_updates"] = 70
     monkeypatch.setattr(analysis, "manifest_for", lambda campaign: manifest)
-    monkeypatch.setattr(analysis, "training_code_hash", lambda: "fixture-scientific-code")
+    monkeypatch.setattr(analysis, "training_code_hash", lambda config: "fixture-scientific-code")
     n = 257
     subset = dict(policy="complete_fixed_validation_v1", population_size=10, sampled_size=10,
                   indices_sha256=sequence_hash(np.arange(10)))
@@ -159,8 +161,8 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
     for config in configs:
         config.update(epochs=2, learning_curve_updates=5, snapshot_updates=5)
     monkeypatch.setattr(analysis, "manifest_for", lambda campaign: configs)
-    monkeypatch.setattr(analysis, "training_code_hash", lambda: "fixture-real-io")
-    monkeypatch.setattr(train, "code_hash", lambda: "fixture-real-io")
+    monkeypatch.setattr(analysis, "training_code_hash", lambda config: "fixture-real-io")
+    monkeypatch.setattr(train, "code_hash", lambda config: "fixture-real-io")
     monkeypatch.setattr(train, "validate_config", lambda c: c)
     monkeypatch.setattr(train, "build_objective", lambda c, data: make_objective(c["method"], ToyMean()))
     datasets = {"train": ScoringData("metr_la", "train", n=300),
