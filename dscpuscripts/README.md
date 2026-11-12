@@ -182,16 +182,38 @@ new ones. FD001's original scientific source hash and protocol are unchanged.
 Use new result roots if previous application runs already exist.
 Do not mix the old campaign with this one or change settings halfway through.
 
-After the corresponding sweep is complete:
+After the corresponding sweep is complete, you can obtain endpoint tables
+first and then run the full test learning curves with controlled parallel
+processes. See [the detailed analysis audit](../docs/fulltd_analysis_audit.md).
+The `--workers` flag affects *test inference only*, not training:
+
+```bash
+bash dscpuscripts/analyze_standard.sh electricity check
+bash dscpuscripts/analyze_standard.sh electricity endpoints --workers 4
+bash dscpuscripts/analyze_standard.sh electricity run --workers 4
+bash dscpuscripts/analyze_standard.sh metr_la check
+bash dscpuscripts/analyze_standard.sh metr_la endpoints --workers 4
+bash dscpuscripts/analyze_standard.sh metr_la run --workers 4
+# Regenerate the same tables/plots without reevaluating selected checkpoints:
+bash dscpuscripts/analyze_standard.sh electricity plots
+bash dscpuscripts/analyze_standard.sh metr_la plots
+```
+
+`endpoints` writes the normal final RMSE/MAE tables from just the five
+selected checkpoints per method, and caches these test evaluations for
+`run`. `run` still tests every selected intermediate checkpoint and creates
+the full test/validation learning curves. Do not run `endpoints` and `run`
+simultaneously against the same output directory; the analysis lock
+prevents concurrent writers.
+
+Previous sequence of commands (equivalent when endpoint-first output is
+not needed):
 
 ```bash
 bash dscpuscripts/analyze_standard.sh electricity check
 bash dscpuscripts/analyze_standard.sh electricity run
 bash dscpuscripts/analyze_standard.sh metr_la check
 bash dscpuscripts/analyze_standard.sh metr_la run
-# Regenerate the requested tables/plots from cached measurements:
-bash dscpuscripts/analyze_standard.sh electricity plots
-bash dscpuscripts/analyze_standard.sh metr_la plots
 ```
 
 Training states live in `~/scratch/fulltd/electricity_results/` and
