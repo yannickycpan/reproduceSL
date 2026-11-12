@@ -307,10 +307,12 @@ def plot(output):
     curves=load_csv(out/"validation_learning_curves.csv")
     tables=load_csv(out/"performance_summary.csv")
     selected=load_csv(out/"selected_hyperparameters.csv")
-    display={row["method"]: f"{LABELS[row['method']]} (B{row['batch_size']})"
-             for row in selected}
-    if set(display) != set(METHODS):
-        raise ValueError("All four selected configurations are required for plotting")
+    display={method_key(row): f"{LABELS[row['method']]} (B{row['batch_size']}"
+             + (f", lags {{{row['lag_set'].replace('-', ',')}}}" if row.get("lag_set") != "none" else "")
+             + ")" for row in selected}
+    if len(display) != len(selected):
+        raise ValueError("Selected TD lag variants must be distinct")
+    plotted_methods = list(display)
     # The x-axis always includes the entire training history, including update 0.
     # Limit only the main figures' y-axis: early initialization outliers should
     # not make later RMSE/MAE/RUL differences visually indistinguishable.
@@ -324,15 +326,15 @@ def plot(output):
                            ("mae_cycles","Validation MAE (cycles)"),
                            ("rul_score_sum","Validation summed RUL score")):
         by_method={}
-        for method in METHODS:
-            rows=sorted((r for r in curves if r["method"]==method and r["metric"]==metric),
+        for method in plotted_methods:
+            rows=sorted((r for r in curves if method_key(r)==method and r["metric"]==metric),
                         key=lambda r:int(r["optimizer_steps"]))
             if not rows or int(rows[0]["optimizer_steps"]) != 0:
                 raise ValueError(f"Missing measured update-zero evaluation: {metric}/{method}")
             by_method[method]=rows
         for view in ("zoom","full"):
             fig,ax=plt.subplots(figsize=(9,4.8))
-            for method in METHODS:
+            for method in plotted_methods:
                 rows=by_method[method]  # Never drop early updates from the x-axis.
                 x=np.array([int(r["optimizer_steps"]) for r in rows])
                 y=np.array([float(r["mean"]) for r in rows])
@@ -356,14 +358,14 @@ def plot(output):
             plt.close(fig)
     for metric in ("rmse","mae","rul_score_sum"):
         fig,ax=plt.subplots(figsize=(9,4.5))
-        for k,method in enumerate(METHODS):
-            v=[r for r in tables if r["method"]==method and r["metric"]==metric]
+        for k,method in enumerate(plotted_methods):
+            v=[r for r in tables if method_key(r)==method and r["metric"]==metric]
             if len(v)!=2: raise ValueError("Missing validation or test result")
             for split,dx in (("validation",-.2),("test",.2)):
                 record=next(r for r in v if r["split"]==split)
                 value=float(record["mean"])
                 ax.bar(k+dx,value,width=.38,label=split if k==0 else None)
-        ax.set_xticks(range(len(METHODS)),[display[k] for k in METHODS],rotation=15,ha="right")
+        ax.set_xticks(range(len(plotted_methods)),[display[k] for k in plotted_methods],rotation=25,ha="right")
         if metric=="rul_score_sum":ax.set_yscale("symlog",linthresh=1000)
         ax.set_ylabel(metric+" (cycles)" if metric!="rul_score_sum" else "Summed RUL score")
         ax.legend()
@@ -375,14 +377,15 @@ def plot(output):
     if td.is_file():
         records=load_csv(td)
         fig,ax=plt.subplots(figsize=(9,4.8))
-        for method in ("td_typed","td_pairwise"):
-            for typ in (1,2):
-                values=sorted((r for r in records if r["method"]==method and int(r["type"])==typ),
+        for method in (m for m in plotted_methods if m.startswith("td_")):
+            lag_values = sorted({int(r["lag"]) for r in records if method_key(r)==method})
+            for lag in lag_values:
+                values=sorted((r for r in records if method_key(r)==method and int(r["lag"])==lag),
                               key=lambda r:int(r["optimizer_steps"]))
                 if values:
                     ax.plot([int(r["optimizer_steps"]) for r in values],
                             [float(r["mean"]) for r in values],
-                            label=display[method]+f" lag type {typ}")
+                            label=display[method]+f" lag {lag}")
         ax.set_xlabel("Cumulative Adam optimizer updates")
         ax.set_ylabel("Realized Gamma on fixed training probe")
         ax.legend()
@@ -400,25 +403,25 @@ def run(mode):
         return
     selected,scores=audit_and_select(root)
     if mode=="check":
-        print("READY:", selected["counts"], "600 candidates audited")
+        print("READY:", selected["counts"], f"{len(make_manifest())} candidates audited")
         return
     with file_lock(out/".analysis.lock"):
         atomic_json(out/"selections.json",selected)
         write_csv(out/"hp_scores.csv",scores)
         rows,curve,td=evaluate_selected(selected,root,data,out)
         write_csv(out/"per_seed_metrics.csv",rows)
-        write_csv(out/"performance_summary.csv",summarize(rows,("method","split","metric","units")))
+        write_csv(out/"performance_summary.csv",summarize(rows,("method","lag_set","split","metric","units")))
         write_csv(out/"paired_comparisons.csv",paired_differences(rows))
         write_csv(out/"validation_curve_per_seed.csv",curve)
-        write_csv(out/"validation_learning_curves.csv",summarize(curve,("method","metric","optimizer_steps")))
+        write_csv(out/"validation_learning_curves.csv",summarize(curve,("method","lag_set","metric","optimizer_steps")))
         write_csv(out/"selected_hyperparameters.csv",[
-           dict(method=r["method"],alpha=r["alpha"],beta=r["beta"],
+           dict(method=r["method"],lag_set=r["lag_set"],alpha=r["alpha"],beta=r["beta"],
                 batch_size=r["batch_size"], selection_mse=r["score"],
                 run_ids=r["run_ids"])
            for r in selected["selected"]])
         write_csv(out/"td_diagnostics"/"gamma_per_seed.csv",td)
         write_csv(out/"td_diagnostics"/"gamma_summary.csv",
-                  summarize(td,("method","type","optimizer_steps"),value="mean"))
+                  summarize(td,("method","lag_set","lag","type","optimizer_steps"),value="mean"))
         atomic_json(out/"analysis_notes.json", dict(
             selection=f"last 25% of actual positive {EVAL_UPDATE_PERIOD}-update validation "
                       "evaluations, five-seed pooled standardized MSE; "
@@ -429,7 +432,7 @@ def run(mode):
             caveat="TD batch 128/256 selected using validation; 128 receives more optimizer "
                    "updates in 100 epochs than baseline B256"))
         plot(out)
-    print("FD001 four-method analysis complete:",out)
+    print("FD001 four-method, three-lag-set analysis complete:",out)
 
 
 def main():
