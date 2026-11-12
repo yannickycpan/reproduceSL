@@ -141,7 +141,7 @@ def _audit_candidate(config, results, expected_code, shared, source_hashes):
         key = (config["dataset"], n, config["seed"], epoch, config.get("source_fraction", 1.0))
         if key not in source_hashes:
             source_hashes[key] = sequence_hash(sources_for_application_round(config["dataset"], n,
-                                                                config["seed"], epoch))
+                          config["seed"], epoch, config.get("source_fraction", 1.0)))
         if (record.get("source_draws") != budgets["draws_per_round"]
                 or record.get("source_sha256") != source_hashes[key]):
             raise ValueError(f"Source stream/budget mismatch: {run_id}, round {epoch}")
