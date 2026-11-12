@@ -37,7 +37,7 @@ def _rank(item):
 
 def _choose(rows, method, batch, regime, final_update):
     lag = "1-5" if method.startswith("td_") else "none"
-    pool = [r for r in rows if r["method"] == method and r["lag_set"] == lag
+    pool = [r for r in rows if r["method"] == method and r.get("lag_set", lag) == lag
             and r["batch_size"] == batch]
     if not pool:
         raise ValueError(f"Missing hyperparameter grid: {method}, batch {batch}")
