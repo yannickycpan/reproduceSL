@@ -22,7 +22,12 @@ from .application_protocol import (PROTOCOL_ID, SEEDS, digest, evaluation_steps,
                                      sources_for_application_round)
 
 ANALYSIS_VERSION = "application-comparison-v1"
-EVALUATION_VERSION = "application-point-metrics-v1"
+EVALUATION_VERSION = "application-point-metrics-v2"
+# Pre-instrumentation evaluator AST fingerprint, from the exact original
+# implementation. Unchecksummed v1 cache entries are explicitly identified
+# and only accepted when evaluator/data-loader semantics are unchanged.
+LEGACY_POINT_METRIC_AST_SHA256 = "441d7d2a80ea4ffca4583bbb2badaa2c8b4be9668ae216250ba375eac76cdb65"
+LEGACY_DATA_LOADER_SHA256 = "9705d5d15bc8cfe32773d20c9781ae3ceb0c87512fa56e7ff14544413dace564"
 # Pinned pre-refactor scientific hash of fullTD c208d83. Recomputed from its
 # exact 15 SCIENTIFIC_SOURCES files, independently verified against the
 # known frozen FD001 hash. This is for *read-only* historic Electricity analysis.
@@ -327,6 +332,72 @@ def _point_metrics(model, dataset, batch_size):
     return values
 
 
+def _point_metric_implementation_hash():
+    """Bind test caches to the actual evaluator AST, not only metrics.py."""
+    import ast
+    import hashlib
+    import inspect
+    import textwrap
+
+    source = textwrap.dedent(inspect.getsource(_point_metrics))
+    ast_representation = ast.dump(ast.parse(source), include_attributes=False)
+    return hashlib.sha256(ast_representation.encode("utf-8")).hexdigest()
+
+
+def _cache_metric_values(values):
+    """Canonicalize/validate the precise two reported metrics, including NaNs.
+
+    Original allow_nonfinite=True results may contain NaN/Inf; their JSON
+    representation remains the same as common.atomic_json. Do not filter seeds.
+    """
+    if not isinstance(values, dict) or set(values) != set(METRICS):
+        raise ValueError("Cached test metrics must contain exactly RMSE and MAE")
+    canonical = {}
+    for name in METRICS:
+        value = values[name]
+        if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+            raise ValueError(f"Invalid cached {name} value type")
+        if isinstance(value, str) and value not in ("Infinity", "-Infinity", "NaN"):
+            raise ValueError(f"Invalid cached {name} string")
+        number = float(value)
+        if number < 0:
+            raise ValueError(f"Negative {name} value in test cache")
+        if math.isnan(number):
+            canonical[name] = "NaN"
+        elif number == math.inf:
+            canonical[name] = "Infinity"
+        elif number == -math.inf:
+            raise ValueError(f"Negative-infinite {name} value in test cache")
+        else:
+            canonical[name] = number
+    return canonical
+
+
+def _read_metric_cache(path, identity, *, require_checksum):
+    cached = read_json(path)
+    if cached.get("identity") != identity:
+        raise ValueError(f"Point-metric cache identity mismatch: {path}")
+    metrics = _cache_metric_values(cached.get("metrics"))
+    if require_checksum and cached.get("metrics_sha256") != digest(metrics):
+        raise ValueError(f"Point-metric cache metrics checksum mismatch: {path}")
+    return cached, metrics
+
+
+def _write_metric_cache(path, identity, metrics, audit_sha256, *,
+                        legacy_unsigned=False):
+    canonical = _cache_metric_values(metrics)
+    atomic_json(path, dict(
+        identity=identity, metrics=canonical, metrics_sha256=digest(canonical),
+        snapshot_audit_sha256=audit_sha256,
+        legacy_unsigned=legacy_unsigned))
+
+
+def _verify_processed_data(campaign, data_dir):
+    """Check actual npy bytes, not only metadata/split.json fingerprints."""
+    from fulltd.data import verify_dataset
+    return verify_dataset(campaign, data_dir)
+
+
 def _evaluate_one_run(task, train, test, batch_size):
     """Verify one selected seed/run and evaluate its retained test checkpoints.
 
@@ -372,42 +443,72 @@ def _evaluate_one_run(task, train, test, batch_size):
             version=EVALUATION_VERSION,
             code_sha256=task["expected_code"],
             metric_code_sha256=task["metric_code_sha256"],
+            data_loader_code_sha256=task["data_loader_code_sha256"],
+            point_metric_code_sha256=task["point_metric_code_sha256"],
             checkpoint_sha256=checksum,
             test_sha256=task["test_sha256"],
             batch_size=batch_size,
             run_id=run_id, optimizer_steps=step)
         cache = (Path(task["output"]) / ".cache" / run_id /
                  f"step_{step:07d}_{digest(cache_identity)[:20]}.json")
-        # Older reports keyed the cache by the *manifest aggregate* rather
-        # than by the per-run hash. Those already-evaluated checkpoint metrics
-        # remain valid when every other key and the checkpoint bytes match.
-        # Migrate them without repeating expensive full-test inference.
-        legacy_identity = dict(cache_identity, code_sha256=task["manifest_code_sha256"])
+
+        # Historical v1 caches recorded neither the analysis function hash nor
+        # a digest of their metric values. They cannot retroactively acquire
+        # cryptographic provenance. Only reuse them with the exact pinned old
+        # evaluator AST and data-loader code; mark their origin in v2 receipts.
+        legacy_identity = dict(
+            version="application-point-metrics-v1",
+            code_sha256=task["manifest_code_sha256"],
+            metric_code_sha256=task["metric_code_sha256"],
+            checkpoint_sha256=checksum,
+            test_sha256=task["test_sha256"],
+            batch_size=batch_size,
+            run_id=run_id, optimizer_steps=step)
         legacy_cache = (Path(task["output"]) / ".cache" / run_id /
                         f"step_{step:07d}_{digest(legacy_identity)[:20]}.json")
-        # Keep the existing scientific audit: even cached snapshots must have
-        # consistent configuration, training cursor and validation records.
-        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-        _validate_snapshot(checkpoint, config, status, curve, step, task["subset"])
+        audit_sha256 = digest(dict(
+            checkpoint_sha256=checksum,
+            status_identity=identity,
+            initial_mean_sha256=status.get("initial_mean_sha256"),
+            validation_record=record, validation_subset=task["subset"],
+            source_curve_sha256=file_hash(folder / "update_curve.json")))
+        cached, values, legacy_unsigned = None, None, False
         if cache.is_file():
-            cached = read_json(cache)
-            if cached.get("identity") != cache_identity:
-                raise ValueError(f"Point-metric cache identity mismatch: {cache}")
-            values = cached["metrics"]
-        elif legacy_cache.is_file():
-            cached = read_json(legacy_cache)
-            if cached.get("identity") != legacy_identity:
-                raise ValueError(f"Legacy point-metric cache identity mismatch: {legacy_cache}")
-            values = cached["metrics"]
-            atomic_json(cache, dict(identity=cache_identity, metrics=values))
-            print(f"Reused legacy test cache {run_id} update {step}", flush=True)
-        else:
+            cached, values = _read_metric_cache(
+                cache, cache_identity, require_checksum=True)
+            legacy_unsigned = bool(cached.get("legacy_unsigned", False))
+        elif (legacy_cache.is_file()
+              and task["point_metric_code_sha256"] == LEGACY_POINT_METRIC_AST_SHA256
+              and task["data_loader_code_sha256"] == LEGACY_DATA_LOADER_SHA256):
+            _, values = _read_metric_cache(
+                legacy_cache, legacy_identity, require_checksum=False)
+            legacy_unsigned = True
+
+        # The first encounter always audits the complete saved state.
+        # A previously audited v2 cache is safe to reuse without reopening
+        # its large optimizer-state tensors, provided its metric checksum and
+        # status/curve/checkpoint signatures still match. mmap also avoids
+        # eagerly materializing unused optimizer storage on first reads.
+        audited = (cached is not None
+                   and cached.get("snapshot_audit_sha256") == audit_sha256)
+        checkpoint = None
+        if not audited:
+            checkpoint = torch.load(
+                checkpoint_path, map_location="cpu",
+                weights_only=False, mmap=True)
+            _validate_snapshot(checkpoint, config, status, curve, step, task["subset"])
+        if values is None:
             if objective is None:
                 objective = build_objective(config, train).cpu()
             objective.load_state_dict(checkpoint["objective"])
-            values = _point_metrics(objective.model, test, batch_size)
-            atomic_json(cache, dict(identity=cache_identity, metrics=values))
+            values = _cache_metric_values(_point_metrics(objective.model, test, batch_size))
             print(f"Evaluated test {run_id} update {step}", flush=True)
+        if not audited or not cache.is_file():
+            _write_metric_cache(cache, cache_identity, values, audit_sha256,
+                                legacy_unsigned=legacy_unsigned)
+            if legacy_unsigned:
+                print(f"Reused historical unchecked v1 test metrics for "
+                      f"{run_id} update {step}; values now checksummed", flush=True)
         del checkpoint
         for split in ("test", "validation"):
             for metric in METRICS:
@@ -488,7 +589,10 @@ def evaluate_selected(plan, results, data_dir, output, batch_size=128,
     # First test access is AFTER the complete validation-only plan is locked.
     test = load_dataset(campaign, data_dir, "test")
     test_identity = data_identity(test)
-    metric_code = file_hash(Path(__file__).resolve().parents[1] / "fulltd" / "metrics.py")
+    root = Path(__file__).resolve().parents[1]
+    metric_code = file_hash(root / "fulltd" / "metrics.py")
+    loader_code = file_hash(root / "fulltd" / "data.py")
+    evaluator_code = _point_metric_implementation_hash()
     tasks = []
     for choice in plan["choices"]:
         for run_id in choice["run_ids"]:
@@ -503,6 +607,8 @@ def evaluate_selected(plan, results, data_dir, output, batch_size=128,
                 subset=subset, data_sha256=plan["data_sha256"],
                 validation_sha256=plan["validation_sha256"],
                 test_sha256=test_identity, metric_code_sha256=metric_code,
+                data_loader_code_sha256=loader_code,
+                point_metric_code_sha256=evaluator_code,
                 manifest_code_sha256=plan["code_sha256"],
                 batch_size=batch_size, backbone=choice["backbone"],
                 regime=choice["regime"], method=choice["method"],
@@ -693,6 +799,10 @@ def run(campaign, mode="all", *, data_dir=None, results_dir=None, output=None,
     data_dir, results, output = [Path(value) if value is not None else fallback
                                 for value, fallback in zip((data_dir, results_dir, output), defaults)]
     output.mkdir(parents=True, exist_ok=True)
+    if mode != "report":
+        # Validate physical training, validation and test array bytes exactly
+        # once per analysis invocation. Check-only mode must do this too.
+        _verify_processed_data(campaign, data_dir)
     with file_lock(output / ".application_analysis.lock"):
         lock = output / "selections.json"
         if mode == "report":
