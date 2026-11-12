@@ -31,7 +31,7 @@ def sequence_hash(indices):
 
 
 class LocalPairLaw:
-    """O(N) metadata, O(B log N) lookup; no N-by-N or N-by-4 table.
+    """O(N) metadata, O(B*K log N) lookup; no N-by-N pair matrix.
 
     Origin coordinates must be integer native hours/5-minute steps/cycles.
     Positive temporal gaps are left in those coordinates and never compressed.
@@ -42,8 +42,9 @@ class LocalPairLaw:
         if self.entity_ids.shape != self.origins.shape or self.origins.ndim != 1 or not len(self.origins):
             raise ValueError("Nonempty equally shaped entity/origin vectors required")
         self.lags = tuple(lags)
-        if len(self.lags) != 2 or any(int(x) != x or x <= 0 for x in self.lags):
-            raise ValueError("Two positive integer native-unit lags required")
+        if (not self.lags or any(int(x) != x or x <= 0 for x in self.lags)
+                or len(set(self.lags)) != len(self.lags)):
+            raise ValueError("Distinct positive integer native-unit lags required")
         self.minimum = int(self.origins.min())
         self.span = int(self.origins.max()) - self.minimum + 1
         self.entity_min = int(self.entity_ids.min())
@@ -58,19 +59,21 @@ class LocalPairLaw:
     def enumerate(self, indices):
         indices = np.asarray(indices, dtype=np.int64)
         entity = self.entity_ids[indices]
-        candidates = self.origins[indices, None] + np.asarray([-self.lags[0], self.lags[0], -self.lags[1], self.lags[1]])
+        offsets = np.asarray([gap for lag in self.lags for gap in (-lag, lag)], dtype=np.int64)
+        candidates = self.origins[indices, None] + offsets
         keys = (entity[:, None] - self.entity_min) * self.span + candidates - self.minimum
         positions = np.searchsorted(self.keys, keys)
         safe = np.minimum(positions, len(self.keys) - 1)
         valid = (positions < len(self.keys)) & (candidates >= self.minimum) & (candidates < self.minimum + self.span) & (self.keys[safe] == keys)
         partners = np.where(valid, self.order[safe], -1)
-        valid_types = valid.reshape(-1, 2, 2).any(axis=2)
+        directions = valid.reshape(-1, len(self.lags), 2)
+        valid_types = directions.any(axis=2)
         type_count = valid_types.sum(axis=1)
-        direction_count = valid.reshape(-1, 2, 2).sum(axis=2).repeat(2, axis=1)
+        direction_count = directions.sum(axis=2).repeat(2, axis=1)
         denominator = type_count[:, None] * direction_count
         probabilities = np.divide(valid.astype(np.float64), denominator,
                                   out=np.zeros(valid.shape, dtype=np.float64), where=denominator > 0)
-        types = np.broadcast_to(np.array([0, 0, 1, 1]), partners.shape)
+        types = np.broadcast_to(np.repeat(np.arange(len(self.lags)), 2), partners.shape)
         return partners, types, probabilities
 
     def sample(self, indices, rng):
@@ -80,7 +83,7 @@ class LocalPairLaw:
         # One inverse-CDF uniform realizes exactly the declared conditional law.
         uniforms = rng.random(len(indices))
         choices = (uniforms[:, None] >= probabilities.cumsum(axis=1)).sum(axis=1)
-        choices = np.minimum(choices, 3)
+        choices = np.minimum(choices, 2 * len(self.lags) - 1)
         rows = np.arange(len(indices))
         return partners[rows, choices], types[rows, choices]
 
