@@ -268,6 +268,18 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
         assert not (output / "evaluation_manifest.json").exists()
         assert not (output / "learning_curves_per_seed.csv").exists()
 
+        # Simulate an endpoint computed by the previous aggregate-hash cache
+        # layout. It must migrate without another expensive test inference.
+        old_cache = next((output / ".cache" / first_run).glob("*.json"))
+        cached = read_json(old_cache)
+        legacy_identity = dict(cached["identity"], code_sha256=locked["code_sha256"])
+        legacy_path = old_cache.with_name(
+            f"step_{legacy_identity['optimizer_steps']:07d}_"
+            f"{digest(legacy_identity)[:20]}.json")
+        atomic_json(legacy_path, dict(identity=legacy_identity,
+                                      metrics=cached["metrics"]))
+        old_cache.unlink()
+
         # A controllable executor verifies per-run task partitioning and cache
         # reuse without spawning subprocesses that cannot inherit mock data.
         import concurrent.futures
@@ -296,7 +308,9 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
         # One B256 full-budget trajectory: update zero and final update four.
         # Endpoint metrics are reused from endpoint-only evaluation.
         assert point_calls == ["test"] * 10
-        assert len(list((output / ".cache").rglob("*.json"))) == 10
+        assert len(list((output / ".cache").rglob("*.json"))) == 11
+        # Ten current checkpoint caches plus the original legacy-format
+        # endpoint evidence retained for provenance.
         for metric in ("rmse", "mae"):
             text = (output / f"graph_wavenet_{metric}_table.md").read_text()
             assert "| Algorithm | Test | Validation |" in text
