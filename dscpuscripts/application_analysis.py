@@ -392,10 +392,27 @@ def _write_metric_cache(path, identity, metrics, audit_sha256, *,
         legacy_unsigned=legacy_unsigned))
 
 
-def _verify_processed_data(campaign, data_dir):
-    """Check actual npy bytes, not only metadata/split.json fingerprints."""
-    from fulltd.data import verify_dataset
-    return verify_dataset(campaign, data_dir)
+def _verify_processed_data(campaign, data_dir, *, include_test=True):
+    """Check actual processed bytes without exposing test labels before HP lock.
+
+    Training/validation arrays and common adjacency are checked before
+    validation-only selection. The entire dataset, including held-out test
+    arrays, is verified only after the selection lock has been written.
+    """
+    from fulltd.data import (canonical_name, sha256, verify_dataset,
+                             _read_metadata)
+
+    if include_test:
+        return verify_dataset(campaign, data_dir)
+    base = Path(data_dir) / "processed" / canonical_name(campaign)
+    metadata = _read_metadata(base)
+    for relative, expected in metadata["processed_sha256"].items():
+        if relative.startswith("test/"):
+            continue
+        path = base / relative
+        if not path.is_file() or sha256(path) != expected:
+            raise ValueError(f"Processed data missing or modified: {path}")
+    return metadata["fingerprint"]
 
 
 def _evaluate_one_run(task, train, test, batch_size):
@@ -586,7 +603,9 @@ def evaluate_selected(plan, results, data_dir, output, batch_size=128,
             or data_identity(validation) != plan["validation_sha256"]
             or subset != plan["validation_subset"]):
         raise ValueError("Prepared training/validation data changed after selection")
-    # First test access is AFTER the complete validation-only plan is locked.
+    # The complete test split is only hashed/loaded after locking validation
+    # choices. A SHA-only data audit cannot feed labels into the selection.
+    _verify_processed_data(campaign, data_dir, include_test=True)
     test = load_dataset(campaign, data_dir, "test")
     test_identity = data_identity(test)
     root = Path(__file__).resolve().parents[1]
@@ -802,7 +821,7 @@ def run(campaign, mode="all", *, data_dir=None, results_dir=None, output=None,
     if mode != "report":
         # Validate physical training, validation and test array bytes exactly
         # once per analysis invocation. Check-only mode must do this too.
-        _verify_processed_data(campaign, data_dir)
+        _verify_processed_data(campaign, data_dir, include_test=False)
     with file_lock(output / ".application_analysis.lock"):
         lock = output / "selections.json"
         if mode == "report":
