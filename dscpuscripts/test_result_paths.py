@@ -63,3 +63,14 @@ def test_guard_refuses_retraining_missing_run_checkpoint(roots):
     new.mkdir()
     (new / "recovery.pt").touch()
     result_paths.guard_unmigrated_runs(dest, [config], [old.parent])
+
+
+def test_metr_la_fraction_specific_directory_rejects_legacy_override(roots, monkeypatch):
+    monkeypatch.setenv("FULLTD_METR_LA_ROOT", str(roots / "metr_la_results"))
+    with pytest.raises(ValueError, match="legacy METR-LA"):
+        result_paths.paths("metr_la")
+    monkeypatch.delenv("FULLTD_METR_LA_ROOT")
+    from dscpuscripts.metr_la_sampling import fraction_tag
+    assert fraction_tag(.10) == "f10pct"
+    assert fraction_tag(.25) == "f25pct"
+    assert fraction_tag(1.0) == "f100pct"

@@ -129,13 +129,19 @@ against the same result root.
 ## Electricity and METR-LA on the AMD CPU server
 
 The current application sweeps replace the older TD-full/TD-scalar campaign.
+**Current METR-LA default:** `FULLTD_METR_LA_SOURCE_FRACTION=0.10`,
+100 stochastic rounds of `ceil(0.1*N)` source draws with replacement;
+the complete training set remains eligible for TD partners. Set the
+environment variable to 0.25 or 1.0 for separate 25% or 100% campaigns.
+At 1.0 it runs exactly the original full random-permutation source stream
+for 100 epochs. All other scientific settings are unchanged.
 All Electricity results from 100 rounds or a TCN campaign are incompatible
 with this 240-round PatchTST scientific identity.
 The Electricity PatchTST backbone has the same four principal methods as FD001. DLinear is a separate architecture and is not in the sweep.
 METR-LA uses Graph WaveNet for all methods, including additional masked-MAE
 and pairwise-TD-MAE comparators. Electricity now uses PatchTST only, with
 240 independent N/24 source-draw rounds (~10 effective passes), for 350
-candidates; METR-LA stays at 100 complete epochs and 525 candidates.
+candidates; METR-LA uses 100 rounds and 525 candidates (10% by default).
 
 Use the existing pinned CPU environment; only run setup if it is not ready.
 The download script verifies existing prepared data without overwriting it.
@@ -170,7 +176,9 @@ completed runs and recorded numerical failures. They stop on operational
 errors. A new launch never silently adopts incompatible old checkpoints.
 If an earlier application sweep occupies these result paths, preserve it and
 choose a fresh path with `FULLTD_ELECTRICITY_ROOT` or `FULLTD_METR_LA_ROOT`.
-The revised scientific identity cannot resume earlier application checkpoints.
+The revised scoped code identity cannot resume earlier application checkpoints
+without a separate conversion/audit; back up old runs and do not mix them with
+new ones. FD001's original scientific source hash and protocol are unchanged.
 Use new result roots if previous application runs already exist.
 Do not mix the old campaign with this one or change settings halfway through.
 
@@ -187,8 +195,9 @@ bash dscpuscripts/analyze_standard.sh metr_la plots
 ```
 
 Training states live in `~/scratch/fulltd/electricity_results/` and
-`~/scratch/fulltd/metr_la_results/`; reports are in the sibling
-`electricity_outputs/` and `metr_la_outputs/` directories. Each backbone
+`~/scratch/fulltd/metr_la_f10pct_results/`; reports are in the sibling
+`electricity_outputs/` and `metr_la_f10pct_outputs/` directories.
+At 25% or 100%, the `f10pct` name becomes `f25pct` or `f100pct`. Each backbone
 gets an RMSE table and an MAE table with algorithms as rows and Test /
 Validation columns (five-seed mean ± standard error). All application algorithms use B256; no matched-update rows are generated.
 Learning curves use the same selected settings, with test and validation

@@ -64,6 +64,12 @@ are zero-weight linear maps of the final hidden representation with bias
 `inverse_softplus(1-1e-6)`, giving variance one initially. Their construction
 does not alter the mean-network RNG stream.
 
+For application experiments, `dscpuscripts/electricity_model.py` and
+`dscpuscripts/metr_la_model.py` now instantiate these same classes using
+the original initialization streams; an integration test checks exact
+parameter-state identity with the old shared factory. These small wrappers
+isolate future dataset-only modifications.
+
 Electricity/METR-LA objectives are selected through
 `dscpuscripts/application_objectives.py`; ordinary MSE/Gaussian NLL/MAE
 implementations are shared from `agents/`. FD001 keeps its protected

@@ -29,7 +29,10 @@ after all four validation-based choices are locked.
 ## Electricity and METR-LA
 
 The current application manifests have 350 Electricity and 525 METR-LA
-candidates. The common model/data utilities are unchanged; application
+candidates. The METR-LA default is now 10% source sampling for 100 rounds,
+with 25%/100% configurable, and results in fraction-tagged sibling folders.
+The application scientific-hash architecture is newly scoped by dataset
+and objective rather than one monolithic application-wide code hash. The common model/data utilities are unchanged; application
 protocol, objectives, training and reporting live in `dscpuscripts/application_*.py`.
 The replaced application campaign's analysis/refit/Slurm entrypoints and its
 obsolete tests have been removed. Current coverage is in
@@ -44,8 +47,11 @@ OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
   python -m pytest -q tests dscpuscripts
 ```
 
-The historical 130-test result belongs to revision 5597f90; the current
-PatchTST-only 240-round protocol must be tested on the AMD server before launch. Matplotlib/Pyparsing deprecation warnings did not
+The historical 130-test result belongs to revision 5597f90; **it does not
+certify this redesigned source-sampling and identity code**. Run all tests
+on the AMD server before a new production campaign. The new regression
+tests cover per-dataset/algorithm hashes, 10/25/100% sampling, exact 100%
+recovery, unchanged model initialization and sampled-run checkpoint resume. Matplotlib/Pyparsing deprecation warnings did not
 cause failures. The suite includes:
 
 - Full-gradient finite-difference checks for typed, pairwise and pairwise-MAE

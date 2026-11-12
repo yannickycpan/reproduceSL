@@ -28,8 +28,12 @@ Electricity and METR-LA use the FD001-aligned application protocol in
 [`dscpuscripts/application_protocol.py`](dscpuscripts/application_protocol.py).
 Electricity has 350 PatchTST-only candidates (MSE, Gaussian NLL, typed TD,
 and pairwise TD), trained for 240 stochastic rounds (~10 effective epochs).
-METR-LA has 525 Graph WaveNet candidates,
-adding masked MAE and pairwise TD with an absolute-error objective.
+METR-LA has 525 Graph WaveNet candidates, adding masked MAE and pairwise
+TD with an absolute-error objective. METR-LA now defaults to **10% uniform
+source draws per round for 100 rounds**; set
+`FULLTD_METR_LA_SOURCE_FRACTION=1.0` to recover the original 100 full
+random-reshuffling epochs (or 0.25 for 25% per round). The dataset, network,
+algorithms and HP grids remain unchanged.
 The current manifests replace the earlier application campaign.
 
 ```bash
@@ -39,6 +43,10 @@ bash dscpuscripts/run_metr_la.sh --dry-run
 bash dscpuscripts/analyze_standard.sh electricity run
 bash dscpuscripts/analyze_standard.sh metr_la run
 ```
+
+METR-LA writes directly to `~/scratch/fulltd/metr_la_f10pct_results/`
+and its sibling `metr_la_f10pct_outputs/`. Different percentages use different
+sibling names; FD001 and Electricity retain their original folders.
 
 The [application protocol](docs/fulltd_protocol.md) explains the common
 selection rule, Electricity's computational exceptions, the B256-only

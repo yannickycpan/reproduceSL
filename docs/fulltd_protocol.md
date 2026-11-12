@@ -21,7 +21,7 @@ There is no stop-gradient path, target network, regularization, clipping,
 learning-rate schedule, early stopping, or post-training refit.
 
 All runs use Adam (betas 0.9/0.999, epsilon 1e-8, weight decay zero), seeds
-0–4. METR-LA uses 100 full epochs and Electricity uses 240 stochastic rounds. Baselines use logical batch 256 and predictor
+0–4. METR-LA uses 100 stochastic rounds (default 10% source draws per round, or 100% for full epochs) and Electricity uses 240 stochastic rounds. Baselines use logical batch 256 and predictor
 rates 0.0001, 0.0003, 0.0005, 0.0007, 0.0009, 0.001, 0.003, 0.005,
 0.007 and 0.01. All application methods use logical batch 256 only. TD
 predictor rates are 0.00003, 0.0001, 0.0003, 0.001 and 0.003; TD operator
@@ -57,7 +57,17 @@ unequal final microbatches.
 
 ## Data exposure and justified dataset exceptions
 
-METR-LA uses 100 complete reshuffled passes, as FD001 does. Electricity
+METR-LA now has a scientific source-fraction setting
+`FULLTD_METR_LA_SOURCE_FRACTION` (default 0.10): each of 100 rounds draws
+`ceil(fraction * N)` source windows uniformly **with replacement**, for a
+total of approximately 10 effective source passes at 10% and 25 at 25%.
+TD partners still come from the complete eligible training set, not only
+the round's source sample. At **exactly 100%**, each round uses the original
+complete random reshuffling sampler, recovering the previous 100-full-epoch
+training setting. This is a reduced optimizer/exposure budget, **not** a
+10%-label-data experiment. The complete 207-sensor METR-LA dataset, masks,
+splits, architecture, optimizer, HP grids, five seeds and 100 rounds remain
+unchanged. Electricity
 uses 240 independent stochastic rounds, each drawing ceil(N/24) sources
 uniformly with replacement. This equals approximately 10 full training-set
 passes in total source draws (not 10 independent full permutations). The
@@ -70,7 +80,10 @@ training set. Isolated sources are excluded from every method equally.
 Native lag types remain (1,24) hours for Electricity and (1,3) five-minute
 steps for METR-LA, with dataset gaps and entity boundaries respected.
 
-Electricity evaluates every 5,000 actual Adam updates, METR-LA every 500.
+Electricity evaluates every 5,000 actual Adam updates. METR-LA evaluates
+every 100 updates at the 10% default, every 250 at 25%, and every 500 at
+100%, to preserve enough positive-update validation measurements for the
+same final-quarter selection rule.
 Both evaluate update zero and the actual final state even when the endpoint
 falls between regular measurements. Checkpoints contain the complete
 optimizer, RNG, source cursor and measurement state; interruptions resume
@@ -128,8 +141,12 @@ shared helpers from them. They are frozen compatibility dependencies, not
 application entrypoints; do not regenerate manifests through `fulltd.protocol`
 or launch `fulltd.train`. Import-only retired class names remain solely
 because the frozen FD001 baseline factory imports them eagerly.
-The application scientific identity has changed for the new PatchTST-only
-240-round Electricity campaign; old application checkpoints must be preserved
-under a different result root rather than reused. FD001 remains unchanged.
+Application scientific identity is now scoped to the code dependencies of
+each dataset and method: METR-LA sampling and model changes no longer
+invalidate Electricity; TD pairwise class changes do not invalidate MSE.
+Genuinely shared changes remain shared dependencies. Source fraction is
+embedded in each METR-LA run configuration and run ID. New app checkpoints
+are not automatically resume-compatible with the prior monolithic-hash
+campaign. FD001 remains unchanged.
 `tests/test_checkpoint_identity.py` enforces the original FD001 file hashes
 and aggregate scientific hash from commit 24b9296.
