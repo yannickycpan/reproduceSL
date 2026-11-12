@@ -21,6 +21,17 @@ from .fd001_train import code_hash, build_objective, json_safe
 
 LABELS = dict(mse="MSE", gaussian_nll="Gaussian NLL",
               td_typed="TD typed", td_pairwise="TD pairwise")
+
+
+def lag_key(config):
+    return "-".join(map(str, config["lags"])) if config["method"].startswith("td_") else "none"
+
+
+def method_key(record):
+    lag = record.get("lag_set", "none")
+    return record["method"] if lag == "none" else f"{record['method']}@{lag}"
+
+
 OUT_METRICS = (("cycles", "rmse"), ("cycles", "mae"), ("score", "rul_score_sum"))
 
 
@@ -118,31 +129,35 @@ def audit_and_select(results):
             if any(step not in score_lookup for step in eligible_updates):
                 raise ValueError(f"Missing final-quarter validation evidence: {run_id}")
             score = statistics.mean(score_lookup[step] for step in eligible_updates)
-        by_hp[(config["method"], config["batch_size"], config["configuration"])].append(
+        by_hp[(config["method"], lag_key(config), config["batch_size"], config["configuration"])].append(
             dict(config=config, state=state, score=score))
-    for (method, batch_size, setting), members in sorted(by_hp.items()):
+    for (method, lag_set, batch_size, setting), members in sorted(by_hp.items()):
         members.sort(key=lambda m: m["config"]["seed"])
         if [m["config"]["seed"] for m in members] != list(SEEDS):
             raise ValueError(f"Missing one of five seeds: {method}, B{batch_size}, h{setting}")
         chosen_config = members[0]["config"]
         pooled = statistics.mean(m["score"] for m in members) if all(
             math.isfinite(m["score"]) for m in members) else math.inf
-        scores.append(dict(method=method, batch_size=batch_size, configuration=setting,
+        scores.append(dict(method=method, lag_set=lag_set, batch_size=batch_size, configuration=setting,
                            alpha=chosen_config["alpha"], beta=chosen_config["beta"],
                            score=pooled, failed_seeds=[m["config"]["seed"] for m in members
                                                       if m["state"] == "numerical_failure"],
                            run_ids=[m["config"]["run_id"] for m in members]))
     for method in METHODS:
-        options = [r for r in scores if r["method"] == method]
-        winning = min(options, key=lambda r: (
-            r["score"], r["alpha"], r["beta"] or 0, r["batch_size"]))
-        if not math.isfinite(winning["score"]):
-            raise ValueError(f"No finite five-seed configuration for {method}; no test report produced")
-        choices.append(winning)
+        lag_sets = dict.fromkeys(lag_key(config) for config in candidates
+                                 if config["method"] == method)
+        for lag_set in lag_sets:
+            options = [row for row in scores
+                       if row["method"] == method and row["lag_set"] == lag_set]
+            winning = min(options, key=lambda row: (
+                row["score"], row["alpha"], row["beta"] or 0, row["batch_size"]))
+            if not math.isfinite(winning["score"]):
+                raise ValueError(f"No finite five-seed configuration for {method}/{lag_set}")
+            choices.append(winning)
     selected = dict(protocol_id=PROTOCOL_ID, selection_fraction=SELECTION_FRACTION,
                     criterion="five-seed mean standardized validation MSE over the final "
                               f"ceil(25%) of post-start {EVAL_UPDATE_PERIOD}-update evaluations; "
-                              "batch is selected jointly",
+                              "batch selected jointly within each method and lag set",
                     code_sha256=expected_code, manifest_sha256=digest(candidates),
                     data_sha256=seen_data["data_sha256"],
                     validation_sha256=seen_data["validation_sha256"],
@@ -179,14 +194,14 @@ def evaluate_selected(selection, root, data_dir, output):
                 raise ValueError(f"Selected checkpoint sidecars disagree: {run_id}")
             for record in ckpt["progress"]["curve"]:
                 for metric in ("rmse_cycles", "mae_cycles", "rul_score_sum"):
-                    learning.append(dict(method=config["method"], seed=config["seed"],
+                    learning.append(dict(method=config["method"], lag_set=lag_key(config), seed=config["seed"],
                                          alpha=config["alpha"], beta=config["beta"],
                                          batch_size=config["batch_size"],
                                          epoch=record["epoch"], optimizer_steps=record["optimizer_steps"],
                                          metric=metric, value=record[metric]))
                 if config["method"].startswith("td_"):
                     for typ in record["gamma_probe"]["types"]:
-                        gamma_rows.append(dict(method=config["method"], seed=config["seed"],
+                        gamma_rows.append(dict(method=config["method"], lag_set=lag_key(config), seed=config["seed"],
                                   batch_size=config["batch_size"],
                                   optimizer_steps=record["optimizer_steps"], **typ))
             if test is None:  # Selection complete BEFORE held-out targets are opened.
@@ -213,7 +228,7 @@ def evaluate_selected(selection, root, data_dir, output):
                     if len(matched) != 1:
                         raise ValueError(f"Missing output metric: {split} {units}/{metric}")
                     record_rows.append(dict(run_id=run_id,method=config["method"],
-                       seed=config["seed"], batch_size=config["batch_size"],
+                       lag_set=lag_key(config), seed=config["seed"], batch_size=config["batch_size"],
                        split=split, metric=metric,
                        units=units, value=matched[0]["value"]))
             atomic_json(cache,dict(identity=key,rows=record_rows))
@@ -248,7 +263,7 @@ def paired_differences(rows):
     indexed=defaultdict(dict)
     for row in rows:
         key=(row["split"], row["metric"], row["units"])
-        method=row["method"]
+        method=method_key(row)
         seed=int(row["seed"])
         if seed in indexed[key].setdefault(method,{}):
             raise ValueError("Duplicate selected seed metric")
@@ -257,7 +272,9 @@ def paired_differences(rows):
     # Five training seeds imply df=4; report descriptive intervals only.
     t95_df4=2.7764451051977987
     for (split,metric,units), methods in sorted(indexed.items()):
-        for first,second in combinations(METHODS,2):
+        methods_ordered = sorted(methods, key=lambda key:
+                                 (list(METHODS).index(key.split("@")[0]), key))
+        for first,second in combinations(methods_ordered,2):
             if (first not in methods or second not in methods or
                     sorted(methods[first])!=list(SEEDS) or
                     sorted(methods[second])!=list(SEEDS)):
