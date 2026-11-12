@@ -136,10 +136,12 @@ current scoped scientific identity before touching the test split.
 - **A:** v2 test cache keys bind the exact `_point_metrics` AST plus
   `fulltd/metrics.py`, the test dataset identity, preprocessing loader
   code and checkpoint SHA-256.
-- **B:** All analysis modes that read model/test data (`check`,
-  `endpoints`, `run`, `evaluate`) call `verify_dataset()` once per
-  invocation before selecting or testing checkpoints. This validates
-  actual processed `.npy` bytes against metadata SHA-256 records.
+- **B:** `check`, `endpoints`, `run` and `evaluate` first verify
+  actual training/validation `.npy` bytes (plus shared adjacency) against
+  metadata SHA-256 records. Only after validation-only hyperparameters
+  are locked does the evaluator call `verify_dataset()` for *all*
+  processed files, including the held-out test split. This preserves the
+  strict no-test-access-before-selection rule.
 - **C:** A versioned v3 application hash scopes mixed functions/classes to
   their actually reachable dataset and objective branches, rather than
   hashing the entire `application_train.py`. Shared optimizer/metrics
