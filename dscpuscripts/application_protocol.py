@@ -71,7 +71,9 @@ def make_manifest():
                             method=method, alpha=alpha, beta=beta, batch_size=batch_size,
                             configuration=setting, seed=seed,
                             epochs=ELECTRICITY_ROUNDS if dataset == "electricity" else EPOCHS,
-                            training_unit="stochastic_round" if dataset == "electricity" else "full_epoch",
+                            training_unit=("stochastic_round" if (dataset == "electricity" or
+                                           (dataset == "metr_la" and METR_LA_SOURCE_FRACTION < 1))
+                                           else "full_epoch"),
                             source_sampling=("iid_uniform_with_replacement" if
                                 (dataset == "electricity" or
                                  (dataset == "metr_la" and METR_LA_SOURCE_FRACTION < 1))
