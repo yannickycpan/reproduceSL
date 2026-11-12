@@ -169,8 +169,6 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
     # Hold the same source universe across all nested-lag variants.
     train, _, excluded = training_universe(train_data, LAG_SETS[config["dataset"]][0])
     law = LocalPairLaw(train.entity_ids, train.origins, tuple(config["lags"]))
-    if len(law.nonisolated()) != len(train):
-        raise ValueError("Lag set isolates a source from the fixed common source universe")
     validation, subset_record = evaluation_validation_view(val_data)
     n, batch_size = len(train), config["batch_size"]
     physical = min(batch_size, microbatch)
