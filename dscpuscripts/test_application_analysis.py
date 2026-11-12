@@ -144,6 +144,59 @@ def test_standard_error_is_across_all_five_seeds_without_filtering():
     assert math.isinf(summary["mean"]) and math.isnan(summary["standard_error"])
 
 
+def test_electricity_point_metrics_skip_unused_raw_metrics(monkeypatch):
+    """Full-test reports use standardized scores, not unused raw kW metrics."""
+    from dscpuscripts.application_analysis import _point_metrics
+    import fulltd.metrics
+    calls = []
+
+    class Dataset:
+        dataset = "electricity"
+
+    def fake_evaluate(model, dataset, **kwargs):
+        calls.append(kwargs)
+        return [
+            dict(units="standardized", horizon="all", metric="rmse", value=1.5),
+            dict(units="standardized", horizon="all", metric="mae", value=1.2)
+        ], []
+
+    monkeypatch.setattr(fulltd.metrics, "evaluate", fake_evaluate)
+    assert _point_metrics(object(), Dataset(), batch_size=19) == {
+        "rmse": 1.5, "mae": 1.2}
+    assert len(calls) == 1
+    assert calls[0]["include_raw"] is False
+    assert calls[0]["batch_size"] == 19
+
+
+def test_metr_la_point_metrics_still_include_mph(monkeypatch):
+    from dscpuscripts.application_analysis import _point_metrics
+    import fulltd.metrics
+    calls = []
+
+    class Dataset:
+        dataset = "metr_la"
+
+    def fake_evaluate(model, dataset, **kwargs):
+        calls.append(kwargs)
+        return [
+            dict(units="mph", horizon="all", metric="rmse", value=3.1),
+            dict(units="mph", horizon="all", metric="mae", value=2.6)
+        ], []
+
+    monkeypatch.setattr(fulltd.metrics, "evaluate", fake_evaluate)
+    assert _point_metrics(object(), Dataset(), batch_size=11) == {
+        "rmse": 3.1, "mae": 2.6}
+    assert calls[0]["include_raw"] is True
+
+
+def test_analysis_workers_must_be_positive(tmp_path):
+    with pytest.raises(ValueError, match="workers"):
+        analysis.evaluate_selected(
+            {"dataset": "metr_la", "code_sha256": "invalid",
+             "manifest_sha256": "invalid"},
+            tmp_path, tmp_path, tmp_path, workers=0)
+
+
 def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkeypatch):
     """Real training/snapshot I/O on a small model exercises both reporting budgets."""
     import torch
