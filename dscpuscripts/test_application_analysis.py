@@ -199,9 +199,49 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
         # Selection never loads a dataset or computes a test prediction.
         analysis.run("metr_la", "check", results_dir=results, data_dir=tmp_path, output=output)
         assert not opened and not point_calls
-        analysis.run("metr_la", "run", results_dir=results, data_dir=tmp_path, output=output, batch_size=16)
+        locked = read_json(output / "selections.json")
+        first_run = locked["choices"][0]["run_ids"][0]
+        individual = read_json(results / first_run / "status.json")["identity"]["code_sha256"]
+        # Regression for the critical manifest-hash versus candidate-hash bug.
+        assert individual != locked["code_sha256"]
+
+        # Fast table path must evaluate only five final checkpoints, without
+        # pretending that the full held-out learning curves are ready.
+        analysis.run("metr_la", "endpoints", results_dir=results,
+                     data_dir=tmp_path, output=output, batch_size=16)
         assert opened == ["train", "val", "test"]
+        assert point_calls == ["test"] * 5
+        assert (output / "endpoint_manifest.json").is_file()
+        assert not (output / "evaluation_manifest.json").exists()
+        assert not (output / "learning_curves_per_seed.csv").exists()
+
+        # A controllable executor verifies per-run task partitioning and cache
+        # reuse without spawning subprocesses that cannot inherit mock data.
+        import concurrent.futures
+
+        class RecordingPool:
+            def __init__(self, max_workers, mp_context):
+                assert max_workers == 2
+                assert mp_context.get_start_method() == "spawn"
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def map(self, fn, tasks, chunksize):
+                assert fn is analysis._evaluate_one_run_worker
+                assert chunksize == 1
+                for task in tasks:
+                    yield analysis._evaluate_one_run(
+                        task, datasets["train"], datasets["test"], task["batch_size"])
+
+        with monkeypatch.context() as patch:
+            patch.setattr(concurrent.futures, "ProcessPoolExecutor", RecordingPool)
+            analysis.run("metr_la", "run", results_dir=results,
+                         data_dir=tmp_path, output=output,
+                         batch_size=16, workers=2)
+        assert opened == ["train", "val", "test"] * 2
         # One B256 full-budget trajectory: update zero and final update four.
+        # Endpoint metrics are reused from endpoint-only evaluation.
         assert point_calls == ["test"] * 10
         assert len(list((output / ".cache").rglob("*.json"))) == 10
         for metric in ("rmse", "mae"):
