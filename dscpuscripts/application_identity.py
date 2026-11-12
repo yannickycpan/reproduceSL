@@ -48,9 +48,11 @@ METHOD_FILES = {
 }
 DATASET_FILES = {
     "electricity": ("dscpuscripts/electricity_sampling.py",
-                    "dscpuscripts/electricity_model.py"),
+                    "dscpuscripts/electricity_model.py",
+                    "dscpuscripts/electricity_validation.py"),
     "metr_la": ("dscpuscripts/metr_la_sampling.py",
-                "dscpuscripts/metr_la_model.py"),
+                "dscpuscripts/metr_la_model.py",
+                "dscpuscripts/metr_la_validation.py"),
 }
 
 

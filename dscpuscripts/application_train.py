@@ -21,16 +21,14 @@ from dscpuscripts.common import atomic_json, read_json, data_identity
 from fulltd.metrics import evaluate
 from .electricity_model import build_model as build_electricity_model
 from .metr_la_model import build_model as build_metr_la_model
+from .electricity_validation import selection as electricity_validation_selection
+from .metr_la_validation import selection as metr_la_validation_selection
 from fulltd.sampling import rng_for, sequence_hash, training_universe
 from fulltd.train import seed_runtime, state_hash, logical_backward
 from .application_objectives import make_objective
 from .application_protocol import (PROTOCOL_ID, digest, validate_config,
                                    update_budgets, evaluation_steps,
                                    sources_for_application_round)
-
-VALIDATION_SEED = 0x54445633
-ELECTRICITY_VALIDATION_POLICY = "fixed_customer_ceil20pct_without_replacement_v1"
-FULL_VALIDATION_POLICY = "complete_fixed_validation_v1"
 
 
 def code_hash(config):
@@ -101,37 +99,13 @@ class _ValidationView:
 
 
 def evaluation_validation_view(dataset):
-    """One fixed independent validation view, shared across methods and seeds.
-
-    Electricity retains ceil(n_customer/5) windows per customer. METR-LA uses
-    its entire validation split. Sampling never consumes a training RNG stream.
-    """
+    """A fixed common validation view, with dataset policies in separate modules."""
     if (dataset.dataset not in ("electricity", "metr_la") or
             dataset.split not in ("val", "validation") or len(dataset) < 1):
         raise ValueError("A nonempty Electricity/METR-LA validation split is required")
     if dataset.dataset == "metr_la":
-        record = dict(policy=FULL_VALIDATION_POLICY, population_size=len(dataset),
-                      sampled_size=len(dataset), indices_sha256=sequence_hash(np.arange(len(dataset))))
-        return dataset, record
-    entities = np.asarray(dataset.entity_ids)
-    if (entities.shape != (len(dataset),) or not np.issubdtype(entities.dtype, np.integer)
-            or bool((entities < 0).any())):
-        raise ValueError("Electricity validation requires nonnegative integer customer IDs")
-    order = np.argsort(entities, kind="stable")
-    customers, counts = np.unique(entities[order], return_counts=True)
-    selected, customer_counts = [], []
-    start = 0
-    for customer, count in zip(customers, counts):
-        count = int(count)
-        size = (count + 4) // 5
-        rng = np.random.Generator(np.random.PCG64(np.random.SeedSequence([VALIDATION_SEED, int(customer)])))
-        selected.append(rng.choice(order[start:start + count], size=size, replace=False))
-        customer_counts.append(dict(customer_id=int(customer), population_size=count, sampled_size=size))
-        start += count
-    indices = np.sort(np.concatenate(selected))
-    record = dict(policy=ELECTRICITY_VALIDATION_POLICY, population_size=len(dataset),
-                  sampled_size=len(indices), indices_sha256=sequence_hash(indices),
-                  rng="numpy.PCG64", validation_seed=VALIDATION_SEED, per_customer=customer_counts)
+        return metr_la_validation_selection(dataset)
+    indices, record = electricity_validation_selection(dataset)
     return _ValidationView(dataset, indices, record), record
 
 
