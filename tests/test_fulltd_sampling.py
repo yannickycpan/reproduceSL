@@ -111,7 +111,6 @@ def test_source_partner_sequences_are_shared_and_independent_of_batch_grouping()
         assert not np.array_equal(a,sources_for_round(dataset,n,3,10))
 
 
-@pytest.mark.parametrize("lags", [(1, 24), (1, 12, 24, 36, 48)])
 def test_nested_lag_scan_must_keep_original_common_source_universe():
     class SparseDataset:
         entity_ids = np.zeros(5, dtype=np.int64)
@@ -132,6 +131,7 @@ def test_nested_lag_scan_must_keep_original_common_source_universe():
     assert len(new_law.nonisolated()) == len(common)
 
 
+@pytest.mark.parametrize("lags", [(1, 24), (1, 12, 24, 36, 48)])
 def test_exact_expected_objective_and_empirical_unbiased_sampling(lags):
     n=49
     law=LocalPairLaw(np.zeros(n),np.arange(n),lags)
