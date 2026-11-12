@@ -347,7 +347,7 @@ def test_real_spawn_workers_match_serial_with_actual_graph_wavenet(tmp_path):
             point_metric_code_sha256=analysis._point_metric_implementation_hash(),
             manifest_code_sha256="synthetic-manifest",
             batch_size=8, backbone="graph_wavenet", regime="full_budget",
-            method="mse", endpoints_only=True))
+            method="mse", lag_set="none", endpoints_only=True))
     torch.set_num_threads(1)
     serial = [analysis._evaluate_one_run_worker(task) for task in tasks]
     parallel_tasks = [dict(task, output=str(tmp_path / "parallel_output"))
@@ -396,7 +396,8 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
             return dict(x=self.x[indices], y=self.y[indices], mask=self.mask[indices])
 
     configs = [copy.deepcopy(c) for c in make_manifest() if c["dataset"] == "metr_la"
-               and c["method"] == "td_pairwise" and c["batch_size"] == 256 and c["configuration"] == 0]
+               and c["method"] == "td_pairwise" and c["batch_size"] == 256
+                and c["lags"] == [1, 3] and c["configuration"] == 0]
     for config in configs:
         # This report/caching fixture intentionally tests the full-epoch path;
         # the 10% case is covered by the dedicated sampling/recovery tests.
