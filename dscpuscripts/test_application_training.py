@@ -83,6 +83,11 @@ def config_for(dataset="metr_la", backbone="graph_wavenet", method="td_pairwise"
 def small_config(monkeypatch, **kwargs):
     config = config_for(**kwargs)
     config.update(epochs=2, learning_curve_updates=5, snapshot_updates=5)
+    if config["dataset"] == "metr_la":
+        # Existing checkpoint tests retain the original full-epoch fixture.
+        # The 10%-sampling resume path is tested separately below.
+        config["source_fraction"] = 1.0
+        config["source_sampling"] = "random_reshuffling"
     # The production validator is tested separately; shortening only the
     # fixture keeps this a meaningful end-to-end restart test without a sweep.
     monkeypatch.setattr(train, "validate_config", lambda c: c)
@@ -122,7 +127,13 @@ def test_application_manifest_matches_fd001_grids_without_legacy_methods():
         assert config["method"] not in ("td_full", "td_scalar", "dlinear_mse")
         assert config["backbone"] != "dlinear"
         assert "selection_epochs" not in config and "validation_epochs" not in config
-        assert config["learning_curve_updates"] == (5000 if config["dataset"] == "electricity" else 500)
+        assert config["learning_curve_updates"] == (
+            5000 if config["dataset"] == "electricity" else protocol.METR_LA_EVAL_PERIOD)
+        if config["dataset"] == "metr_la":
+            assert config["source_fraction"] == protocol.METR_LA_SOURCE_FRACTION
+            assert config["source_sampling"] == (
+                "random_reshuffling" if config["source_fraction"] == 1
+                else "iid_uniform_with_replacement")
         assert config["optimizer"] == "adam" and config["weight_decay"] == 0
         assert config["gradient_clipping"] is None and config["learning_rate_schedule"] is None
     for dataset, backbone, methods in protocol.MATRIX:
@@ -168,6 +179,26 @@ def test_extended_round_sampler_reuses_original_law_and_is_deterministic():
             protocol.sources_for_application_round("electricity", n, 4, step))
     with pytest.raises(ValueError, match="round"):
         protocol.sources_for_application_round("electricity", n, 3, 241)
+
+
+@pytest.mark.parametrize("fraction", [0.1, 0.25, 1.0])
+def test_metr_la_sampling_budget_reproducibility_and_exact_full_recovery(fraction):
+    from fulltd.sampling import sources_for_round
+    config = config_for()
+    config["source_fraction"] = fraction
+    n = 23967
+    budget = protocol.update_budgets(config, n)
+    assert budget["draws_per_round"] == math.ceil(n * fraction)
+    assert budget["total_updates"] == 100 * math.ceil(math.ceil(n * fraction) / 256)
+    draw = protocol.sources_for_application_round("metr_la", n, 2, 5, fraction)
+    assert len(draw) == budget["draws_per_round"]
+    assert (draw >= 0).all() and (draw < n).all()
+    np.testing.assert_array_equal(
+        draw, protocol.sources_for_application_round("metr_la", n, 2, 5, fraction))
+    if fraction == 1:
+        np.testing.assert_array_equal(draw, sources_for_round("metr_la", n, 2, 5))
+    else:
+        assert len(np.unique(draw)) < len(draw)
 
 
 def test_fixed_electricity_validation_is_shared_and_rng_independent():
@@ -222,6 +253,27 @@ def test_mid_round_resume_is_exact_and_retains_every_endpoint(tmp_path, monkeypa
             assert snapshot["progress"]["curve"][-1]["optimizer_steps"] == step
             assert snapshot["progress"]["pending_evaluation"] is None
         assert len(read_json(directory / "rounds.json")) == 2
+
+
+def test_ten_percent_metr_la_resume_matches_uninterrupted(tmp_path, monkeypatch):
+    config = small_config(monkeypatch, method="td_pairwise")
+    config.update(source_fraction=0.1, source_sampling="iid_uniform_with_replacement",
+                  learning_curve_updates=1, snapshot_updates=1)
+    monkeypatch.setattr(train, "build_objective",
+                        lambda c, data: make_objective(c["method"], ToyMean()))
+    tr, va = ToyData("metr_la", "train", n=300), ToyData("metr_la", "val", n=24)
+    done = train.train_candidate(config, tr, va, tmp_path / "full", microbatch=16)
+    paused = train.train_candidate(config, tr, va, tmp_path / "resumed",
+                                   microbatch=16, stop_after_updates=1)
+    assert paused["state"] == "checkpointed"
+    resumed = train.train_candidate(config, tr, va, tmp_path / "resumed", microbatch=16)
+    assert done["state"] == resumed["state"] == "complete"
+    assert done["optimizer_steps"] == resumed["optimizer_steps"] == 2
+    assert done["source_draws"] == 2 * math.ceil(len(tr) * 0.1)
+    a = torch.load(tmp_path / "full" / config["run_id"] / "final.pt", weights_only=False)
+    b = torch.load(tmp_path / "resumed" / config["run_id"] / "final.pt", weights_only=False)
+    for key in ("objective", "optimizer", "progress"):
+        assert_tree_equal(a[key], b[key])
 
 
 def test_electricity_resumes_exactly_after_round_100(tmp_path, monkeypatch):
