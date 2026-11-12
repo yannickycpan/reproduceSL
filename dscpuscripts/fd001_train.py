@@ -20,10 +20,10 @@ from dscpuscripts.common import atomic_json, read_json, data_identity
 from fulltd.data import load_dataset
 from fulltd.metrics import evaluate
 from fulltd.models import build_model
-from fulltd.sampling import (rng_for, sources_for_round, sequence_hash,
+from fulltd.sampling import (LocalPairLaw, rng_for, sources_for_round, sequence_hash,
                              training_universe)
 from fulltd.train import (seed_runtime, state_hash, logical_backward)
-from .fd001_protocol import (PROTOCOL_ID, EPOCHS, EVAL_UPDATE_PERIOD,
+from .fd001_protocol import (PROTOCOL_ID, EPOCHS, EVAL_UPDATE_PERIOD, LAG_SETS,
                                  digest, validate_config)
 
 
@@ -183,7 +183,11 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
         raise ValueError("The direct fresh FD001 sweep uses CPU only")
     stop_requested = stop_requested or (lambda: False)
     seed_runtime(config["seed"])
-    train, law, excluded = training_universe(train_data, tuple(config["lags"]))
+    # Do not add previously excluded source windows when adding lag types.
+    train, _, excluded = training_universe(train_data, LAG_SETS[0])
+    law = LocalPairLaw(train.entity_ids, train.origins, tuple(config["lags"]))
+    if len(law.nonisolated()) != len(train):
+        raise ValueError("Lag set isolates a source from the fixed common source universe")
     n = len(train)
     batch_size = config["batch_size"]
     physical = min(batch_size, microbatch)
