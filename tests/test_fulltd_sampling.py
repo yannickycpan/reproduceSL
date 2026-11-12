@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from dscpuscripts.application_protocol import make_manifest, validate_config, ELECTRICITY_ROUNDS, sources_for_application_round
-from fulltd.sampling import LocalPairLaw, rng_for, sources_for_round
+from fulltd.sampling import LocalPairLaw, rng_for, sources_for_round, training_universe
 
 
 def test_prespecified_matrix_and_budget():
@@ -112,6 +112,26 @@ def test_source_partner_sequences_are_shared_and_independent_of_batch_grouping()
 
 
 @pytest.mark.parametrize("lags", [(1, 24), (1, 12, 24, 36, 48)])
+def test_nested_lag_scan_must_keep_original_common_source_universe():
+    class SparseDataset:
+        entity_ids = np.zeros(5, dtype=np.int64)
+        origins = np.array([0, 1, 12, 25, 37], dtype=np.int64)
+        metadata = {}
+
+        def __len__(self):
+            return len(self.origins)
+
+    raw = SparseDataset()
+    common, _, excluded = training_universe(raw, (1, 24))
+    expanded, _, _ = training_universe(raw, (1, 12, 24, 36, 48))
+    assert len(common) == 3 and len(expanded) == 5
+    assert len(excluded) == 2
+    assert common.origins.tolist() == [0, 1, 25]
+    new_law = LocalPairLaw(common.entity_ids, common.origins,
+                           (1, 12, 24, 36, 48))
+    assert len(new_law.nonisolated()) == len(common)
+
+
 def test_exact_expected_objective_and_empirical_unbiased_sampling(lags):
     n=49
     law=LocalPairLaw(np.zeros(n),np.arange(n),lags)
