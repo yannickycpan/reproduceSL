@@ -54,7 +54,7 @@ def test_historical_electricity_selection_lock_stays_unchanged(
                 and c["configuration"] == 0]
     old_hash = analysis.LEGACY_ELECTRICITY_CODE_SHA256
     monkeypatch.setattr(analysis, "_verify_processed_data",
-                        lambda campaign, path: "validated synthetic bytes")
+                        lambda campaign, path, **kwargs: "validated synthetic bytes")
     results, output = tmp_path / "results", tmp_path / "outputs"
     for config in manifest:
         folder = results / config["run_id"]
@@ -98,7 +98,7 @@ def test_final_quarter_counts_only_positive_measurements_before_endpoint():
 def _fake_campaign(root, monkeypatch):
     """Small grid with realistic 100-epoch source accounting and off-grid endpoints."""
     monkeypatch.setattr(analysis, "_verify_processed_data",
-                        lambda campaign, path: "validated synthetic bytes")
+                        lambda campaign, path, **kwargs: "validated synthetic bytes")
     manifest = [copy.deepcopy(c) for c in make_manifest() if c["dataset"] == "metr_la"
                 and c["method"] in ("mse", "td_pairwise") and c["configuration"] in (0, 1)]
     for config in manifest:
@@ -383,7 +383,7 @@ def test_analysis_workers_must_be_positive(tmp_path):
 def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkeypatch):
     """Real training/snapshot I/O on a small model exercises both reporting budgets."""
     monkeypatch.setattr(analysis, "_verify_processed_data",
-                        lambda campaign, path: "validated synthetic bytes")
+                        lambda campaign, path, **kwargs: "validated synthetic bytes")
     import torch
     from dscpuscripts import application_train as train
     from dscpuscripts.application_objectives import make_objective
