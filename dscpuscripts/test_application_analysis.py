@@ -212,8 +212,8 @@ def test_standard_error_is_across_all_five_seeds_without_filtering():
     assert math.isinf(summary["mean"]) and math.isnan(summary["standard_error"])
 
 
-def test_electricity_point_metrics_skip_unused_raw_metrics(monkeypatch):
-    """Full-test reports use standardized scores, not unused raw kW metrics."""
+def test_electricity_point_metrics_keep_original_evaluation_call(monkeypatch):
+    """Do not change the original report evaluator's numerical behavior."""
     from dscpuscripts.application_analysis import _point_metrics
     import fulltd.metrics
     calls = []
@@ -232,7 +232,7 @@ def test_electricity_point_metrics_skip_unused_raw_metrics(monkeypatch):
     assert _point_metrics(object(), Dataset(), batch_size=19) == {
         "rmse": 1.5, "mae": 1.2}
     assert len(calls) == 1
-    assert calls[0]["include_raw"] is False
+    assert "include_raw" not in calls[0]
     assert calls[0]["batch_size"] == 19
 
 
@@ -254,7 +254,7 @@ def test_metr_la_point_metrics_still_include_mph(monkeypatch):
     monkeypatch.setattr(fulltd.metrics, "evaluate", fake_evaluate)
     assert _point_metrics(object(), Dataset(), batch_size=11) == {
         "rmse": 3.1, "mae": 2.6}
-    assert calls[0]["include_raw"] is True
+    assert "include_raw" not in calls[0]
 
 
 def test_analysis_workers_must_be_positive(tmp_path):
