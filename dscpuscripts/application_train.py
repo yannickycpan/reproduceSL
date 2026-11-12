@@ -23,10 +23,10 @@ from .electricity_model import build_model as build_electricity_model
 from .metr_la_model import build_model as build_metr_la_model
 from .electricity_validation import selection as electricity_validation_selection
 from .metr_la_validation import selection as metr_la_validation_selection
-from fulltd.sampling import rng_for, sequence_hash, training_universe
+from fulltd.sampling import LocalPairLaw, rng_for, sequence_hash, training_universe
 from fulltd.train import seed_runtime, state_hash, logical_backward
 from .application_objectives import make_objective
-from .application_protocol import (PROTOCOL_ID, digest, validate_config,
+from .application_protocol import (PROTOCOL_ID, LAG_SETS, digest, validate_config,
                                    update_budgets, evaluation_steps,
                                    sources_for_application_round)
 
@@ -166,7 +166,11 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
         raise ValueError("Candidate dataset and train/validation split do not agree")
     stop_requested = stop_requested or (lambda: False)
     seed_runtime(config["seed"])
-    train, law, excluded = training_universe(train_data, tuple(config["lags"]))
+    # Hold the same source universe across all nested-lag variants.
+    train, _, excluded = training_universe(train_data, LAG_SETS[config["dataset"]][0])
+    law = LocalPairLaw(train.entity_ids, train.origins, tuple(config["lags"]))
+    if len(law.nonisolated()) != len(train):
+        raise ValueError("Lag set isolates a source from the fixed common source universe")
     validation, subset_record = evaluation_validation_view(val_data)
     n, batch_size = len(train), config["batch_size"]
     physical = min(batch_size, microbatch)
