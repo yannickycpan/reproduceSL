@@ -140,6 +140,40 @@ class _ScopeBranches(ast.NodeTransformer):
     def __init__(self, config):
         self.config = config
 
+    def visit_FunctionDef(self, node):
+        # After pruning a selected return branch, code below it is unreachable
+        # for this particular dataset/method and must not widen its hash.
+        body = []
+        for statement in node.body:
+            changed = self.visit(statement)
+            parts = changed if isinstance(changed, list) else (
+                [] if changed is None else [changed])
+            body.extend(parts)
+            if parts and isinstance(parts[-1], (ast.Return, ast.Raise)):
+                break
+        node.body = body
+        return node
+
+    def visit_ImportFrom(self, node):
+        # Factory imports of unrelated baseline heads are not dependencies.
+        if node.module and node.module.startswith("agents.fulltd_"):
+            actual = node.module + ".py"
+            return node if METHOD_FILES.get(self.config["method"]) == actual else None
+        return node
+
+    def visit_Assign(self, node):
+        if (len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+                and node.targets[0].id == "classes"
+                and isinstance(node.value, ast.Dict)):
+            # The baseline dispatch table contains other methods' entries.
+            # Retain only the entry actually used by the selected objective.
+            choices = [(k, v) for k, v in zip(node.value.keys, node.value.values)
+                       if isinstance(k, ast.Constant) and k.value == self.config["method"]]
+            if choices:
+                node.value.keys = [choices[0][0]]
+                node.value.values = [choices[0][1]]
+        return self.generic_visit(node)
+
     def visit_If(self, node):
         decision = _choose_condition(node.test, self.config)
         if decision is True:
