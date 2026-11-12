@@ -1,4 +1,4 @@
-"""The sole current FD001 experiment protocol: four methods and 600 runs.
+"""The sole current FD001 experiment protocol: four methods and three TD lag settings.
 
 Only the measurement/checkpoint cadence changes the original 100-epoch
 training procedure. HP selection is a *reporting* decision, not a
@@ -10,7 +10,7 @@ import os
 
 from fulltd.protocol import digest
 
-PROTOCOL_ID = "fd001-four-methods"
+PROTOCOL_ID = "fd001-four-methods-lag-sweep-v2"
 SEEDS = tuple(range(5))
 EPOCHS = 100
 # This is an immutable per-run scientific setting. Do not change it after
@@ -24,6 +24,7 @@ BASELINE_ALPHAS = (0.0001, 0.0003, 0.0005, 0.0007, 0.0009,
                    0.001, 0.003, 0.005, 0.007, 0.01)
 TD_ALPHAS = (0.00003, 0.0001, 0.0003, 0.001, 0.003)
 METHODS = ("mse", "gaussian_nll", "td_typed", "td_pairwise")
+LAG_SETS = ((1, 5), (1, 3, 5), (1, 3, 5, 10, 15))
 ALPHAS = dict(mse=BASELINE_ALPHAS, gaussian_nll=BASELINE_ALPHAS,
               td_typed=TD_ALPHAS, td_pairwise=TD_ALPHAS)
 BATCH_SIZES = dict(mse=(256,), gaussian_nll=(256,),
@@ -33,25 +34,28 @@ BATCH_SIZES = dict(mse=(256,), gaussian_nll=(256,),
 def make_manifest():
     runs = []
     for method in METHODS:
+        td = method.startswith("td_")
         rate_pairs = [(alpha, beta) for alpha in ALPHAS[method]
-                      for beta in (BETAS if method.startswith("td_") else (None,))]
-        for batch_size in BATCH_SIZES[method]:
-            for setting, (alpha, beta) in enumerate(rate_pairs):
-                for seed in SEEDS:
-                    runs.append(dict(
-                        run_id=f"fd001_{method}_b{batch_size}_h{setting}_s{seed}",
-                        protocol_id=PROTOCOL_ID, dataset="fd001", backbone="tcn",
-                        method=method, alpha=alpha, beta=beta,
-                        batch_size=batch_size, configuration=setting, seed=seed,
-                        epochs=EPOCHS, source_sampling="random_reshuffling",
-                        optimizer="adam", adam_betas=[0.9, 0.999], adam_eps=1e-8,
-                        weight_decay=0, gradient_clipping=None, learning_rate_schedule=None,
-                        learning_curve_updates=EVAL_UPDATE_PERIOD,
-                        snapshot_updates=EVAL_UPDATE_PERIOD,
-                        validation_sampling="full", lags=[1, 5],
-                        checkpoint_policy="update_snapshots_and_resumable_cursor"))
-    assert len(runs) == 600
-    assert len({c["run_id"] for c in runs}) == 600
+                      for beta in (BETAS if td else (None,))]
+        for lags in (LAG_SETS if td else LAG_SETS[:1]):
+            lag_id = "_lags" + "-".join(map(str, lags)) if td else ""
+            for batch_size in BATCH_SIZES[method]:
+                for setting, (alpha, beta) in enumerate(rate_pairs):
+                    for seed in SEEDS:
+                        runs.append(dict(
+                            run_id=f"fd001_{method}_b{batch_size}_h{setting}_s{seed}{lag_id}",
+                            protocol_id=PROTOCOL_ID, dataset="fd001", backbone="tcn",
+                            method=method, alpha=alpha, beta=beta,
+                            batch_size=batch_size, configuration=setting, seed=seed,
+                            epochs=EPOCHS, source_sampling="random_reshuffling",
+                            optimizer="adam", adam_betas=[0.9, 0.999], adam_eps=1e-8,
+                            weight_decay=0, gradient_clipping=None, learning_rate_schedule=None,
+                            learning_curve_updates=EVAL_UPDATE_PERIOD,
+                            snapshot_updates=EVAL_UPDATE_PERIOD,
+                            validation_sampling="full", lags=list(lags),
+                            checkpoint_policy="update_snapshots_and_resumable_cursor"))
+    assert len(runs) == 1600
+    assert len({c["run_id"] for c in runs}) == len(runs)
     return runs
 
 
