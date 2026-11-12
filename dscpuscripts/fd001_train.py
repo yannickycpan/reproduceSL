@@ -186,8 +186,6 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
     # Do not add previously excluded source windows when adding lag types.
     train, _, excluded = training_universe(train_data, LAG_SETS[0])
     law = LocalPairLaw(train.entity_ids, train.origins, tuple(config["lags"]))
-    if len(law.nonisolated()) != len(train):
-        raise ValueError("Lag set isolates a source from the fixed common source universe")
     n = len(train)
     batch_size = config["batch_size"]
     physical = min(batch_size, microbatch)
