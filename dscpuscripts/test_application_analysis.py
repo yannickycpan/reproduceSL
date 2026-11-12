@@ -267,6 +267,9 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
         assert (output / "endpoint_manifest.json").is_file()
         assert not (output / "evaluation_manifest.json").exists()
         assert not (output / "learning_curves_per_seed.csv").exists()
+        with pytest.raises(ValueError, match="Only endpoint tables"):
+            analysis.run("metr_la", "plots", results_dir=results,
+                         data_dir=tmp_path, output=output)
 
         # Simulate an endpoint computed by the previous aggregate-hash cache
         # layout. It must migrate without another expensive test inference.
