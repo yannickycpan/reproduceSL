@@ -1,6 +1,6 @@
 """Dataset-scoped, explicit Electricity and METR-LA experimental manifests.
 
-FD001 is independent and unchanged. The METR-LA source fraction defaults to
+FD001 has an independent matching nested-lag sweep. The METR-LA source fraction defaults to
 10%, with 100 stochastic rounds. A 100% fraction recovers the exact original
 full-permutation training setting. Electricity retains its prior protocol.
 """
