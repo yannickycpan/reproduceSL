@@ -1,7 +1,7 @@
 [
   {
     "run_id": "electricity_patchtst_mse_b256_h0_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -35,7 +35,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h0_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -69,7 +69,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h0_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -103,7 +103,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h0_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -137,7 +137,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h0_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -171,7 +171,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h1_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -205,7 +205,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h1_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -239,7 +239,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h1_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -273,7 +273,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h1_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -307,7 +307,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h1_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -341,7 +341,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h2_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -375,7 +375,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h2_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -409,7 +409,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h2_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -443,7 +443,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h2_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -477,7 +477,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h2_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -511,7 +511,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h3_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -545,7 +545,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h3_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -579,7 +579,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h3_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -613,7 +613,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h3_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -647,7 +647,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h3_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -681,7 +681,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h4_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -715,7 +715,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h4_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -749,7 +749,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h4_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -783,7 +783,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h4_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -817,7 +817,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h4_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -851,7 +851,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h5_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -885,7 +885,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h5_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -919,7 +919,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h5_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -953,7 +953,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h5_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -987,7 +987,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h5_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1021,7 +1021,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h6_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1055,7 +1055,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h6_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1089,7 +1089,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h6_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1123,7 +1123,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h6_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1157,7 +1157,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h6_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1191,7 +1191,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h7_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1225,7 +1225,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h7_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1259,7 +1259,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h7_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1293,7 +1293,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h7_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1327,7 +1327,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h7_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1361,7 +1361,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h8_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1395,7 +1395,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h8_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1429,7 +1429,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h8_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1463,7 +1463,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h8_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1497,7 +1497,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h8_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1531,7 +1531,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h9_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1565,7 +1565,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h9_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1599,7 +1599,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h9_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1633,7 +1633,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h9_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1667,7 +1667,7 @@
   },
   {
     "run_id": "electricity_patchtst_mse_b256_h9_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "mse",
@@ -1701,7 +1701,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h0_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -1735,7 +1735,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h0_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -1769,7 +1769,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h0_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -1803,7 +1803,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h0_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -1837,7 +1837,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h0_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -1871,7 +1871,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h1_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -1905,7 +1905,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h1_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -1939,7 +1939,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h1_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -1973,7 +1973,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h1_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2007,7 +2007,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h1_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2041,7 +2041,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h2_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2075,7 +2075,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h2_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2109,7 +2109,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h2_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2143,7 +2143,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h2_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2177,7 +2177,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h2_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2211,7 +2211,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h3_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2245,7 +2245,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h3_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2279,7 +2279,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h3_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2313,7 +2313,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h3_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2347,7 +2347,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h3_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2381,7 +2381,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h4_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2415,7 +2415,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h4_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2449,7 +2449,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h4_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2483,7 +2483,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h4_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2517,7 +2517,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h4_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2551,7 +2551,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h5_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2585,7 +2585,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h5_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2619,7 +2619,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h5_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2653,7 +2653,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h5_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2687,7 +2687,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h5_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2721,7 +2721,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h6_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2755,7 +2755,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h6_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2789,7 +2789,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h6_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2823,7 +2823,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h6_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2857,7 +2857,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h6_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2891,7 +2891,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h7_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2925,7 +2925,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h7_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2959,7 +2959,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h7_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -2993,7 +2993,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h7_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -3027,7 +3027,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h7_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -3061,7 +3061,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h8_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -3095,7 +3095,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h8_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -3129,7 +3129,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h8_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -3163,7 +3163,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h8_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -3197,7 +3197,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h8_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -3231,7 +3231,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h9_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -3265,7 +3265,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h9_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -3299,7 +3299,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h9_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -3333,7 +3333,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h9_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -3367,7 +3367,7 @@
   },
   {
     "run_id": "electricity_patchtst_gaussian_nll_b256_h9_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "gaussian_nll",
@@ -3401,7 +3401,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h0_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3435,7 +3435,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h0_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3469,7 +3469,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h0_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3503,7 +3503,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h0_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3537,7 +3537,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h0_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3571,7 +3571,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h1_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3605,7 +3605,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h1_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3639,7 +3639,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h1_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3673,7 +3673,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h1_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3707,7 +3707,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h1_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3741,7 +3741,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h2_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3775,7 +3775,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h2_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3809,7 +3809,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h2_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3843,7 +3843,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h2_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3877,7 +3877,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h2_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3911,7 +3911,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h3_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3945,7 +3945,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h3_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -3979,7 +3979,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h3_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4013,7 +4013,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h3_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4047,7 +4047,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h3_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4081,7 +4081,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h4_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4115,7 +4115,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h4_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4149,7 +4149,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h4_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4183,7 +4183,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h4_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4217,7 +4217,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h4_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4251,7 +4251,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h5_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4285,7 +4285,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h5_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4319,7 +4319,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h5_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4353,7 +4353,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h5_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4387,7 +4387,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h5_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4421,7 +4421,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h6_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4455,7 +4455,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h6_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4489,7 +4489,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h6_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4523,7 +4523,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h6_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4557,7 +4557,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h6_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4591,7 +4591,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h7_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4625,7 +4625,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h7_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4659,7 +4659,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h7_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4693,7 +4693,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h7_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4727,7 +4727,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h7_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4761,7 +4761,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h8_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4795,7 +4795,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h8_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4829,7 +4829,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h8_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4863,7 +4863,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h8_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4897,7 +4897,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h8_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4931,7 +4931,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h9_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4965,7 +4965,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h9_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -4999,7 +4999,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h9_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5033,7 +5033,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h9_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5067,7 +5067,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h9_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5101,7 +5101,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h10_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5135,7 +5135,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h10_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5169,7 +5169,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h10_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5203,7 +5203,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h10_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5237,7 +5237,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h10_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5271,7 +5271,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h11_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5305,7 +5305,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h11_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5339,7 +5339,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h11_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5373,7 +5373,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h11_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5407,7 +5407,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h11_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5441,7 +5441,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h12_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5475,7 +5475,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h12_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5509,7 +5509,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h12_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5543,7 +5543,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h12_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5577,7 +5577,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h12_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5611,7 +5611,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h13_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5645,7 +5645,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h13_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5679,7 +5679,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h13_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5713,7 +5713,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h13_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5747,7 +5747,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h13_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5781,7 +5781,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h14_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5815,7 +5815,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h14_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5849,7 +5849,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h14_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5883,7 +5883,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h14_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5917,7 +5917,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h14_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5951,7 +5951,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h15_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -5985,7 +5985,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h15_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6019,7 +6019,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h15_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6053,7 +6053,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h15_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6087,7 +6087,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h15_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6121,7 +6121,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h16_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6155,7 +6155,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h16_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6189,7 +6189,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h16_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6223,7 +6223,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h16_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6257,7 +6257,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h16_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6291,7 +6291,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h17_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6325,7 +6325,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h17_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6359,7 +6359,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h17_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6393,7 +6393,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h17_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6427,7 +6427,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h17_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6461,7 +6461,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h18_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6495,7 +6495,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h18_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6529,7 +6529,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h18_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6563,7 +6563,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h18_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6597,7 +6597,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h18_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6631,7 +6631,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h19_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6665,7 +6665,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h19_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6699,7 +6699,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h19_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6733,7 +6733,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h19_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6767,7 +6767,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h19_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6801,7 +6801,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h20_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6835,7 +6835,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h20_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6869,7 +6869,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h20_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6903,7 +6903,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h20_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6937,7 +6937,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h20_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -6971,7 +6971,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h21_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7005,7 +7005,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h21_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7039,7 +7039,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h21_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7073,7 +7073,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h21_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7107,7 +7107,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h21_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7141,7 +7141,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h22_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7175,7 +7175,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h22_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7209,7 +7209,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h22_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7243,7 +7243,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h22_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7277,7 +7277,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h22_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7311,7 +7311,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h23_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7345,7 +7345,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h23_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7379,7 +7379,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h23_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7413,7 +7413,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h23_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7447,7 +7447,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h23_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7481,7 +7481,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h24_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7515,7 +7515,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h24_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7549,7 +7549,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h24_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7583,7 +7583,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h24_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7617,7 +7617,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_typed_b256_h24_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_typed",
@@ -7651,7 +7651,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h0_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -7685,7 +7685,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h0_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -7719,7 +7719,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h0_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -7753,7 +7753,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h0_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -7787,7 +7787,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h0_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -7821,7 +7821,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h1_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -7855,7 +7855,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h1_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -7889,7 +7889,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h1_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -7923,7 +7923,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h1_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -7957,7 +7957,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h1_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -7991,7 +7991,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h2_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8025,7 +8025,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h2_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8059,7 +8059,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h2_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8093,7 +8093,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h2_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8127,7 +8127,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h2_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8161,7 +8161,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h3_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8195,7 +8195,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h3_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8229,7 +8229,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h3_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8263,7 +8263,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h3_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8297,7 +8297,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h3_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8331,7 +8331,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h4_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8365,7 +8365,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h4_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8399,7 +8399,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h4_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8433,7 +8433,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h4_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8467,7 +8467,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h4_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8501,7 +8501,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h5_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8535,7 +8535,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h5_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8569,7 +8569,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h5_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8603,7 +8603,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h5_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8637,7 +8637,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h5_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8671,7 +8671,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h6_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8705,7 +8705,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h6_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8739,7 +8739,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h6_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8773,7 +8773,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h6_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8807,7 +8807,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h6_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8841,7 +8841,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h7_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8875,7 +8875,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h7_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8909,7 +8909,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h7_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8943,7 +8943,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h7_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -8977,7 +8977,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h7_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9011,7 +9011,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h8_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9045,7 +9045,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h8_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9079,7 +9079,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h8_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9113,7 +9113,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h8_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9147,7 +9147,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h8_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9181,7 +9181,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h9_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9215,7 +9215,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h9_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9249,7 +9249,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h9_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9283,7 +9283,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h9_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9317,7 +9317,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h9_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9351,7 +9351,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h10_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9385,7 +9385,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h10_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9419,7 +9419,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h10_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9453,7 +9453,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h10_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9487,7 +9487,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h10_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9521,7 +9521,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h11_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9555,7 +9555,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h11_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9589,7 +9589,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h11_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9623,7 +9623,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h11_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9657,7 +9657,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h11_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9691,7 +9691,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h12_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9725,7 +9725,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h12_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9759,7 +9759,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h12_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9793,7 +9793,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h12_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9827,7 +9827,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h12_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9861,7 +9861,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h13_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9895,7 +9895,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h13_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9929,7 +9929,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h13_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9963,7 +9963,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h13_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -9997,7 +9997,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h13_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10031,7 +10031,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h14_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10065,7 +10065,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h14_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10099,7 +10099,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h14_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10133,7 +10133,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h14_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10167,7 +10167,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h14_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10201,7 +10201,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h15_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10235,7 +10235,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h15_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10269,7 +10269,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h15_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10303,7 +10303,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h15_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10337,7 +10337,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h15_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10371,7 +10371,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h16_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10405,7 +10405,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h16_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10439,7 +10439,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h16_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10473,7 +10473,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h16_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10507,7 +10507,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h16_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10541,7 +10541,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h17_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10575,7 +10575,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h17_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10609,7 +10609,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h17_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10643,7 +10643,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h17_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10677,7 +10677,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h17_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10711,7 +10711,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h18_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10745,7 +10745,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h18_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10779,7 +10779,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h18_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10813,7 +10813,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h18_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10847,7 +10847,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h18_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10881,7 +10881,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h19_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10915,7 +10915,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h19_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10949,7 +10949,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h19_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -10983,7 +10983,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h19_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11017,7 +11017,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h19_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11051,7 +11051,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h20_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11085,7 +11085,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h20_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11119,7 +11119,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h20_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11153,7 +11153,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h20_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11187,7 +11187,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h20_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11221,7 +11221,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h21_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11255,7 +11255,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h21_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11289,7 +11289,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h21_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11323,7 +11323,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h21_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11357,7 +11357,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h21_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11391,7 +11391,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h22_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11425,7 +11425,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h22_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11459,7 +11459,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h22_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11493,7 +11493,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h22_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11527,7 +11527,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h22_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11561,7 +11561,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h23_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11595,7 +11595,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h23_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11629,7 +11629,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h23_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11663,7 +11663,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h23_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11697,7 +11697,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h23_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11731,7 +11731,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h24_s0",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11765,7 +11765,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h24_s1",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11799,7 +11799,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h24_s2",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11833,7 +11833,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h24_s3",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
@@ -11867,7 +11867,7 @@
   },
   {
     "run_id": "electricity_patchtst_td_pairwise_b256_h24_s4",
-    "protocol_id": "applications-fd001-aligned-v3-electricity-10passes",
+    "protocol_id": "applications-metrla-sampling-fraction-v1",
     "dataset": "electricity",
     "backbone": "patchtst",
     "method": "td_pairwise",
