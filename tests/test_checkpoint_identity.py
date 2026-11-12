@@ -172,6 +172,16 @@ def test_mixed_application_module_is_hashed_by_reachable_dataset_and_method(
     assert code_hash(metr, root=tmp_path) != before["metr"]
     train.write_text(original)
 
+    # Dataset-specific validation view routing is also isolated.
+    original_train = train.read_text()
+    selection = "return metr_la_validation_selection(dataset)"
+    assert selection in original_train
+    train.write_text(original_train.replace(
+        selection, "return metr_la_validation_selection(dataset, extra=True)"))
+    assert code_hash(electricity, root=tmp_path) == before["electricity"]
+    assert code_hash(metr, root=tmp_path) != before["metr"]
+    train.write_text(original_train)
+
     # Different dataset-specific LazyDataset.get_batch branches are
     # independent even though FD001 freezes the containing shared file.
     data = tmp_path / "fulltd/data.py"
@@ -193,6 +203,14 @@ def test_mixed_application_module_is_hashed_by_reachable_dataset_and_method(
     assert code_hash(metr, root=tmp_path) == before["metr"]
     assert code_hash(pair, root=tmp_path) == before["pair"]
     assert code_hash(typed, root=tmp_path) != before["typed"]
+    objective.write_text(original)
+
+    # Baseline factory dispatch must ignore another baseline's import path.
+    assert "from agents.fulltd_gaussian_nll import GaussianNLL" in original
+    objective.write_text(original.replace(
+        "from agents.fulltd_gaussian_nll import GaussianNLL",
+        "from agents.fulltd_gaussian_nll import AnotherGaussianNLL"))
+    assert code_hash(metr, root=tmp_path) == before["metr"]
     objective.write_text(original)
 
     # Generic training semantics still invalidate every dependent run.
