@@ -159,7 +159,10 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
     configs = [copy.deepcopy(c) for c in make_manifest() if c["dataset"] == "metr_la"
                and c["method"] == "td_pairwise" and c["batch_size"] == 256 and c["configuration"] == 0]
     for config in configs:
-        config.update(epochs=2, learning_curve_updates=5, snapshot_updates=5)
+        # This report/caching fixture intentionally tests the full-epoch path;
+        # the 10% case is covered by the dedicated sampling/recovery tests.
+        config.update(epochs=2, learning_curve_updates=5, snapshot_updates=5,
+                      source_fraction=1.0, source_sampling="random_reshuffling")
     monkeypatch.setattr(analysis, "manifest_for", lambda campaign: configs)
     monkeypatch.setattr(analysis, "training_code_hash", lambda config: "fixture-real-io")
     monkeypatch.setattr(train, "code_hash", lambda config: "fixture-real-io")
