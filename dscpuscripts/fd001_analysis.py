@@ -308,7 +308,7 @@ def plot(output):
     tables=load_csv(out/"performance_summary.csv")
     selected=load_csv(out/"selected_hyperparameters.csv")
     display={method_key(row): f"{LABELS[row['method']]} (B{row['batch_size']}"
-             + (f", lags {{{row['lag_set'].replace('-', ',')}}}" if row.get("lag_set") != "none" else "")
+             + (f", lags {{{row['lag_set'].replace('-', ',')}}}" if row.get("lag_set", "none") != "none" else "")
              + ")" for row in selected}
     if len(display) != len(selected):
         raise ValueError("Selected TD lag variants must be distinct")
