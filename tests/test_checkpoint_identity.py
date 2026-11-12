@@ -38,19 +38,87 @@ def test_existing_fd001_scientific_bytes_and_identity_are_unchanged():
     assert fd001_train.code_hash() == FD001_BASELINE_CODE_HASH
 
 
-def test_current_application_scientific_hash_boundary(tmp_path, monkeypatch):
-    for name in application_train.SCIENTIFIC_SOURCES:
-        target = tmp_path / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(b"original\n")
-    monkeypatch.setattr(application_train, "__file__",
-                        str(tmp_path / "dscpuscripts" / "application_train.py"))
-    original = application_train.code_hash()
-    (tmp_path / "dscpuscripts" / "standard_runner.py").write_bytes(b"different scheduling\n")
-    (tmp_path / "dscpuscripts" / "application_analysis.py").write_bytes(b"different reporting\n")
-    assert application_train.code_hash() == original
-    objective = tmp_path / "dscpuscripts" / "application_objectives.py"
-    objective.write_bytes(b"original\r\n")
-    assert application_train.code_hash() == original
-    objective.write_bytes(b"changed scientific objective\n")
-    assert application_train.code_hash() != original
+def test_application_hash_scopes_dataset_algorithm_and_common_code(tmp_path):
+    import shutil
+    from dscpuscripts.application_identity import (
+        code_hash, SHARED_FILES, DATASET_FILES, METHOD_FILES)
+    from dscpuscripts.application_protocol import make_manifest
+
+    root = Path(__file__).resolve().parents[1]
+    files = set(SHARED_FILES)
+    files.update(name for paths in DATASET_FILES.values() for name in paths)
+    files.update(METHOD_FILES.values())
+    files.update(("fulltd/models.py", "fulltd/data.py",
+                  "dscpuscripts/application_protocol.py",
+                  "dscpuscripts/application_objectives.py",
+                  "dscpuscripts/fd001_objectives.py"))
+    for name in sorted(files):
+        dest = tmp_path / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(root / name, dest)
+
+    manifest = make_manifest()
+    electricity = next(c for c in manifest
+                       if c["dataset"] == "electricity" and c["method"] == "mse")
+    metr_mse = next(c for c in manifest
+                    if c["dataset"] == "metr_la" and c["method"] == "mse")
+    metr_pair = next(c for c in manifest
+                     if c["dataset"] == "metr_la" and c["method"] == "td_pairwise")
+
+    old_elec = code_hash(electricity, root=tmp_path)
+    old_metr = code_hash(metr_mse, root=tmp_path)
+
+    # Editing only METR-LA sampling cannot invalidate Electricity.
+    sampling = tmp_path / "dscpuscripts/metr_la_sampling.py"
+    sampling.write_text(sampling.read_text() + "\n# METR-only change\n")
+    assert code_hash(electricity, root=tmp_path) == old_elec
+    assert code_hash(metr_mse, root=tmp_path) != old_metr
+
+    # A change to the pairwise objective must not invalidate ordinary MSE.
+    objective = tmp_path / "dscpuscripts/application_objectives.py"
+    original = objective.read_text()
+    assert 'gamma_variant = "pairwise"' in original
+    mse_before = code_hash(metr_mse, root=tmp_path)
+    pair_before = code_hash(metr_pair, root=tmp_path)
+    objective.write_text(original.replace('gamma_variant = "pairwise"',
+                                          'gamma_variant = "pairwise-changed"'))
+    assert code_hash(metr_mse, root=tmp_path) == mse_before
+    assert code_hash(metr_pair, root=tmp_path) != pair_before
+
+    # Shared evaluation code does invalidate genuinely dependent models.
+    metrics = tmp_path / "fulltd/metrics.py"
+    metrics.write_text(metrics.read_text() + "\n# Shared-code change\n")
+    assert code_hash(electricity, root=tmp_path) != old_elec
+
+
+def test_metr_la_model_change_does_not_invalidate_electricity(tmp_path):
+    import shutil
+    from dscpuscripts.application_identity import (
+        code_hash, SHARED_FILES, DATASET_FILES, METHOD_FILES)
+    from dscpuscripts.application_protocol import make_manifest
+
+    root = Path(__file__).resolve().parents[1]
+    paths = set(SHARED_FILES)
+    paths.update(name for names in DATASET_FILES.values() for name in names)
+    paths.update(METHOD_FILES.values())
+    paths.update(("fulltd/models.py", "fulltd/data.py",
+                  "dscpuscripts/application_protocol.py",
+                  "dscpuscripts/application_objectives.py",
+                  "dscpuscripts/fd001_objectives.py"))
+    for name in paths:
+        dest = tmp_path / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(root / name, dest)
+    manifest = make_manifest()
+    electricity = next(c for c in manifest
+                       if c["dataset"] == "electricity" and c["method"] == "mse")
+    metr = next(c for c in manifest
+                if c["dataset"] == "metr_la" and c["method"] == "mse")
+    e0, m0 = code_hash(electricity, root=tmp_path), code_hash(metr, root=tmp_path)
+    models = tmp_path / "fulltd/models.py"
+    content = models.read_text()
+    assert "self.feature_dim = 192" in content
+    models.write_text(content.replace("self.feature_dim = 192",
+                                      "self.feature_dim = 191"))
+    assert code_hash(electricity, root=tmp_path) == e0
+    assert code_hash(metr, root=tmp_path) != m0
