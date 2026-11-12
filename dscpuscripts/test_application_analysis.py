@@ -34,6 +34,7 @@ def test_historical_electricity_identity_is_read_only_pinned_and_never_guessed(
     # A newly recomputed scoped identity is NOT the old hash and must never
     # be silently substituted into pre-refactor checkpoint validation.
     assert old_hash != "new-scoped-scientific-identity"
+    assert analysis._plan_code_hash(manifest, selected) == old_hash
     assert digest([[c["run_id"], selected[c["run_id"]]] for c in manifest]) != old_hash
 
     # If the first candidate is not the known pinned historical code,
@@ -45,13 +46,12 @@ def test_historical_electricity_identity_is_read_only_pinned_and_never_guessed(
     assert set(current.values()) == {"new-scoped-scientific-identity"}
 
 
-def test_historical_electricity_selection_lock_migrates_hash_only(
+def test_historical_electricity_selection_lock_stays_unchanged(
         tmp_path, monkeypatch):
-    """Legacy plan can be reused only when all validation choices are unchanged."""
+    """The original Electricity selection/code hash must survive analysis unchanged."""
     manifest = [copy.deepcopy(c) for c in make_manifest()
                 if c["dataset"] == "electricity" and c["method"] == "mse"
                 and c["configuration"] == 0]
-    assert len(manifest) == 5
     old_hash = analysis.LEGACY_ELECTRICITY_CODE_SHA256
     results, output = tmp_path / "results", tmp_path / "outputs"
     for config in manifest:
@@ -60,21 +60,19 @@ def test_historical_electricity_selection_lock_migrates_hash_only(
         atomic_json(folder / "status.json",
                     dict(config=config, identity=dict(code_sha256=old_hash)))
     monkeypatch.setattr(analysis, "manifest_for", lambda campaign: manifest)
-    code = digest([[c["run_id"], old_hash] for c in manifest])
-    plan = dict(dataset="electricity", code_sha256=code,
+    expected = analysis._expected_codes(manifest, results)
+    assert analysis._plan_code_hash(manifest, expected) == old_hash
+    plan = dict(dataset="electricity", code_sha256=old_hash,
                 manifest_sha256=digest(manifest), choices=[])
     monkeypatch.setattr(analysis, "compute_plan",
                         lambda campaign, results_path: (plan, []))
     output.mkdir()
-    old = dict(plan, code_sha256=old_hash)
-    atomic_json(output / "selections.json", old)
+    atomic_json(output / "selections.json", plan)
     analysis.run("electricity", "check", data_dir=tmp_path,
                  results_dir=results, output=output)
     assert read_json(output / "selections.json") == plan
-    assert read_json(output / "selections_pre_scoped_hash.json") == old
+    assert not (output / "selections_pre_scoped_hash.json").exists()
 
-    # Even a different HP selection or changed checkpoint identity refuses
-    # migration. An already migrated lock cannot be rewritten implicitly.
     changed = dict(plan, choices=[{"changed": "scientific selection"}])
     monkeypatch.setattr(analysis, "compute_plan",
                         lambda campaign, results_path: (changed, []))
