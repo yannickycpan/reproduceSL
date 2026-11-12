@@ -46,7 +46,7 @@ def build_objective(config, dataset=None):
         model = build_metr_la_model(config["seed"], adjacency)
     else:
         raise ValueError("Unsupported application dataset/backbone")
-    return make_objective(config["method"], model)
+    return make_objective(config["method"], model, num_types=len(config["lags"]))
 
 
 def atomic_torch(path, value):
@@ -323,7 +323,7 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
             progress["rounds"].append(dict(epoch=epoch, source_draws=draws,
                 source_sha256=sequence_hash(sources),
                 partner_sha256=sequence_hash(partners) if td else None,
-                type_counts=np.bincount(types, minlength=2).tolist() if td else [],
+                type_counts=np.bincount(types, minlength=len(config["lags"])).tolist() if td else [],
                 optimizer_steps_cumulative=progress["optimizer_steps"],
                 update_opportunities_cumulative=progress["count"],
                 empty_mask_batches_cumulative=progress["empty_mask_batches"],
