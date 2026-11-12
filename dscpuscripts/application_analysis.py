@@ -74,6 +74,19 @@ def _expected_codes(manifest, results):
     return codes
 
 
+def _plan_code_hash(manifest, codes):
+    """Keep the original Electricity analysis-lock/cache identity unchanged.
+
+    The original sweep used one pinned scientific hash for every candidate.
+    Only newly scoped experiments use the per-run aggregate digest.
+    """
+    if (manifest and manifest[0]["dataset"] == "electricity"
+            and all(codes[c["run_id"]] == LEGACY_ELECTRICITY_CODE_SHA256
+                    for c in manifest)):
+        return LEGACY_ELECTRICITY_CODE_SHA256
+    return digest([[c["run_id"], codes[c["run_id"]]] for c in manifest])
+
+
 def selection_update_steps(measured_steps, endpoint):
     """Apply the FD001 count-based final-quarter rule AFTER endpoint truncation."""
     if type(endpoint) is not int or endpoint < 1:
@@ -274,7 +287,7 @@ def compute_plan(campaign, results):
     choices.sort(key=_choice_order)
     plan = dict(analysis_version=ANALYSIS_VERSION,
                 protocol_id=manifest[0]["protocol_id"], dataset=campaign,
-                code_sha256=digest([[r["run_id"], code_by_id[r["run_id"]]] for r in manifest]),
+                code_sha256=_plan_code_hash(manifest, code_by_id),
                 manifest_sha256=digest(manifest),
                 data_sha256=shared["data_sha256"], validation_sha256=shared["validation_sha256"],
                 validation_subset=shared["validation_subset"], n_sources=shared["n_sources"],
@@ -456,8 +469,7 @@ def evaluate_selected(plan, results, data_dir, output, batch_size=128,
     campaign = plan["dataset"]
     candidate_manifest = manifest_for(campaign)
     code_by_id = _expected_codes(candidate_manifest, results)
-    codes = [[c["run_id"], code_by_id[c["run_id"]]] for c in candidate_manifest]
-    if (plan.get("code_sha256") != digest(codes)
+    if (plan.get("code_sha256") != _plan_code_hash(candidate_manifest, code_by_id)
             or plan.get("manifest_sha256") != digest(candidate_manifest)):
         raise ValueError("Selection belongs to a different scientific implementation")
     torch.set_num_threads(1)
@@ -696,32 +708,12 @@ def run(campaign, mode="all", *, data_dir=None, results_dir=None, output=None,
             return report(plan, output)
         plan, scores = compute_plan(campaign, results)
         if lock.is_file():
-            existing = read_json(lock)
-            if existing != plan:
-                # Earlier completed Electricity sweeps stored the verified
-                # historical monolithic code hash directly in the plan.
-                # The scoped analysis stores a digest across the candidate
-                # hashes instead. Permit ONLY this representation migration,
-                # never a change to selected HPs, checkpoint bytes, evidence,
-                # manifest, or any validation/test values.
-                same_science = dict(existing, code_sha256=plan["code_sha256"]) == plan
-                recorded = _expected_codes(manifest_for(campaign), results)
-                historic = (
-                    campaign == "electricity"
-                    and existing.get("code_sha256") == LEGACY_ELECTRICITY_CODE_SHA256
-                    and set(recorded.values()) == {LEGACY_ELECTRICITY_CODE_SHA256})
-                if not (historic and same_science):
-                    raise ValueError(
-                        "Locked validation-only selection changed; preserve "
-                        "the existing report and investigate")
-                backup = output / "selections_pre_scoped_hash.json"
-                if backup.exists() and read_json(backup) != existing:
-                    raise ValueError("Conflicting historical selection backup; refusing migration")
-                if not backup.exists():
-                    atomic_json(backup, existing)
-                atomic_json(lock, plan)
-                print("Preserved original locked selections and migrated only "
-                      "its legacy Electricity code-hash representation", flush=True)
+            # Historical Electricity selections retain their exact old hash,
+            # selected HPs and endpoint evidence. Nothing is migrated.
+            if read_json(lock) != plan:
+                raise ValueError(
+                    "Locked validation-only selection changed; preserve "
+                    "the existing report and investigate")
         else:
             if mode == "evaluate":
                 raise ValueError("Run select first to lock all validation-only choices")
