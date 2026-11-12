@@ -443,9 +443,14 @@ def write_tables(plan, summary, output):
                     formatted.append(_format_metric(measurement["mean"], measurement["standard_error"]))
                 lines.append("| " + " | ".join([row["algorithm"], *formatted]) + " |")
                 table.append(row)
-            lines.extend(["", "Rows report the final iterate after "
-                          + ("240 stochastic rounds (~10 effective passes)" if plan["dataset"] == "electricity"
-                             else "100 full epochs") + ".",
+            if plan["dataset"] == "electricity":
+                exposure = "240 stochastic rounds (~10 effective passes)"
+            else:
+                fraction = manifest_for(plan["dataset"])[0].get("source_fraction", 1.0)
+                exposure = ("100 full epochs" if fraction == 1.0
+                            else f"100 stochastic rounds ({100*fraction:g}% source draws per round; "
+                                 f"~{100*fraction:g} effective passes)")
+            lines.extend(["", "Rows report the final iterate after " + exposure + ".",
                           "Hyperparameters are selected by standardized validation MSE, never test performance."])
             if plan["dataset"] == "electricity":
                 lines.append("Metrics average within each customer and then across customers. "
