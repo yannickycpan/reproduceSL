@@ -1,7 +1,7 @@
 """The sole current FD001 experiment protocol: four methods and three TD lag settings.
 
-Only the measurement/checkpoint cadence changes the original 100-epoch
-training procedure. HP selection is a *reporting* decision, not a
+The nested-lag scan changes only TD pair choices and operator dimensions,
+not the original 100-epoch training procedure. HP selection is a *reporting* decision, not a
 training-configuration parameter.
 """
 from __future__ import annotations
