@@ -53,6 +53,8 @@ def test_historical_electricity_selection_lock_stays_unchanged(
                 if c["dataset"] == "electricity" and c["method"] == "mse"
                 and c["configuration"] == 0]
     old_hash = analysis.LEGACY_ELECTRICITY_CODE_SHA256
+    monkeypatch.setattr(analysis, "_verify_processed_data",
+                        lambda campaign, path: "validated synthetic bytes")
     results, output = tmp_path / "results", tmp_path / "outputs"
     for config in manifest:
         folder = results / config["run_id"]
@@ -95,6 +97,8 @@ def test_final_quarter_counts_only_positive_measurements_before_endpoint():
 
 def _fake_campaign(root, monkeypatch):
     """Small grid with realistic 100-epoch source accounting and off-grid endpoints."""
+    monkeypatch.setattr(analysis, "_verify_processed_data",
+                        lambda campaign, path: "validated synthetic bytes")
     manifest = [copy.deepcopy(c) for c in make_manifest() if c["dataset"] == "metr_la"
                 and c["method"] in ("mse", "td_pairwise") and c["configuration"] in (0, 1)]
     for config in manifest:
@@ -267,6 +271,8 @@ def test_analysis_workers_must_be_positive(tmp_path):
 
 def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkeypatch):
     """Real training/snapshot I/O on a small model exercises both reporting budgets."""
+    monkeypatch.setattr(analysis, "_verify_processed_data",
+                        lambda campaign, path: "validated synthetic bytes")
     import torch
     from dscpuscripts import application_train as train
     from dscpuscripts.application_objectives import make_objective
@@ -343,7 +349,14 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
         # layout. It must migrate without another expensive test inference.
         old_cache = next((output / ".cache" / first_run).glob("*.json"))
         cached = read_json(old_cache)
-        legacy_identity = dict(cached["identity"], code_sha256=locked["code_sha256"])
+        # Rebuild a genuine pre-v2 cache key: it had no point-function or
+        # data-loader hash and no checksum of the saved metric values.
+        original_identity = cached["identity"]
+        legacy_identity = {key: original_identity[key] for key in (
+            "metric_code_sha256", "checkpoint_sha256", "test_sha256",
+            "batch_size", "run_id", "optimizer_steps")}
+        legacy_identity.update(version="application-point-metrics-v1",
+                               code_sha256=locked["code_sha256"])
         legacy_path = old_cache.with_name(
             f"step_{legacy_identity['optimizer_steps']:07d}_"
             f"{digest(legacy_identity)[:20]}.json")
@@ -391,6 +404,28 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
                 assert figure.stat().st_size > 1000
         # Rerunning evaluation reuses all point-metric caches, including endpoint overlap.
         analysis.run("metr_la", "evaluate", results_dir=results, data_dir=tmp_path, output=output, batch_size=16)
+        assert len(point_calls) == 10
+        # Metrics are authenticated independently of the run/checkpoint key.
+        current = [p for p in (output / ".cache").rglob("*.json")
+                   if "metrics_sha256" in read_json(p)]
+        assert len(current) == 10
+        corrupt = current[0]
+        original_cache = read_json(corrupt)
+        tampered = copy.deepcopy(original_cache)
+        tampered["metrics"]["rmse"] = 123456.0
+        atomic_json(corrupt, tampered)
+        with pytest.raises(ValueError, match="checksum mismatch"):
+            analysis.run("metr_la", "evaluate", results_dir=results,
+                         data_dir=tmp_path, output=output, batch_size=16)
+        atomic_json(corrupt, original_cache)
+
+        # A fully audited cache does not deserialize Adam tensors again.
+        with monkeypatch.context() as patch:
+            def should_not_load(*args, **kwargs):
+                raise AssertionError("A valid cache must not reload checkpoint tensors")
+            patch.setattr(torch, "load", should_not_load)
+            analysis.run("metr_la", "evaluate", results_dir=results,
+                         data_dir=tmp_path, output=output, batch_size=16)
         assert len(point_calls) == 10
         artifact = output / "per_seed_metrics.csv"
         original = artifact.read_bytes()
