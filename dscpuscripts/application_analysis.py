@@ -696,8 +696,32 @@ def run(campaign, mode="all", *, data_dir=None, results_dir=None, output=None,
             return report(plan, output)
         plan, scores = compute_plan(campaign, results)
         if lock.is_file():
-            if read_json(lock) != plan:
-                raise ValueError("Locked validation-only selection changed; preserve the existing report and investigate")
+            existing = read_json(lock)
+            if existing != plan:
+                # Earlier completed Electricity sweeps stored the verified
+                # historical monolithic code hash directly in the plan.
+                # The scoped analysis stores a digest across the candidate
+                # hashes instead. Permit ONLY this representation migration,
+                # never a change to selected HPs, checkpoint bytes, evidence,
+                # manifest, or any validation/test values.
+                same_science = dict(existing, code_sha256=plan["code_sha256"]) == plan
+                recorded = _expected_codes(manifest_for(campaign), results)
+                historic = (
+                    campaign == "electricity"
+                    and existing.get("code_sha256") == LEGACY_ELECTRICITY_CODE_SHA256
+                    and set(recorded.values()) == {LEGACY_ELECTRICITY_CODE_SHA256})
+                if not (historic and same_science):
+                    raise ValueError(
+                        "Locked validation-only selection changed; preserve "
+                        "the existing report and investigate")
+                backup = output / "selections_pre_scoped_hash.json"
+                if backup.exists() and read_json(backup) != existing:
+                    raise ValueError("Conflicting historical selection backup; refusing migration")
+                if not backup.exists():
+                    atomic_json(backup, existing)
+                atomic_json(lock, plan)
+                print("Preserved original locked selections and migrated only "
+                      "its legacy Electricity code-hash representation", flush=True)
         else:
             if mode == "evaluate":
                 raise ValueError("Run select first to lock all validation-only choices")
