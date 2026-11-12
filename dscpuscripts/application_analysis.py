@@ -23,6 +23,10 @@ from .application_protocol import (PROTOCOL_ID, SEEDS, digest, evaluation_steps,
 
 ANALYSIS_VERSION = "application-comparison-v1"
 EVALUATION_VERSION = "application-point-metrics-v1"
+# Pinned pre-refactor scientific hash of fullTD c208d83. Recomputed from its
+# exact 15 SCIENTIFIC_SOURCES files, independently verified against the
+# known frozen FD001 hash. This is for *read-only* historic Electricity analysis.
+LEGACY_ELECTRICITY_CODE_SHA256 = "5d1b76509dac2238936bce12bbbbcae5337b764b01bfcb1fa1789cb7596e9124"
 SELECTION_FRACTION = 0.25
 METRICS = ("rmse", "mae")
 LABELS = {"mse": "MSE", "gaussian_nll": "Gaussian NLL", "td_typed": "TD typed",
@@ -42,6 +46,32 @@ def manifest_for(campaign):
     if campaign not in DATASET_LABELS:
         raise ValueError(f"Unknown application campaign: {campaign}")
     return [row for row in make_manifest() if row["dataset"] == campaign]
+
+
+def _expected_codes(manifest, results):
+    """Accept current dataset/method-scoped code or ONE verified historical identity.
+
+    Earlier Electricity candidates were fitted using a monolithic application
+    scientific code hash. Only the known original hash is admitted. Every
+    candidate in the grid must then pass the same hash check; no mixing of
+    historical/current identities, no status-hash-trusting shortcut.
+    """
+    if not manifest:
+        raise ValueError("Empty application candidate manifest")
+    legacy = False
+    if manifest[0]["dataset"] == "electricity":
+        first = Path(results) / manifest[0]["run_id"] / "status.json"
+        if first.is_file():
+            legacy = (read_json(first).get("identity", {}).get("code_sha256")
+                      == LEGACY_ELECTRICITY_CODE_SHA256)
+    scopes, codes = {}, {}
+    for config in manifest:
+        scope = (config["dataset"], config["backbone"], config["method"])
+        if scope not in scopes:
+            scopes[scope] = (LEGACY_ELECTRICITY_CODE_SHA256
+                             if legacy else training_code_hash(config))
+        codes[config["run_id"]] = scopes[scope]
+    return codes
 
 
 def selection_update_steps(measured_steps, endpoint):
@@ -191,13 +221,7 @@ def _choice_order(choice):
 def compute_plan(campaign, results):
     """Audit the entire prescribed grid using only training/validation records."""
     manifest = manifest_for(campaign)
-    scoped_codes = {}
-    code_by_id = {}
-    for config in manifest:
-        scope = (config["dataset"], config["backbone"], config["method"])
-        if scope not in scoped_codes:
-            scoped_codes[scope] = training_code_hash(config)
-        code_by_id[config["run_id"]] = scoped_codes[scope]
+    code_by_id = _expected_codes(manifest, results)
     shared, source_hashes, candidates, by_hp = {}, {}, [], defaultdict(list)
     for config in manifest:
         candidate = _audit_candidate(config, results, code_by_id[config["run_id"]], shared, source_hashes)
@@ -431,12 +455,8 @@ def evaluate_selected(plan, results, data_dir, output, batch_size=128,
         raise ValueError("Evaluation batch size must be positive")
     campaign = plan["dataset"]
     candidate_manifest = manifest_for(campaign)
-    cached_hashes, codes = {}, []
-    for c in candidate_manifest:
-        scope = (c["dataset"], c["backbone"], c["method"])
-        if scope not in cached_hashes:
-            cached_hashes[scope] = training_code_hash(c)
-        codes.append([c["run_id"], cached_hashes[scope]])
+    code_by_id = _expected_codes(candidate_manifest, results)
+    codes = [[c["run_id"], code_by_id[c["run_id"]]] for c in candidate_manifest]
     if (plan.get("code_sha256") != digest(codes)
             or plan.get("manifest_sha256") != digest(candidate_manifest)):
         raise ValueError("Selection belongs to a different scientific implementation")
@@ -465,11 +485,10 @@ def evaluate_selected(plan, results, data_dir, output, batch_size=128,
             config = configs[run_id]
             endpoint = choice["optimizer_steps"]
             total = update_budgets(config, plan["n_sources"])["total_updates"]
-            scope = (config["dataset"], config["backbone"], config["method"])
             tasks.append(dict(
                 campaign=campaign, config=config, results=str(results),
                 output=str(output), data_dir=str(data_dir), endpoint=endpoint,
-                total=total, expected_code=cached_hashes[scope],
+                total=total, expected_code=code_by_id[run_id],
                 endpoint_sha256=choice["checkpoint_sha256"][run_id],
                 subset=subset, data_sha256=plan["data_sha256"],
                 validation_sha256=plan["validation_sha256"],
