@@ -103,7 +103,7 @@ def test_fraction_controls_manifest_and_root_in_fresh_process(tmp_path, fraction
     result = subprocess.run([sys.executable, "-c", program], cwd=root, env=env,
                             check=True, capture_output=True, text=True)
     record = json.loads(result.stdout.strip())
-    assert record["count"] == 525
+    assert record["count"] == 1275
     config = record["config"]
     assert config["source_fraction"] == float(fraction)
     assert config["learning_curve_updates"] == cadence
