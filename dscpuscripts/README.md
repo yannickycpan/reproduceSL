@@ -13,8 +13,7 @@ in this directory. They share the frozen data/model/sampling utilities with
 FD001, and match its optimizer, baseline grids, seeds, TD definitions and selection
 rule. Application TD has its own beta range and B256-only training.
 See [the application protocol](../docs/fulltd_protocol.md) for the explicit
-Electricity computation exceptions. FD001's scientific files and hash are
-unchanged.
+Electricity computation exceptions. FD001's scientific hash is intentionally updated for the clean lag sweep.
 
 ## Experiment definition
 
@@ -28,13 +27,19 @@ gradients flow through both predictions and the operator.
 |---|---|---|---|---:|
 | MSE | 0.0001, 0.0003, 0.0005, 0.0007, 0.0009, 0.001, 0.003, 0.005, 0.007, 0.01 | — | 256 | 50 |
 | Gaussian NLL | same 10 | — | 256 | 50 |
-| TD typed | 0.00003, 0.0001, 0.0003, 0.001, 0.003 | 0.00003, 0.0001, 0.0003, 0.001, 0.003 | 128, 256 | 250 |
-| TD pairwise | same 5 | same 5 | 128, 256 | 250 |
-| **Total** | | | | **600** |
+| TD typed | 0.00003, 0.0001, 0.0003, 0.001, 0.003 | 0.00003, 0.0001, 0.0003, 0.001, 0.003 | 128, 256 | 750 |
+| TD pairwise | same 5 | same 5 | 128, 256 | 750 |
+| **Total** | | | | **1600** |
 
 The method set includes no raw26, source-only representation, MAE-trained
 FD001, or other TD parameterization. All methods are evaluated using the
 **same** validation/test RMSE, MAE, and RUL score.
+
+The TD methods scan three nested cycle lag sets: `{1,5}`, `{1,3,5}`,
+and `{1,3,5,10,15}`. MSE and Gaussian NLL (which do not use TD
+partners) are trained only once with the same original source universe.
+The complete FD001 sweep contains 1600 candidates and 8 validation-locked
+selections (2 baselines and 3 lag settings for each TD method).
 
 ## Measurements and hyperparameter selection
 
@@ -53,11 +58,11 @@ scientific identity.
 **Analysis-only selection:** for each candidate, ignore update-zero and
 take the final `ceil(0.25 × number_of_positive_update_evaluations)`
 measured validation-MSE values. Average them per seed, then across all five
-seeds, and choose the best α/β/batch setting separately for each method.
+seeds, and choose the best α/β/batch setting separately for each method and lag set.
 For the default 500-update interval and FD001 training sizes, these are
 updates 4500/5000/5500 for B256 and
 8500/9000/9500/10000/10500/11000 for B128. No test labels
-are opened until the four method-level selections are locked.
+are opened until all eight method/lag choices are locked.
 A documented numerical failure of any seed gives that entire HP
 setting infinite selection score.
 
@@ -75,8 +80,8 @@ typed/pairwise Gamma diagnostics.
   fd001_results/              # Flat run directories; fd001_<method>_b..._h..._s...
     fd001_mse_b256_h0_s0/
     fd001_gaussian_nll_b256_h0_s0/
-    fd001_td_typed_b128_h0_s0/
-    fd001_td_pairwise_b256_h0_s0/
+    fd001_td_typed_b128_h0_s0_lags1-5/
+    fd001_td_pairwise_b256_h0_s0_lags1-3-5-10-15/
   fd001_outputs/              # Sibling analysis, NEVER inside fd001_results/
     selections.json
     hp_scores.csv
@@ -91,7 +96,7 @@ typed/pairwise Gamma diagnostics.
 
 No script deletes or renames existing server-side results. If there are
 old run directories on your server, review and remove them separately after
-verifying backups; the current protocol has unversioned run IDs.
+verifying backups; TD run IDs now include the lag set; old protocol identities are incompatible.
 
 ## AMD server: run and analyze
 
@@ -104,6 +109,13 @@ $HOME/scratch/fulltd/.venv-fulltd/bin/python -m pytest -q \
   dscpuscripts/test_fd001.py \
   dscpuscripts/test_standard_workflow.py \
   dscpuscripts/test_result_paths.py
+
+# Validate the updated dynamic manifests, sampling, objectives and recovery:
+$HOME/scratch/fulltd/.venv-fulltd/bin/python -m pytest -q \
+  tests/test_fulltd_sampling.py tests/test_fulltd_models.py \
+  tests/test_checkpoint_identity.py dscpuscripts/test_fd001.py \
+  dscpuscripts/test_application_training.py dscpuscripts/test_application_analysis.py \
+  dscpuscripts/test_standard_workflow.py dscpuscripts/test_result_paths.py
 
 bash dscpuscripts/run_standard.sh fd001 --dry-run
 nohup bash dscpuscripts/run_standard.sh fd001 \
@@ -140,8 +152,29 @@ with this 240-round PatchTST scientific identity.
 The Electricity PatchTST backbone has the same four principal methods as FD001. DLinear is a separate architecture and is not in the sweep.
 METR-LA uses Graph WaveNet for all methods, including additional masked-MAE
 and pairwise-TD-MAE comparators. Electricity now uses PatchTST only, with
-240 independent N/24 source-draw rounds (~10 effective passes), for 350
-candidates; METR-LA uses 100 rounds and 525 candidates (10% by default).
+240 independent N/24 source-draw rounds (~10 effective passes), for 850
+candidates; METR-LA uses 100 rounds and 1275 candidates (10% by default).
+
+### Nested lag sets and METR-LA pairwise features
+
+| Dataset | 2 lags | 3 lags | 5 lags |
+|---|---|---|---|
+| Electricity (hours) | `{1,24}` | `{1,12,24}` | `{1,12,24,36,48}` |
+| METR-LA (5-minute steps) | `{1,3}` | `{1,3,6}` | `{1,3,6,12,24}` |
+| FD001 (cycles) | `{1,5}` | `{1,3,5}` | `{1,3,5,10,15}` |
+
+The temporal-lag ablation changes **only TD**, and baseline MSE/NLL/MAE
+runs are not duplicated. All methods retain the old optimizer, training
+budget, data split, source sampling and validation-only selection rules.
+
+METR-LA Pairwise Gamma now operates on Graph WaveNet representations
+`[B,207,192]` without flattening the sensor axis into learned weights:
+it uses the 192-dimensional **mean across sensors of absolute pairwise
+differences** (absolute value before pooling), plus global normalized
+inner-product and distance scalars. It learns 195 parameters per lag:
+390/585/975 for 2/3/5 lags, instead of 79,494 parameters for the
+original two-lag flatten head. Graph WaveNet mean predictions and
+Gaussian NLL remain unchanged.
 
 Use the existing pinned CPU environment; only run setup if it is not ready.
 The download script verifies existing prepared data without overwriting it.
@@ -178,7 +211,7 @@ If an earlier application sweep occupies these result paths, preserve it and
 choose a fresh path with `FULLTD_ELECTRICITY_ROOT` or `FULLTD_METR_LA_ROOT`.
 The revised scoped code identity cannot resume earlier application checkpoints
 without a separate conversion/audit; back up old runs and do not mix them with
-new ones. FD001's original scientific source hash and protocol are unchanged.
+new ones. FD001's scientific source hash and protocol also change for the new sweep.
 Use new result roots if previous application runs already exist.
 Do not mix the old campaign with this one or change settings halfway through.
 
@@ -200,7 +233,7 @@ bash dscpuscripts/analyze_standard.sh metr_la plots
 ```
 
 `endpoints` writes the normal final RMSE/MAE tables from just the five
-selected checkpoints per method, and caches these test evaluations for
+selected checkpoints per method/lag set, and caches these test evaluations for
 `run`. `run` still tests every selected intermediate checkpoint and creates
 the full test/validation learning curves. Do not run `endpoints` and `run`
 simultaneously against the same output directory; the analysis lock
@@ -294,7 +327,7 @@ is missing, the command stops rather than replacing it.
 
 ## One-command complete FD001 reporting (original + batches + TEST curves)
 
-After all 600 FD001 candidate runs and retained step-500 checkpoints exist
+After all 1600 FD001 candidate runs and retained step-500 checkpoints exist
 on the AMD server, run from the checked-out `fullTD` branch:
 
 ```bash
@@ -302,8 +335,8 @@ bash fd001analysis.sh
 ```
 
 The wrapper first executes synthetic regression tests, then regenerates the
-canonical four-method tables and validation plots, and finally performs the
-separate six-configuration batch-specific comparison and two matched-update
+canonical method-by-lag tables and validation plots, and finally performs the
+separate original-{1,5}-lag six-configuration batch-specific comparison and two matched-update
 B128 sensitivities. It also evaluates all recorded **TEST** checkpoints
 for the validation-selected **B256** HP of MSE, Gaussian NLL, TD typed,
 and TD pairwise at steps 0,500,...,5500 (five seeds each), drawing mean
