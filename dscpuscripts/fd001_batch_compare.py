@@ -6,6 +6,7 @@ Equal updates: only for TD batch-128, truncate the *selection timeline* to the
 batch-256 100-epoch update count. Select with the same final-quarter rule and
 evaluate the saved checkpoint at that matched update, not the epoch-100 model.
 
+Use the original {1,5} TD lag set for the existing batch comparison.
 All outputs live separately in fd001_outputs/batch_comparison/.
 """
 from __future__ import annotations
@@ -35,7 +36,9 @@ def _rank(item):
 
 
 def _choose(rows, method, batch, regime, final_update):
-    pool = [r for r in rows if r["method"] == method and r["batch_size"] == batch]
+    lag = "1-5" if method.startswith("td_") else "none"
+    pool = [r for r in rows if r["method"] == method and r["lag_set"] == lag
+            and r["batch_size"] == batch]
     if not pool:
         raise ValueError(f"Missing hyperparameter grid: {method}, batch {batch}")
     winner = min(pool, key=_rank)
@@ -77,7 +80,7 @@ def compute_plan(results):
     original, scores = audit_and_select(results)
     manifest = make_manifest()
     if original["counts"].get("complete") != len(manifest):
-        raise ValueError("Comparison requires all 600 runs complete; no failures")
+        raise ValueError("Comparison requires every prescribed run complete; no failures")
     reference = next(c for c in manifest if c["method"] == "mse" and c["seed"] == 0)
     status = read_json(results / reference["run_id"] / "status.json")
     sources = status["n_sources"]
@@ -96,13 +99,14 @@ def compute_plan(results):
     matched_scores = []
     for method in TD_METHODS:
         for row in scores:
-            if row["method"] == method and row["batch_size"] == 128:
+            if row["method"] == method and row["lag_set"] == "1-5" and row["batch_size"] == 128:
                 matched_scores.append({**row, "score": _matched_score(results, row, matched_updates)})
         candidates.append(_choose(matched_scores, method, 128,
                                   "matched_updates", matched_updates))
     choices = [item for item in candidates]
     plan = dict(analysis_revision=ANALYSIS_REVISION, protocol_id=PROTOCOL_ID,
-                original_joint_selection=original["selected"],
+                original_joint_selection=[row for row in original["selected"]
+                                           if row["lag_set"] in ("none", "1-5")],
                 original_criterion=original["criterion"],
                 matched_update_budget=matched_updates,
                 matched_selection_steps=list(selection_update_steps(matched_updates, EVAL_UPDATE_PERIOD)),
