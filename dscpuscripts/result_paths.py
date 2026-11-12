@@ -1,9 +1,6 @@
-"""Consistent dataset-specific results layout across direct CPU/HPC environments.
-
-Every dataset uses one sibling results/outputs pair. Canonical run IDs
-are stored directly inside <dataset>_results, never in nested results folders.
-"""
+"""Simple sibling data/results/outputs roots, with METR-LA fractions in the name."""
 from __future__ import annotations
+
 import os
 from pathlib import Path
 
@@ -19,20 +16,25 @@ def dataset_root(dataset):
     if dataset not in DATASETS:
         raise ValueError(f"Unknown dataset for results path: {dataset}")
     name = "FULLTD_" + dataset.upper() + "_ROOT"
-    return Path(os.environ.get(name, base_root() / f"{dataset}_results")).expanduser().resolve()
+    override = os.environ.get(name)
+    if override:
+        return Path(override).expanduser().resolve()
+    if dataset == "metr_la":
+        from .metr_la_sampling import SOURCE_FRACTION, fraction_tag
+        return (base_root() / f"metr_la_{fraction_tag(SOURCE_FRACTION)}_results").resolve()
+    return (base_root() / f"{dataset}_results").resolve()
 
 
 def paths(dataset, output_kind=None):
-    """Return (dataset-independent data directory, results, analysis outputs).
-
-    Canonical run directories live directly in <dataset>_results/ (flat),
-    as on the user's server. Only analysis output files live in outputs/.
-    The run IDs are set by each dataset's current scientific protocol.
-    """
+    """Return the processed-data directory and sibling results/output folders."""
     root = dataset_root(dataset)
     data = Path(os.environ.get("FULLTD_DATA_DIR", base_root() / "data")).expanduser().resolve()
-    # Analysis is a sibling of results, not nested inside training checkpoints.
-    out = root.parent / f"{dataset}_outputs"
+    if dataset == "metr_la":
+        # Results: metr_la_f10pct_results; outputs: metr_la_f10pct_outputs.
+        suffix = root.name[:-len("_results")] if root.name.endswith("_results") else "metr_la"
+        out = root.parent / (suffix + "_outputs")
+    else:
+        out = root.parent / f"{dataset}_outputs"
     if output_kind:
         if not (output_kind.replace("_", "").isalnum() and "/" not in output_kind):
             raise ValueError("Invalid output directory kind")
@@ -41,13 +43,7 @@ def paths(dataset, output_kind=None):
 
 
 def guard_unmigrated_runs(results_dir, configs, previous_roots):
-    """Refuse retraining when recorded runs exist in a former result directory.
-
-    The destination may already hold completed or interrupted runs; the guard
-    only checks for *missing* run IDs with evidence in another known location.
-    It never moves, deletes or overwrites any result or treats failures as
-    missing. Run IDs are assumed to be prevalidated canonical names.
-    """
+    """Protect checkpoints in historical nested locations; no file mutation."""
     results = Path(results_dir).expanduser().resolve()
     for previous in previous_roots:
         old = Path(previous).expanduser().resolve()
