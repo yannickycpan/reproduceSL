@@ -434,6 +434,11 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
             return actual_point_metrics(model, data, batch_size)
 
         monkeypatch.setattr(analysis, "_point_metrics", count_metrics)
+        # This synthetic wrapper only counts calls; its test-only monkeypatch
+        # must not disqualify the intentionally fabricated old-v1 cache.
+        # Production legacy reuse requires the actual pinned evaluator AST.
+        monkeypatch.setattr(analysis, "_point_metric_implementation_hash",
+                            lambda: analysis.LEGACY_POINT_METRIC_AST_SHA256)
         # Selection never loads a dataset or computes a test prediction.
         analysis.run("metr_la", "check", results_dir=results, data_dir=tmp_path, output=output)
         assert not opened and not point_calls
