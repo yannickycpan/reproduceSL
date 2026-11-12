@@ -343,6 +343,13 @@ def _evaluate_one_run(task, train, test, batch_size):
             run_id=run_id, optimizer_steps=step)
         cache = (Path(task["output"]) / ".cache" / run_id /
                  f"step_{step:07d}_{digest(cache_identity)[:20]}.json")
+        # Older reports keyed the cache by the *manifest aggregate* rather
+        # than by the per-run hash. Those already-evaluated checkpoint metrics
+        # remain valid when every other key and the checkpoint bytes match.
+        # Migrate them without repeating expensive full-test inference.
+        legacy_identity = dict(cache_identity, code_sha256=task["manifest_code_sha256"])
+        legacy_cache = (Path(task["output"]) / ".cache" / run_id /
+                        f"step_{step:07d}_{digest(legacy_identity)[:20]}.json")
         # Keep the existing scientific audit: even cached snapshots must have
         # consistent configuration, training cursor and validation records.
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
@@ -352,6 +359,13 @@ def _evaluate_one_run(task, train, test, batch_size):
             if cached.get("identity") != cache_identity:
                 raise ValueError(f"Point-metric cache identity mismatch: {cache}")
             values = cached["metrics"]
+        elif legacy_cache.is_file():
+            cached = read_json(legacy_cache)
+            if cached.get("identity") != legacy_identity:
+                raise ValueError(f"Legacy point-metric cache identity mismatch: {legacy_cache}")
+            values = cached["metrics"]
+            atomic_json(cache, dict(identity=cache_identity, metrics=values))
+            print(f"Reused legacy test cache {run_id} update {step}", flush=True)
         else:
             if objective is None:
                 objective = build_objective(config, train).cpu()
@@ -460,6 +474,7 @@ def evaluate_selected(plan, results, data_dir, output, batch_size=128,
                 subset=subset, data_sha256=plan["data_sha256"],
                 validation_sha256=plan["validation_sha256"],
                 test_sha256=test_identity, metric_code_sha256=metric_code,
+                manifest_code_sha256=plan["code_sha256"],
                 batch_size=batch_size, backbone=choice["backbone"],
                 regime=choice["regime"], method=choice["method"],
                 endpoints_only=endpoints_only))
