@@ -278,7 +278,10 @@ def _validate_snapshot(checkpoint, config, status, curve, step, subset):
 def _point_metrics(model, dataset, batch_size):
     from fulltd.metrics import evaluate
     units = "standardized" if dataset.dataset == "electricity" else "mph"
-    records, _ = evaluate(model, dataset, batch_size=batch_size, device="cpu", allow_nonfinite=True)
+    # Electricity's report uses standardized metrics only. Avoid computing
+    # unused inverse-scaled kW metrics for every intermediate checkpoint.
+    records, _ = evaluate(model, dataset, batch_size=batch_size, device="cpu",
+                          allow_nonfinite=True, include_raw=dataset.dataset != "electricity")
     values = {}
     for metric in METRICS:
         matching = [r for r in records if r["units"] == units and str(r["horizon"]) == "all"
@@ -289,12 +292,124 @@ def _point_metrics(model, dataset, batch_size):
     return values
 
 
-def evaluate_selected(plan, results, data_dir, output, batch_size=128):
-    """Evaluate already locked choices; cache identical run/step/test predictions."""
+def _evaluate_one_run(task, train, test, batch_size):
+    """Verify one selected seed/run and evaluate its retained test checkpoints.
+
+    Separate run-ID cache paths allow independent OS processes without shared
+    mutable model/metric state or a second global analysis dispatcher.
+    """
+    import torch
+    from .application_train import build_objective
+
+    config = task["config"]
+    run_id = config["run_id"]
+    folder = Path(task["results"]) / run_id
+    status = read_json(folder / "status.json")
+    curve = read_json(folder / "update_curve.json")
+    identity = status.get("identity", {})
+    # A checkpoint code hash is *per candidate*. plan["code_sha256"] is
+    # a digest across all candidates and MUST NOT be compared here.
+    if (status.get("config") != config
+            or identity.get("protocol_id") != config["protocol_id"]
+            or identity.get("config_sha256") != digest(config)
+            or identity.get("code_sha256") != task["expected_code"]
+            or identity.get("data_sha256") != task["data_sha256"]
+            or identity.get("validation_sha256") != task["validation_sha256"]
+            or identity.get("validation_subset_sha256") != digest(task["subset"])):
+        raise ValueError(f"Selected status no longer matches locked plan: {run_id}")
+    endpoint, total = task["endpoint"], task["total"]
+    endpoint_path = _snapshot_path(folder, endpoint, total)
+    if file_hash(endpoint_path) != task["endpoint_sha256"]:
+        raise ValueError(f"Selected endpoint weights changed after locking: {run_id}")
+    units = "standardized" if task["campaign"] == "electricity" else "mph"
+    per_seed, learning = [], []
+    objective = None
+
+    for record in curve:
+        step = record["optimizer_steps"]
+        if step > endpoint:
+            break
+        if task["endpoints_only"] and step != endpoint:
+            continue
+        checkpoint_path = _snapshot_path(folder, step, total)
+        checksum = file_hash(checkpoint_path)
+        cache_identity = dict(
+            version=EVALUATION_VERSION,
+            code_sha256=task["expected_code"],
+            metric_code_sha256=task["metric_code_sha256"],
+            checkpoint_sha256=checksum,
+            test_sha256=task["test_sha256"],
+            batch_size=batch_size,
+            run_id=run_id, optimizer_steps=step)
+        cache = (Path(task["output"]) / ".cache" / run_id /
+                 f"step_{step:07d}_{digest(cache_identity)[:20]}.json")
+        # Keep the existing scientific audit: even cached snapshots must have
+        # consistent configuration, training cursor and validation records.
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        _validate_snapshot(checkpoint, config, status, curve, step, task["subset"])
+        if cache.is_file():
+            cached = read_json(cache)
+            if cached.get("identity") != cache_identity:
+                raise ValueError(f"Point-metric cache identity mismatch: {cache}")
+            values = cached["metrics"]
+        else:
+            if objective is None:
+                objective = build_objective(config, train).cpu()
+            objective.load_state_dict(checkpoint["objective"])
+            values = _point_metrics(objective.model, test, batch_size)
+            atomic_json(cache, dict(identity=cache_identity, metrics=values))
+            print(f"Evaluated test {run_id} update {step}", flush=True)
+        del checkpoint
+        for split in ("test", "validation"):
+            for metric in METRICS:
+                value = (float(values[metric]) if split == "test"
+                         else _curve_value(record, task["campaign"], metric))
+                row = dict(dataset=task["campaign"], backbone=task["backbone"],
+                           regime=task["regime"], method=task["method"],
+                           batch_size=config["batch_size"], seed=config["seed"],
+                           run_id=run_id, optimizer_steps=step,
+                           split=split, metric=metric, units=units, value=value)
+                learning.append(row)
+                if step == endpoint:
+                    per_seed.append(row.copy())
+    if len(per_seed) != len(METRICS) * 2:
+        raise ValueError(f"Selected final checkpoint was not evaluated: {run_id}")
+    return run_id, per_seed, learning
+
+
+def _evaluate_one_run_worker(task):
+    """Fresh process: one CPU thread; reopen read-only mmap datasets locally."""
+    from dscpuscripts.common import cpu_environment
+    cpu_environment()
+    import torch
+    from fulltd.data import load_dataset
+    torch.set_num_threads(1)
+    try:
+        torch.set_num_interop_threads(1)
+    except RuntimeError:
+        pass
+    campaign, data_dir = task["campaign"], task["data_dir"]
+    train = load_dataset(campaign, data_dir, "train")
+    test = load_dataset(campaign, data_dir, "test")
+    if data_identity(test) != task["test_sha256"]:
+        raise ValueError(f"Prepared test data changed while evaluating {task['config']['run_id']}")
+    return _evaluate_one_run(task, train, test, task["batch_size"])
+
+
+def evaluate_selected(plan, results, data_dir, output, batch_size=128,
+                      *, workers=1, endpoints_only=False):
+    """Evaluate validation-locked runs; parallelize independent test inference.
+
+    Defaults preserve the old single-process behavior. --workers launches one
+    process per selected run, capped by the 20/30 selected run count. Each run
+    owns its cache directory. No fitting, refit or changed evaluation windows.
+    """
+    from concurrent.futures import ProcessPoolExecutor
+    import multiprocessing
     import torch
     from fulltd.data import load_dataset
     from fulltd.sampling import training_universe
-    from .application_train import build_objective, evaluation_validation_view
+    from .application_train import evaluation_validation_view
 
     campaign = plan["dataset"]
     candidate_manifest = manifest_for(campaign)
@@ -307,83 +422,69 @@ def evaluate_selected(plan, results, data_dir, output, batch_size=128):
     if (plan.get("code_sha256") != digest(codes)
             or plan.get("manifest_sha256") != digest(candidate_manifest)):
         raise ValueError("Selection belongs to a different scientific implementation")
+    if type(workers) is not int or workers < 1:
+        raise ValueError("Analysis workers must be a positive integer")
     if batch_size < 1:
         raise ValueError("Evaluation batch size must be positive")
     torch.set_num_threads(1)
     try:
         torch.set_num_interop_threads(1)
     except RuntimeError:
-        pass  # Another caller may already have initialized the process's thread pool.
-    configs = {c["run_id"]: c for c in manifest_for(campaign)}
+        pass
+    configs = {c["run_id"]: c for c in candidate_manifest}
     reference = next(iter(configs.values()))
-    train, _, _ = training_universe(load_dataset(campaign, data_dir, "train"), tuple(reference["lags"]))
+    train, _, _ = training_universe(load_dataset(campaign, data_dir, "train"),
+                                   tuple(reference["lags"]))
     validation = load_dataset(campaign, data_dir, "val")
     _, subset = evaluation_validation_view(validation)
     if (data_identity(train) != plan["data_sha256"]
             or data_identity(validation) != plan["validation_sha256"]
             or subset != plan["validation_subset"]):
         raise ValueError("Prepared training/validation data changed after selection")
-    # This is the first access to held-out targets, after the complete validation-only plan is locked.
+    # First test access is AFTER the complete validation-only plan is locked.
     test = load_dataset(campaign, data_dir, "test")
     test_identity = data_identity(test)
-    units = "standardized" if campaign == "electricity" else "mph"
     metric_code = file_hash(Path(__file__).resolve().parents[1] / "fulltd" / "metrics.py")
-    per_seed, learning = [], []
+    tasks = []
     for choice in plan["choices"]:
         for run_id in choice["run_ids"]:
             config = configs[run_id]
-            folder = Path(results) / run_id
-            status = read_json(folder / "status.json")
-            curve = read_json(folder / "update_curve.json")
-            if (status.get("identity", {}).get("code_sha256") != plan["code_sha256"]
-                    or status.get("identity", {}).get("data_sha256") != plan["data_sha256"]
-                    or status.get("identity", {}).get("validation_sha256") != plan["validation_sha256"]):
-                raise ValueError(f"Selected status no longer matches locked plan: {run_id}")
             endpoint = choice["optimizer_steps"]
             total = update_budgets(config, plan["n_sources"])["total_updates"]
-            endpoint_path = _snapshot_path(folder, endpoint, total)
-            if file_hash(endpoint_path) != choice["checkpoint_sha256"][run_id]:
-                raise ValueError(f"Selected endpoint weights changed after locking: {run_id}")
-            objective = None
-            for record in curve:
-                step = record["optimizer_steps"]
-                if step > endpoint:
-                    break
-                checkpoint_path = _snapshot_path(folder, step, total)
-                checksum = file_hash(checkpoint_path)
-                cache_identity = dict(version=EVALUATION_VERSION, code_sha256=plan["code_sha256"],
-                                      metric_code_sha256=metric_code, checkpoint_sha256=checksum,
-                                      test_sha256=test_identity, batch_size=batch_size,
-                                      run_id=run_id, optimizer_steps=step)
-                cache = (Path(output) / ".cache" / run_id /
-                         f"step_{step:07d}_{digest(cache_identity)[:20]}.json")
-                # Validate every retained state even when its point metrics were cached.
-                checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-                _validate_snapshot(checkpoint, config, status, curve, step, subset)
-                if cache.is_file():
-                    cached = read_json(cache)
-                    if cached.get("identity") != cache_identity:
-                        raise ValueError(f"Point-metric cache identity mismatch: {cache}")
-                    values = cached["metrics"]
-                else:
-                    if objective is None:
-                        objective = build_objective(config, train).cpu()
-                    objective.load_state_dict(checkpoint["objective"])
-                    values = _point_metrics(objective.model, test, batch_size)
-                    atomic_json(cache, dict(identity=cache_identity, metrics=values))
-                    print(f"Evaluated test {run_id} update {step}", flush=True)
-                for split in ("test", "validation"):
-                    for metric in METRICS:
-                        value = (float(values[metric]) if split == "test"
-                                 else _curve_value(record, campaign, metric))
-                        row = dict(dataset=campaign, backbone=choice["backbone"], regime=choice["regime"],
-                                   method=choice["method"], batch_size=choice["batch_size"],
-                                   seed=config["seed"], run_id=run_id, optimizer_steps=step,
-                                   split=split, metric=metric, units=units, value=value)
-                        learning.append(row)
-                        if step == endpoint:
-                            per_seed.append(row.copy())
+            scope = (config["dataset"], config["backbone"], config["method"])
+            tasks.append(dict(
+                campaign=campaign, config=config, results=str(results),
+                output=str(output), data_dir=str(data_dir), endpoint=endpoint,
+                total=total, expected_code=cached_hashes[scope],
+                endpoint_sha256=choice["checkpoint_sha256"][run_id],
+                subset=subset, data_sha256=plan["data_sha256"],
+                validation_sha256=plan["validation_sha256"],
+                test_sha256=test_identity, metric_code_sha256=metric_code,
+                batch_size=batch_size, backbone=choice["backbone"],
+                regime=choice["regime"], method=choice["method"],
+                endpoints_only=endpoints_only))
+
+    per_seed, learning = [], []
+    if workers == 1:
+        results_iterator = (_evaluate_one_run(task, train, test, batch_size)
+                            for task in tasks)
+        for run_id, endpoint_rows, curve_rows in results_iterator:
+            per_seed.extend(endpoint_rows)
+            learning.extend(curve_rows)
+            print(f"Completed selected run: {run_id}", flush=True)
+    else:
+        # 'spawn' avoids importing an inherited threaded PyTorch/MKL state.
+        # Read-only numpy mmap arrays are reopened in each child on demand.
+        with ProcessPoolExecutor(
+                max_workers=min(workers, len(tasks)),
+                mp_context=multiprocessing.get_context("spawn")) as pool:
+            for run_id, endpoint_rows, curve_rows in pool.map(
+                    _evaluate_one_run_worker, tasks, chunksize=1):
+                per_seed.extend(endpoint_rows)
+                learning.extend(curve_rows)
+                print(f"Completed selected run: {run_id}", flush=True)
     return per_seed, learning, test_identity
+
 
 
 def summarize(rows, keys):
@@ -538,10 +639,11 @@ def report(plan, output):
     print("Wrote performance tables and learning curves:", output, flush=True)
 
 
-def run(campaign, mode="all", *, data_dir=None, results_dir=None, output=None, batch_size=128):
+def run(campaign, mode="all", *, data_dir=None, results_dir=None, output=None,
+        batch_size=128, workers=1):
     """Direct-server API; check/run/plots aliases preserve the existing launcher."""
     mode = {"check": "select", "run": "all", "plots": "report"}.get(mode, mode)
-    if mode not in ("select", "evaluate", "report", "all"):
+    if mode not in ("select", "evaluate", "report", "all", "endpoints"):
         raise ValueError(f"Unknown application analysis mode: {mode}")
     defaults = result_paths(campaign)
     data_dir, results, output = [Path(value) if value is not None else fallback
@@ -561,7 +663,8 @@ def run(campaign, mode="all", *, data_dir=None, results_dir=None, output=None, b
         else:
             if mode == "evaluate":
                 raise ValueError("Run select first to lock all validation-only choices")
-            if any((output / name).exists() for name in ("per_seed_metrics.csv", "evaluation_manifest.json")):
+            if any((output / name).exists() for name in ("per_seed_metrics.csv", "evaluation_manifest.json",
+                                                        "endpoint_per_seed_metrics.csv", "endpoint_manifest.json")):
                 raise ValueError("Unlocked prior test results exist; preserve them separately before a new analysis")
             atomic_json(lock, plan)
         write_csv(output / "hyperparameter_scores.csv", scores)
@@ -571,7 +674,23 @@ def run(campaign, mode="all", *, data_dir=None, results_dir=None, output=None, b
         if mode == "select":
             print(f"Locked {len(plan['choices'])} five-seed choices using validation only: {lock}", flush=True)
             return plan
-        per_seed, learning, test_identity = evaluate_selected(plan, results, data_dir, output, batch_size)
+        per_seed, learning, test_identity = evaluate_selected(
+            plan, results, data_dir, output, batch_size,
+            workers=workers, endpoints_only=(mode == "endpoints"))
+        if mode == "endpoints":
+            write_csv(output / "endpoint_per_seed_metrics.csv", per_seed)
+            atomic_json(output / "endpoint_manifest.json", dict(
+                selection_sha256=digest(plan), test_sha256=test_identity,
+                files={"endpoint_per_seed_metrics.csv":
+                       file_hash(output / "endpoint_per_seed_metrics.csv")}))
+            summaries = summarize(per_seed, ROW_KEYS)
+            write_csv(output / "performance_summary.csv", summaries)
+            paths = write_tables(plan, summaries, output)
+            for path in paths:
+                print(path.read_text(encoding="utf-8"))
+            print("Wrote endpoint performance tables (full learning curves not yet evaluated):",
+                  output, flush=True)
+            return plan
         write_csv(output / "per_seed_metrics.csv", per_seed)
         write_csv(output / "learning_curves_per_seed.csv", learning)
         atomic_json(output / "evaluation_manifest.json", dict(
@@ -587,14 +706,17 @@ def main():
     cpu_environment()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("campaign", choices=tuple(DATASET_LABELS))
-    parser.add_argument("mode", choices=("select", "evaluate", "report", "all", "check", "run", "plots"))
+    parser.add_argument("mode", choices=("select", "evaluate", "report", "all",
+                                         "endpoints", "check", "run", "plots"))
     parser.add_argument("--data-dir")
     parser.add_argument("--results-dir")
     parser.add_argument("--output")
     parser.add_argument("--batch-size", type=int, default=128)
+    parser.add_argument("--workers", type=int, default=1,
+                        help="Independent selected runs to evaluate in parallel; default 1")
     args = parser.parse_args()
     run(args.campaign, args.mode, data_dir=args.data_dir, results_dir=args.results_dir,
-        output=args.output, batch_size=args.batch_size)
+        output=args.output, batch_size=args.batch_size, workers=args.workers)
 
 
 if __name__ == "__main__":
