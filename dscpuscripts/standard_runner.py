@@ -195,10 +195,11 @@ def execute_worker(args):
         else:
             from dscpuscripts.application_train import train_candidate, code_hash
         from dscpuscripts.common import file_lock, read_json
-        if code_hash() != args.expected_code:
-            raise ValueError('Training implementation changed after launch; no fitting performed')
         configs = {c['run_id']: c for c in configurations(args.campaign)}
         config = configs[args.run_id]
+        scientific_hash = code_hash() if args.campaign == 'fd001' else code_hash(config)
+        if scientific_hash != args.expected_code:
+            raise ValueError('Training implementation changed after launch; no fitting performed')
         data, results, _ = paths(args.campaign)
         folder = results / args.run_id
         with file_lock(folder / '.worker.lock'):
@@ -221,8 +222,15 @@ def dispatch(args):
         from dscpuscripts.application_train import code_hash
     data, results, _ = paths(args.campaign)
     configs = configurations(args.campaign)
-    code = code_hash()
-    states = {c['run_id']: classify(c, results, code) for c in configs}
+    from fulltd.protocol import digest
+    scoped_hashes, code_by_id = {}, {}
+    for c in configs:
+        scope = ("fd001",) if args.campaign == 'fd001' else (
+            c["dataset"], c["backbone"], c["method"])
+        if scope not in scoped_hashes:
+            scoped_hashes[scope] = code_hash() if args.campaign == 'fd001' else code_hash(c)
+        code_by_id[c["run_id"]] = scoped_hashes[scope]
+    states = {c['run_id']: classify(c, results, code_by_id[c['run_id']]) for c in configs}
     pending = [c for c in configs if states[c['run_id']] not in ('complete', 'numerical_failure')]
     if args.max_runs:
         pending = pending[:args.max_runs]
@@ -258,12 +266,12 @@ def dispatch(args):
     with file_lock(results / '.direct_campaign.lock'), stop_flag() as stopped:
         # The lock is separate from each scientific run lock and protects the
         # entire dispatcher, including the startup race between two terminals.
-        pending = [c for c in pending if classify(c, results, code) not in ('complete', 'numerical_failure')]
+        pending = [c for c in pending if classify(c, results, code_by_id[c['run_id']]) not in ('complete', 'numerical_failure')]
         logs = results / 'direct_logs'
         logs.mkdir(exist_ok=True)
         receipt_path = results / 'direct_launches' / f'{uuid.uuid4().hex}.json'
         record = dict(campaign=args.campaign, started=datetime.now(timezone.utc).isoformat(),
-                      pid=os.getpid(), code_sha256=code, workers=workers, microbatch=args.microbatch,
+                      pid=os.getpid(), code_sha256=digest(code_by_id), workers=workers, microbatch=args.microbatch,
                       state='running', completed=[], failed=[])
         atomic_json(receipt_path, record)
         active, next_index, stopping = {}, 0, False
@@ -279,7 +287,7 @@ def dispatch(args):
                         continue
                     del active[run_id]
                     config = next(c for c in configs if c['run_id'] == run_id)
-                    if exitcode == 0 and classify(config, results, code) in ('complete', 'numerical_failure'):
+                    if exitcode == 0 and classify(config, results, code_by_id[run_id]) in ('complete', 'numerical_failure'):
                         record['completed'].append(run_id)
                         print(f'Finished {run_id}', flush=True)
                     elif not (exitcode == 75 and stopping):
@@ -305,7 +313,7 @@ def dispatch(args):
                     c = pending[next_index]
                     next_index += 1
                     cmd = [sys.executable, '-m', 'dscpuscripts.standard_runner', args.campaign,
-                           '--worker', '--run-id', c['run_id'], '--expected-code', code,
+                           '--worker', '--run-id', c['run_id'], '--expected-code', code_by_id[c['run_id']],
                            '--microbatch', str(args.microbatch)]
                     with (logs / (c['run_id'] + '.log')).open('a', encoding='utf-8') as log:
                         process = subprocess.Popen(cmd, cwd=Path(__file__).resolve().parents[1],

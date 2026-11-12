@@ -19,7 +19,8 @@ import torch
 
 from dscpuscripts.common import atomic_json, read_json, data_identity
 from fulltd.metrics import evaluate
-from fulltd.models import build_model
+from .electricity_model import build_model as build_electricity_model
+from .metr_la_model import build_model as build_metr_la_model
 from fulltd.sampling import rng_for, sequence_hash, training_universe
 from fulltd.train import seed_runtime, state_hash, logical_backward
 from .application_objectives import make_objective
@@ -27,33 +28,26 @@ from .application_protocol import (PROTOCOL_ID, digest, validate_config,
                                    update_budgets, evaluation_steps,
                                    sources_for_application_round)
 
-SCIENTIFIC_SOURCES = (
-    "dscpuscripts/application_protocol.py", "dscpuscripts/application_train.py",
-    "dscpuscripts/application_objectives.py", "dscpuscripts/common.py",
-    "dscpuscripts/fd001_objectives.py", "agents/fulltd_objectives.py",
-    "agents/fulltd_mse.py", "agents/fulltd_gaussian_nll.py", "agents/fulltd_mae.py",
-    "fulltd/protocol.py", "fulltd/train.py", "fulltd/data.py", "fulltd/metrics.py",
-    "fulltd/models.py", "fulltd/sampling.py",
-)
 VALIDATION_SEED = 0x54445633
 ELECTRICITY_VALIDATION_POLICY = "fixed_customer_ceil20pct_without_replacement_v1"
 FULL_VALIDATION_POLICY = "complete_fixed_validation_v1"
 
 
-def code_hash():
-    root = Path(__file__).resolve().parents[1]
-    h = hashlib.sha256()
-    for name in SCIENTIFIC_SOURCES:
-        h.update(name.encode())
-        h.update((root / name).read_bytes().replace(b"\r\n", b"\n"))
-    return h.hexdigest()
+def code_hash(config):
+    from .application_identity import code_hash as scientific_code_hash
+    return scientific_code_hash(config)
 
 
 def build_objective(config, dataset=None):
     adjacency = getattr(dataset, "adjacency", None)
     if isinstance(dataset, (np.ndarray, torch.Tensor)):
         adjacency = dataset
-    model = build_model(config["dataset"], config["backbone"], config["seed"], adjacency=adjacency)
+    if config["dataset"] == "electricity" and config["backbone"] == "patchtst":
+        model = build_electricity_model(config["seed"])
+    elif config["dataset"] == "metr_la" and config["backbone"] == "graph_wavenet":
+        model = build_metr_la_model(config["seed"], adjacency)
+    else:
+        raise ValueError("Unsupported application dataset/backbone")
     return make_objective(config["method"], model)
 
 
@@ -210,7 +204,7 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
     scheduled = set(evaluation_steps(budgets["total_updates"], config["learning_curve_updates"]))
     root = Path(results_dir) / config["run_id"]
     root.mkdir(parents=True, exist_ok=True)
-    identity = dict(protocol_id=PROTOCOL_ID, config_sha256=digest(config), code_sha256=code_hash(),
+    identity = dict(protocol_id=config["protocol_id"], config_sha256=digest(config), code_sha256=code_hash(config),
                     data_sha256=data_identity(train), validation_sha256=data_identity(val_data),
                     validation_subset_sha256=digest(subset_record))
     status_file, recovery, final = root / "status.json", root / "recovery.pt", root / "final.pt"
@@ -271,7 +265,7 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
         atomic_json(root / "update_curve.json", progress["curve"])
         atomic_json(root / "rounds.json", progress["rounds"])
         source_draws = (progress["epoch"] - 1) * draws + progress["cursor"]
-        report = dict(config=config, identity=identity, state=state, protocol_id=PROTOCOL_ID,
+        report = dict(config=config, identity=identity, state=state, protocol_id=config["protocol_id"],
                       epochs_completed=progress["epoch"] - 1, next_epoch=progress["epoch"],
                       cursor=progress["cursor"], optimizer_steps=progress["optimizer_steps"],
                       update_opportunities=progress["count"], n_sources=n, **budgets,
@@ -311,7 +305,8 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
             return checkpoint("checkpointed")
         while progress["epoch"] <= config["epochs"]:
             epoch = progress["epoch"]
-            sources = sources_for_application_round(config["dataset"], n, config["seed"], epoch)
+            sources = sources_for_application_round(config["dataset"], n, config["seed"], epoch,
+                                                    config.get("source_fraction"))
             if len(sources) != draws:
                 raise ValueError("Source sampler differs from the frozen draw budget")
             partners, types = law.sample(sources, rng_for(config["dataset"], config["seed"], epoch, 22)) if td else (None, None)

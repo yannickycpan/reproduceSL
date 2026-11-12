@@ -33,9 +33,9 @@ DATASET_LABELS = {"electricity": "Electricity", "metr_la": "METR-LA"}
 ROW_KEYS = ("backbone", "regime", "method", "batch_size", "split", "metric", "units")
 
 
-def training_code_hash():
+def training_code_hash(config):
     from .application_train import code_hash
-    return code_hash()
+    return code_hash(config)
 
 
 def manifest_for(campaign):
@@ -83,7 +83,7 @@ def _audit_candidate(config, results, expected_code, shared, source_hashes):
         raise ValueError(f"Missing candidate status: {run_id}")
     status = read_json(folder / "status.json")
     identity = status.get("identity", {})
-    if (status.get("config") != config or identity.get("protocol_id") != PROTOCOL_ID
+    if (status.get("config") != config or identity.get("protocol_id") != config["protocol_id"]
             or identity.get("config_sha256") != digest(config)
             or identity.get("code_sha256") != expected_code):
         raise ValueError(f"Scientific configuration/code mismatch: {run_id}")
@@ -138,10 +138,10 @@ def _audit_candidate(config, results, expected_code, shared, source_hashes):
     td = config["method"].startswith("td_")
     for record in rounds:
         epoch = record["epoch"]
-        key = (config["dataset"], n, config["seed"], epoch)
+        key = (config["dataset"], n, config["seed"], epoch, config.get("source_fraction"))
         if key not in source_hashes:
             source_hashes[key] = sequence_hash(sources_for_application_round(config["dataset"], n,
-                                                                config["seed"], epoch))
+                                   config["seed"], epoch, config.get("source_fraction")))
         if (record.get("source_draws") != budgets["draws_per_round"]
                 or record.get("source_sha256") != source_hashes[key]):
             raise ValueError(f"Source stream/budget mismatch: {run_id}, round {epoch}")
@@ -191,10 +191,16 @@ def _choice_order(choice):
 def compute_plan(campaign, results):
     """Audit the entire prescribed grid using only training/validation records."""
     manifest = manifest_for(campaign)
-    expected_code = training_code_hash()
+    scoped_codes = {}
+    code_by_id = {}
+    for config in manifest:
+        scope = (config["dataset"], config["backbone"], config["method"])
+        if scope not in scoped_codes:
+            scoped_codes[scope] = training_code_hash(config)
+        code_by_id[config["run_id"]] = scoped_codes[scope]
     shared, source_hashes, candidates, by_hp = {}, {}, [], defaultdict(list)
     for config in manifest:
-        candidate = _audit_candidate(config, results, expected_code, shared, source_hashes)
+        candidate = _audit_candidate(config, results, code_by_id[config["run_id"]], shared, source_hashes)
         candidates.append(candidate)
         regime = "full_budget"
         endpoint = candidate["budgets"]["total_updates"]
@@ -242,8 +248,10 @@ def compute_plan(campaign, results):
             choice["checkpoint_sha256"][run_id] = file_hash(checkpoint)
         choices.append(choice)
     choices.sort(key=_choice_order)
-    plan = dict(analysis_version=ANALYSIS_VERSION, protocol_id=PROTOCOL_ID, dataset=campaign,
-                code_sha256=expected_code, manifest_sha256=digest(manifest),
+    plan = dict(analysis_version=ANALYSIS_VERSION,
+                protocol_id=manifest[0]["protocol_id"], dataset=campaign,
+                code_sha256=digest([[r["run_id"], code_by_id[r["run_id"]]] for r in manifest]),
+                manifest_sha256=digest(manifest),
                 data_sha256=shared["data_sha256"], validation_sha256=shared["validation_sha256"],
                 validation_subset=shared["validation_subset"], n_sources=shared["n_sources"],
                 evidence_sha256=digest([[r["config"]["run_id"], r["evidence_sha256"]] for r in candidates]),
@@ -289,8 +297,15 @@ def evaluate_selected(plan, results, data_dir, output, batch_size=128):
     from .application_train import build_objective, evaluation_validation_view
 
     campaign = plan["dataset"]
-    if (plan.get("code_sha256") != training_code_hash()
-            or plan.get("manifest_sha256") != digest(manifest_for(campaign))):
+    candidate_manifest = manifest_for(campaign)
+    cached_hashes, codes = {}, []
+    for c in candidate_manifest:
+        scope = (c["dataset"], c["backbone"], c["method"])
+        if scope not in cached_hashes:
+            cached_hashes[scope] = training_code_hash(c)
+        codes.append([c["run_id"], cached_hashes[scope]])
+    if (plan.get("code_sha256") != digest(codes)
+            or plan.get("manifest_sha256") != digest(candidate_manifest)):
         raise ValueError("Selection belongs to a different scientific implementation")
     if batch_size < 1:
         raise ValueError("Evaluation batch size must be positive")
