@@ -126,8 +126,8 @@ def test_mean_initialization_matches_original_unchanged_backbones():
 def test_application_manifest_matches_fd001_grids_without_legacy_methods():
     from dscpuscripts import fd001_protocol as fd001
     manifest = protocol.make_manifest()
-    assert len(manifest) == len({c["run_id"] for c in manifest}) == 875
-    assert Counter(c["dataset"] for c in manifest) == {"electricity": 350, "metr_la": 525}
+    assert len(manifest) == len({c["run_id"] for c in manifest}) == 2125
+    assert Counter(c["dataset"] for c in manifest) == {"electricity": 850, "metr_la": 1275}
     assert protocol.BASELINE_ALPHAS == fd001.BASELINE_ALPHAS
     assert protocol.TD_ALPHAS == fd001.TD_ALPHAS
     assert protocol.BETAS == (0.00003, 0.0001, 0.001, 0.003, 0.01)
@@ -152,7 +152,7 @@ def test_application_manifest_matches_fd001_grids_without_legacy_methods():
     for dataset, backbone, methods in protocol.MATRIX:
         selected = [c for c in manifest if (c["dataset"], c["backbone"]) == (dataset, backbone)]
         counts = Counter(c["method"] for c in selected)
-        assert counts == {method: 125 if method.startswith("td_") else 50 for method in methods}
+        assert counts == {method: 375 if method.startswith("td_") else 50 for method in methods}
     bad = dict(manifest[0], learning_curve_updates=500)
     with pytest.raises(ValueError, match="current"):
         protocol.validate_config(bad)
