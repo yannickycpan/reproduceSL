@@ -17,11 +17,25 @@ def dataset_root(dataset):
         raise ValueError(f"Unknown dataset for results path: {dataset}")
     name = "FULLTD_" + dataset.upper() + "_ROOT"
     override = os.environ.get(name)
-    if override:
-        return Path(override).expanduser().resolve()
     if dataset == "metr_la":
         from .metr_la_sampling import SOURCE_FRACTION, fraction_tag
-        return (base_root() / f"metr_la_{fraction_tag(SOURCE_FRACTION)}_results").resolve()
+        tag = fraction_tag(SOURCE_FRACTION)
+        if override:
+            root = Path(override).expanduser().resolve()
+            # An inherited old environment can otherwise accidentally reuse
+            # the former untagged directory for the new 10%-sampling campaign.
+            if root.name == "metr_la_results":
+                raise ValueError(
+                    "Refusing legacy METR-LA result root; unset FULLTD_METR_LA_ROOT "
+                    "to select the fraction-specific results directory")
+            if root.name.startswith("metr_la_f") and root.name.endswith("_results"):
+                expected = f"metr_la_{tag}_results"
+                if root.name != expected:
+                    raise ValueError(f"Result root fraction conflicts with {tag}: {root}")
+            return root
+        return (base_root() / f"metr_la_{tag}_results").resolve()
+    if override:
+        return Path(override).expanduser().resolve()
     return (base_root() / f"{dataset}_results").resolve()
 
 
