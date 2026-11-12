@@ -50,10 +50,10 @@ def build_objective(config):
     model = build_model("fd001", "tcn", config["seed"])
     if config["method"] == "td_typed":
         from dscpuscripts.fd001_objectives import TypedGammaTD
-        return TypedGammaTD(model)
+        return TypedGammaTD(model, num_types=len(config["lags"]))
     if config["method"] == "td_pairwise":
         from dscpuscripts.fd001_objectives import PairwiseGammaTD
-        return PairwiseGammaTD(model)
+        return PairwiseGammaTD(model, num_types=len(config["lags"]))
     if config["method"] in ("mse", "gaussian_nll"):
         from agents.fulltd_objectives import make_objective
         return make_objective(config["method"], model)
@@ -123,7 +123,7 @@ def gamma_diagnostics(objective, dataset, pair_law, microbatch, device, stop_req
     # Logging must not change scientific stopping: preserve nonfinite probe
     # values rather than turn an otherwise finite training update into a failure.
     records = []
-    for kind, lag in enumerate((1, 5)):
+    for kind, lag in enumerate(pair_law.lags):
         take = types == kind
         if not take.any():
             continue
@@ -309,7 +309,7 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
             progress["rounds"].append(dict(epoch=epoch, source_draws=n,
                                           source_sha256=sequence_hash(sources),
                                           partner_sha256=sequence_hash(partners) if td else None,
-                                          type_counts=np.bincount(types, minlength=2).tolist() if td else [],
+                                          type_counts=np.bincount(types, minlength=len(config["lags"])).tolist() if td else [],
                                           optimizer_steps_cumulative=progress["optimizer_steps"],
                                           sampled_half_pair_mse=progress["epoch_loss"]/progress["epoch_valid"]))
             progress["epoch"] = epoch+1
