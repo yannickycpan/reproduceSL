@@ -315,10 +315,8 @@ def _validate_snapshot(checkpoint, config, status, curve, step, subset):
 def _point_metrics(model, dataset, batch_size):
     from fulltd.metrics import evaluate
     units = "standardized" if dataset.dataset == "electricity" else "mph"
-    # Electricity's report uses standardized metrics only. Avoid computing
-    # unused inverse-scaled kW metrics for every intermediate checkpoint.
-    records, _ = evaluate(model, dataset, batch_size=batch_size, device="cpu",
-                          allow_nonfinite=True, include_raw=dataset.dataset != "electricity")
+    # Keep the exact original point-metric evaluation call.
+    records, _ = evaluate(model, dataset, batch_size=batch_size, device="cpu", allow_nonfinite=True)
     values = {}
     for metric in METRICS:
         matching = [r for r in records if r["units"] == units and str(r["horizon"]) == "all"
