@@ -14,7 +14,7 @@ from dscpuscripts.application_protocol import make_manifest as other_manifest, d
 
 
 @pytest.mark.parametrize("name,count", [
-    ("fd001", 600), ("electricity", 350), ("metr_la", 525)])
+    ("fd001", 1600), ("electricity", 850), ("metr_la", 1275)])
 def test_one_manifest_per_dataset(name, count):
     runs=runner.configurations(name)
     assert len(runs)==count
