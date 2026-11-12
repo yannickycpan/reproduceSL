@@ -145,7 +145,7 @@ def _fake_campaign(root, monkeypatch):
         atomic_json(folder / "rounds.json", [
             dict(epoch=epoch, source_draws=n, source_sha256=hashes[config["seed"], epoch],
                  partner_sha256=f"pair-{config['seed']}-{epoch}" if td else None,
-                 type_counts=[n, 0] if td else [],
+                 type_counts=([n] + [0] * (len(config["lags"]) - 1)) if td else [],
                  optimizer_steps_cumulative=epoch * budget["updates_per_epoch"])
             for epoch in range(1, 101)])
         (folder / "final.pt").write_bytes(f"final:{config['run_id']}".encode())
@@ -155,10 +155,11 @@ def _fake_campaign(root, monkeypatch):
 def test_only_b256_full_budget_is_selected_without_reading_tests(tmp_path, monkeypatch):
     manifest = _fake_campaign(tmp_path, monkeypatch)
     plan, _ = analysis.compute_plan("metr_la", tmp_path)
-    choices = {(c["method"], c["batch_size"], c["regime"]): c for c in plan["choices"]}
+    choices = {(c["method"], c["lag_set"], c["batch_size"], c["regime"]): c
+               for c in plan["choices"]}
     assert {c["batch_size"] for c in plan["choices"]} == {256}
     assert {c["regime"] for c in plan["choices"]} == {"full_budget"}
-    chosen = choices["td_pairwise", 256, "full_budget"]
+    chosen = choices["td_pairwise", "1-3", 256, "full_budget"]
     assert chosen["configuration"] == 1 and chosen["optimizer_steps"] == 200
     assert chosen["selection_steps"] == [200]
     assert len(chosen["run_ids"]) == 5
@@ -405,7 +406,7 @@ def test_report_end_to_end_locks_before_test_and_reuses_overlap(tmp_path, monkey
     monkeypatch.setattr(analysis, "training_code_hash", lambda config: "fixture-real-io")
     monkeypatch.setattr(train, "code_hash", lambda config: "fixture-real-io")
     monkeypatch.setattr(train, "validate_config", lambda c: c)
-    monkeypatch.setattr(train, "build_objective", lambda c, data: make_objective(c["method"], ToyMean()))
+    monkeypatch.setattr(train, "build_objective", lambda c, data: make_objective(c["method"], ToyMean(), num_types=len(c["lags"])))
     datasets = {"train": ScoringData("metr_la", "train", n=300),
                 "val": ScoringData("metr_la", "val", n=35),
                 "test": ScoringData("metr_la", "test", n=39)}
