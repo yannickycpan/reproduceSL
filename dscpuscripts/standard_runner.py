@@ -1,7 +1,8 @@
 """Direct CPU dispatcher for FD001, Electricity and METR-LA.
 
-FD001 is frozen. Electricity and METR-LA use the aligned application
-protocol, with update-based checkpoints and typed/pairwise TD.
+FD001, Electricity and METR-LA now each use an explicit 2/3/5-lag TD
+sweep with update-based checkpoints and typed/pairwise TD.
+The existing launchers read these manifests dynamically from Python.
 """
 from __future__ import annotations
 
