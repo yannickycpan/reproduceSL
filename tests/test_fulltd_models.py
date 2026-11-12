@@ -292,27 +292,49 @@ def test_graph_nodewise_linear_head_equals_reference_1x1_convolution():
     torch.testing.assert_close(model.head(hidden), result, atol=1e-14, rtol=1e-14)
 
 
-def test_graph_pairwise_head_preserves_sensor_coordinates_when_flattening():
-    """Equal pooled means must still permit different global pair coefficients."""
+def test_graph_pairwise_head_pools_abs_differences_without_cancellation():
+    """Sensor pooling is permutation-invariant and much smaller than flattening."""
     model = build_model("metr_la", "graph_wavenet", 0, np.eye(3)).double()
-    objective = make_objective("td_pairwise", model).double()
+    objective = make_objective("td_pairwise", model, num_types=5).double()
     width = model.feature_dim
-    assert objective.gamma_head.feature_dim == 3 * width
+    assert objective.gamma_head.feature_dim == width == 192
+    assert sum(p.numel() for p in objective.gamma_head.parameters()) == 5 * (width + 3)
+    assert sum(p.numel() for p in make_objective("gaussian_nll", model).variance_head.parameters()) == 2316
     source = torch.zeros(2, 3, width, dtype=torch.double)
     source[0, 0, 4] = 2.
-    source[1, 1, 4] = 2.
+    source[0, 1, 4] = -2.
+    source[1] = source[0, [1, 0, 2]]
     neighbor = torch.zeros_like(source)
-    torch.testing.assert_close(source.mean(1)[0], source.mean(1)[1])
-    # Select one sensor's absolute difference coordinate; a pooled adaptation
-    # would erase the distinction between these two otherwise equal windows.
+    # Averaging signed hidden vectors first would erase both changes.
+    torch.testing.assert_close(source.mean(1), torch.zeros(2, width, dtype=torch.double))
     with torch.no_grad():
-        objective.gamma_head.linear.weight[0, 1 + width + 4] = .3
-        objective.gamma_head.linear.bias[0] = .1
+        objective.gamma_head.linear.weight[2, 1 + 4] = .3
+        objective.gamma_head.linear.bias[2] = .1
     x = torch.zeros(2, 2, 3, 12, dtype=torch.double)
-    gamma = objective.gamma_values(x, x, torch.zeros(2, dtype=torch.long),
+    gamma = objective.gamma_values(x, x, torch.full((2,), 2, dtype=torch.long),
                                    hidden=source, neighbor_hidden=neighbor)
-    torch.testing.assert_close(gamma, torch.tensor([.1, .7], dtype=torch.double))
-    assert gamma.shape == (2,)
+    torch.testing.assert_close(gamma, torch.full((2,), .5, dtype=torch.double),
+                               rtol=1e-12, atol=1e-12)
+    with pytest.raises(ValueError, match="lag"):
+        objective.gamma_values(x, x, torch.full((2,), 5, dtype=torch.long),
+                               hidden=source, neighbor_hidden=neighbor)
+
+
+@pytest.mark.parametrize("num_types", [2, 3, 5])
+def test_typed_and_pairwise_operator_dimensions_follow_lags(num_types):
+    source, partner, _ = examples()
+    types = torch.tensor([0, num_types - 1, 1])
+    for method in ("td_typed", "td_pairwise"):
+        objective = make_objective(method, tiny(), num_types=num_types)
+        if method == "td_typed":
+            assert objective.operator.numel() == num_types
+        else:
+            assert sum(p.numel() for p in objective.gamma_head.parameters()) == num_types * 6
+        loss, count = objective.loss_sum(source, partner, types)
+        assert torch.isfinite(loss) and count == source["y"].numel()
+        (loss / count).backward()
+        assert all(p.grad is not None and torch.isfinite(p.grad).all()
+                   for p in objective.parameters())
 
 
 @pytest.mark.parametrize("dataset,backbone,x_shape,y_shape", [
