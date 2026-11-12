@@ -670,6 +670,10 @@ def run(campaign, mode="all", *, data_dir=None, results_dir=None, output=None,
             plan = read_json(lock)
             if plan.get("dataset") != campaign or plan.get("analysis_version") != ANALYSIS_VERSION:
                 raise ValueError("Locked selection is not this application's current report")
+            if not (output / "evaluation_manifest.json").is_file():
+                raise ValueError(
+                    "Only endpoint tables are available; use 'run' to finish the "
+                    "full test learning curves before regenerating plots")
             return report(plan, output)
         plan, scores = compute_plan(campaign, results)
         if lock.is_file():
