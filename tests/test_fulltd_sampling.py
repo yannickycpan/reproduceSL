@@ -33,6 +33,10 @@ def test_prespecified_matrix_and_budget():
             method_runs = [r for r in runs if r["method"] == method]
             assert len({(r["alpha"], r["beta"]) for r in method_runs}) == (25 if method.startswith("td_") else 10)
             assert {r["batch_size"] for r in method_runs} == {256}
+            configured_lags = {tuple(r["lags"]) for r in method_runs}
+            from dscpuscripts.application_protocol import LAG_SETS
+            assert configured_lags == (set(LAG_SETS[dataset]) if method.startswith("td_")
+                                       else {LAG_SETS[dataset][0]})
     assert not any(r["backbone"] == "dlinear" for r in manifest)
     invalid = dict(manifest[0], epochs=99)
     with pytest.raises(ValueError):
@@ -52,13 +56,20 @@ def test_electricity_240_stochastic_round_source_stream():
         sources_for_application_round("electricity", n, 0, 241)
 
 
-@pytest.mark.parametrize("name,lags", [("electricity", (1,24)), ("metr_la", (1,3)), ("fd001", (1,5))])
+@pytest.mark.parametrize("name,lags", [
+    ("electricity", (1, 24)), ("electricity", (1, 12, 24)),
+    ("electricity", (1, 12, 24, 36, 48)),
+    ("metr_la", (1, 3)), ("metr_la", (1, 3, 6)),
+    ("metr_la", (1, 3, 6, 12, 24)),
+    ("fd001", (1, 5)), ("fd001", (1, 3, 5)),
+    ("fd001", (1, 3, 5, 10, 15))])
 def test_pair_metadata_boundaries_no_gaps_no_other_entities(name, lags):
     origins = np.r_[np.arange(60), np.arange(80,120), np.arange(60)]
     entities = np.r_[np.zeros(100), np.ones(60)].astype(int)
     law = LocalPairLaw(entities, origins, lags)
     ids = np.arange(len(origins))
     partner, types, probabilities = law.enumerate(ids)
+    assert probabilities.shape == (len(ids), 2 * len(lags))
     assert np.allclose(probabilities.sum(axis=1), 1)
     for row, source in enumerate(ids):
         expected = []
@@ -79,7 +90,10 @@ def test_pair_metadata_boundaries_no_gaps_no_other_entities(name, lags):
 
 def test_source_partner_sequences_are_shared_and_independent_of_batch_grouping():
     n = 2501
-    for dataset, lags in [("electricity",(1,24)),("metr_la",(1,3)),("fd001",(1,5))]:
+    for dataset, lags in [
+        ("electricity", (1, 24)), ("electricity", (1, 12, 24, 36, 48)),
+        ("metr_la", (1, 3)), ("metr_la", (1, 3, 6, 12, 24)),
+        ("fd001", (1, 5)), ("fd001", (1, 3, 5, 10, 15))]:
         law = LocalPairLaw(np.zeros(n), np.arange(n), lags)
         a = sources_for_round(dataset,n,2,10)
         b = sources_for_round(dataset,n,2,10)
@@ -97,11 +111,12 @@ def test_source_partner_sequences_are_shared_and_independent_of_batch_grouping()
         assert not np.array_equal(a,sources_for_round(dataset,n,3,10))
 
 
-def test_exact_expected_objective_and_empirical_unbiased_sampling():
+@pytest.mark.parametrize("lags", [(1, 24), (1, 12, 24, 36, 48)])
+def test_exact_expected_objective_and_empirical_unbiased_sampling(lags):
     n=49
-    law=LocalPairLaw(np.zeros(n),np.arange(n),(1,24))
+    law=LocalPairLaw(np.zeros(n),np.arange(n),lags)
     residual=np.sin(np.arange(n)*.23)+np.arange(n)/100
-    theta=np.array([.4,-.3])
+    theta=np.linspace(.4, -.3, len(lags))
     p,t,w=law.enumerate(np.arange(n))
     safe=np.maximum(p,0)
     exact=np.sum(w*.5*(residual[:,None]-theta[t]*residual[safe])**2)/n
