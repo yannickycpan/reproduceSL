@@ -20,8 +20,8 @@ ELECTRICITY_ROUNDS = electricity_sampling.ELECTRICITY_ROUNDS
 METR_LA_SOURCE_FRACTION = metr_la_sampling.SOURCE_FRACTION
 METR_LA_EVAL_PERIOD = metr_la_sampling.evaluation_period(METR_LA_SOURCE_FRACTION)
 PROTOCOL_IDS = {
-    "electricity": "applications-fd001-aligned-v3-electricity-10passes",
-    "metr_la": "metr-la-configurable-fraction-v1",
+    "electricity": "applications-fd001-aligned-v4-lag-sweep-10passes",
+    "metr_la": "metr-la-configurable-fraction-v2-lag-sweep",
 }
 # Kept as an imported compatibility alias for legacy reporting tests; scientific
 # checkpoints always use the dataset-specific config["protocol_id"].
@@ -31,7 +31,11 @@ BASELINE_ALPHAS = (0.0001, 0.0003, 0.0005, 0.0007, 0.0009,
                    0.001, 0.003, 0.005, 0.007, 0.01)
 TD_ALPHAS = (0.00003, 0.0001, 0.0003, 0.001, 0.003)
 EVAL_UPDATE_PERIOD = {"electricity": 5000, "metr_la": METR_LA_EVAL_PERIOD}
-LAGS = {"electricity": (1, 24), "metr_la": (1, 3)}
+LAG_SETS = {
+    "electricity": ((1, 24), (1, 12, 24), (1, 12, 24, 36, 48)),
+    "metr_la": ((1, 3), (1, 3, 6), (1, 3, 6, 12, 24)),
+}
+LAGS = {dataset: variants[0] for dataset, variants in LAG_SETS.items()}
 PRINCIPAL_METHODS = ("mse", "gaussian_nll", "td_typed", "td_pairwise")
 MATRIX = (
     ("electricity", "patchtst", PRINCIPAL_METHODS),
@@ -60,36 +64,38 @@ def make_manifest():
             td = method.startswith("td_")
             rates = [(a, b) for a in (TD_ALPHAS if td else BASELINE_ALPHAS)
                      for b in (BETAS if td else (None,))]
-            for setting, (alpha, beta) in enumerate(rates):
-                for seed in SEEDS:
-                    name = f"{dataset}_{backbone}_{method}_b256_h{setting}_s{seed}"
-                    if dataset == "metr_la":
-                        name += "_" + metr_la_sampling.fraction_tag(METR_LA_SOURCE_FRACTION)
-                    config = dict(
-                        run_id=name, protocol_id=PROTOCOL_IDS[dataset],
-                        dataset=dataset, backbone=backbone, method=method,
-                        alpha=alpha, beta=beta, batch_size=256,
-                        configuration=setting, seed=seed,
-                        epochs=ELECTRICITY_ROUNDS if dataset == "electricity" else EPOCHS,
-                        training_unit="stochastic_round" if (dataset == "electricity" or sampled)
-                                      else "full_epoch",
-                        source_sampling=("iid_uniform_with_replacement" if (dataset == "electricity" or sampled)
-                                         else "random_reshuffling"),
-                        source_divisor=24 if dataset == "electricity" else 1,
-                        optimizer="adam", adam_betas=[0.9, 0.999], adam_eps=1e-8,
-                        weight_decay=0, gradient_clipping=None, learning_rate_schedule=None,
-                        learning_curve_updates=EVAL_UPDATE_PERIOD[dataset],
-                        snapshot_updates=EVAL_UPDATE_PERIOD[dataset],
-                        validation_sampling=("fixed_customer_stratified_without_replacement"
-                                             if dataset == "electricity" else "full"),
-                        validation_fraction=0.2 if dataset == "electricity" else 1.0,
-                        lags=list(LAGS[dataset]),
-                        checkpoint_policy="update_snapshots_and_resumable_cursor")
-                    if dataset == "metr_la":
-                        config["source_fraction"] = METR_LA_SOURCE_FRACTION
-                    runs.append(config)
-    if len(runs) != 875 or len({r["run_id"] for r in runs}) != 875:
-        raise AssertionError("Expected 350 Electricity and 525 METR-LA runs")
+            for lags in (LAG_SETS[dataset] if td else LAG_SETS[dataset][:1]):
+                lag_id = "_lags" + "-".join(map(str, lags)) if td else ""
+                for setting, (alpha, beta) in enumerate(rates):
+                    for seed in SEEDS:
+                        name = f"{dataset}_{backbone}_{method}_b256_h{setting}_s{seed}{lag_id}"
+                        if dataset == "metr_la":
+                            name += "_" + metr_la_sampling.fraction_tag(METR_LA_SOURCE_FRACTION)
+                        config = dict(
+                            run_id=name, protocol_id=PROTOCOL_IDS[dataset],
+                            dataset=dataset, backbone=backbone, method=method,
+                            alpha=alpha, beta=beta, batch_size=256,
+                            configuration=setting, seed=seed,
+                            epochs=ELECTRICITY_ROUNDS if dataset == "electricity" else EPOCHS,
+                            training_unit="stochastic_round" if (dataset == "electricity" or sampled)
+                                          else "full_epoch",
+                            source_sampling=("iid_uniform_with_replacement" if (dataset == "electricity" or sampled)
+                                             else "random_reshuffling"),
+                            source_divisor=24 if dataset == "electricity" else 1,
+                            optimizer="adam", adam_betas=[0.9, 0.999], adam_eps=1e-8,
+                            weight_decay=0, gradient_clipping=None, learning_rate_schedule=None,
+                            learning_curve_updates=EVAL_UPDATE_PERIOD[dataset],
+                            snapshot_updates=EVAL_UPDATE_PERIOD[dataset],
+                            validation_sampling=("fixed_customer_stratified_without_replacement"
+                                                 if dataset == "electricity" else "full"),
+                            validation_fraction=0.2 if dataset == "electricity" else 1.0,
+                            lags=list(lags),
+                            checkpoint_policy="update_snapshots_and_resumable_cursor")
+                        if dataset == "metr_la":
+                            config["source_fraction"] = METR_LA_SOURCE_FRACTION
+                        runs.append(config)
+    if len(runs) != 2125 or len({r["run_id"] for r in runs}) != 2125:
+        raise AssertionError("Expected 850 Electricity and 1275 METR-LA runs")
     return runs
 
 
@@ -159,7 +165,7 @@ def main():
         subset = manifest if name == "manifest" else [r for r in manifest if r["dataset"] == name]
         (destination / (name + ".json")).write_text(
             json.dumps(subset, indent=2) + "\n", encoding="utf-8")
-    print(f"Wrote {len(manifest)} application candidates")
+    print(f"Wrote {len(manifest)} application candidates across nested TD lag sets")
 
 
 if __name__ == "__main__":
