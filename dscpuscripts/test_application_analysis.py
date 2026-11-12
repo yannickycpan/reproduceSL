@@ -31,6 +31,8 @@ def _fake_campaign(root, monkeypatch):
                 and c["method"] in ("mse", "td_pairwise") and c["configuration"] in (0, 1)]
     for config in manifest:
         config["learning_curve_updates"] = config["snapshot_updates"] = 70
+        config["source_fraction"] = 1.0
+        config["source_sampling"] = "random_reshuffling"
     monkeypatch.setattr(analysis, "manifest_for", lambda campaign: manifest)
     monkeypatch.setattr(analysis, "training_code_hash", lambda: "fixture-scientific-code")
     n = 257
