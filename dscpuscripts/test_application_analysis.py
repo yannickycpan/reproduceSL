@@ -45,6 +45,45 @@ def test_historical_electricity_identity_is_read_only_pinned_and_never_guessed(
     assert set(current.values()) == {"new-scoped-scientific-identity"}
 
 
+def test_historical_electricity_selection_lock_migrates_hash_only(
+        tmp_path, monkeypatch):
+    """Legacy plan can be reused only when all validation choices are unchanged."""
+    manifest = [copy.deepcopy(c) for c in make_manifest()
+                if c["dataset"] == "electricity" and c["method"] == "mse"
+                and c["configuration"] == 0]
+    assert len(manifest) == 5
+    old_hash = analysis.LEGACY_ELECTRICITY_CODE_SHA256
+    results, output = tmp_path / "results", tmp_path / "outputs"
+    for config in manifest:
+        folder = results / config["run_id"]
+        folder.mkdir(parents=True)
+        atomic_json(folder / "status.json",
+                    dict(config=config, identity=dict(code_sha256=old_hash)))
+    monkeypatch.setattr(analysis, "manifest_for", lambda campaign: manifest)
+    code = digest([[c["run_id"], old_hash] for c in manifest])
+    plan = dict(dataset="electricity", code_sha256=code,
+                manifest_sha256=digest(manifest), choices=[])
+    monkeypatch.setattr(analysis, "compute_plan",
+                        lambda campaign, results_path: (plan, []))
+    output.mkdir()
+    old = dict(plan, code_sha256=old_hash)
+    atomic_json(output / "selections.json", old)
+    analysis.run("electricity", "check", data_dir=tmp_path,
+                 results_dir=results, output=output)
+    assert read_json(output / "selections.json") == plan
+    assert read_json(output / "selections_pre_scoped_hash.json") == old
+
+    # Even a different HP selection or changed checkpoint identity refuses
+    # migration. An already migrated lock cannot be rewritten implicitly.
+    changed = dict(plan, choices=[{"changed": "scientific selection"}])
+    monkeypatch.setattr(analysis, "compute_plan",
+                        lambda campaign, results_path: (changed, []))
+    with pytest.raises(ValueError, match="Locked validation-only selection changed"):
+        analysis.run("electricity", "check", data_dir=tmp_path,
+                     results_dir=results, output=output)
+    assert read_json(output / "selections.json") == plan
+
+
 def test_final_quarter_counts_only_positive_measurements_before_endpoint():
     steps = (0, 70, 140, 200, 210, 280, 300)
     assert analysis.selection_update_steps(steps, 200) == (200,)
