@@ -85,3 +85,17 @@ bash dscpuscripts/analyze_standard.sh metr_la run
 
 The `--status` mode uses its own default displayed worker count; that
 number is not the running dispatcher's actual `--workers` cap.
+
+
+## Scope refinement (scientific-code hash v3)
+
+The A–F maintenance revision now hashes only reachable dataset/method AST
+branches in mixed training, objective and LazyDataset code. Comments and
+unreachable branches for other datasets no longer force unrelated
+checkpoint invalidation. Actual shared training/metric code remains
+conservatively protected. This introduces a new scientific-code identity
+scheme for *future* application training runs; old v2 checkpoints are not
+automatically relabeled, and an actively running v2 worker must not be
+hot-updated. FD001 retains its independent original code hash and scientific
+source files. Completed old Electricity training is supported read-only by
+the previously pinned monolithic scientific hash.

@@ -69,9 +69,11 @@ size if exact cached floating-point values matter.
 `performance_summary.csv` and the usual RMSE/MAE tables.
 The `evaluation_manifest.json`, `learning_curves_per_seed.csv` and
 figures are produced only after `run` succeeds. A cached test observation
-is reused only after the checkpoint's config, cursor and validation history
-are checked; the previous aggregate-hash cache layout is migrated when
-all other evidence hashes agree.
+is reused only when checkpoint identity, recorded validation history and
+metric values pass the new checks. The evaluator's AST, data-loader code and
+metric code are bound to each new cache key. Historical v1 metrics are
+recognized only under the pinned original evaluator/data-loader identity;
+they are explicitly marked legacy_unsigned when migrated to v2.
 
 Completed historical Electricity experiments are read with their exact
 original scientific identity and unchanged validation-only selection lock.
@@ -79,8 +81,10 @@ The 350 Electricity manifest configurations were checked byte-for-byte
 equivalent after JSON parsing against the pre-refactor experiment, and the
 pinned scientific hash was independently reconstructed from the original
 15 files. There is **no checkpoint conversion, selection-lock migration,
-or compulsory re-training**. Existing per-step metric caches retain the same
-key, so they are reused without re-evaluation.
+or compulsory re-training**. Existing v1 point caches are retained and
+can be reused only for the original validated code path; v2 point-cache keys
+are different and contain independent checksums of metric values. No
+checkpoint or hyperparameter selection lock is rewritten.
 
 The standard Electricity command remains:
 `bash dscpuscripts/analyze_standard.sh electricity run --workers 4`.
@@ -108,9 +112,9 @@ in these analysis files do **not** change the training checkpoint code hash.
   This is an intentional strict full-budget comparison, not silently counted
   as a comparable full-budget result.
 - Reproducible process speedup cannot be claimed from static source review.
-  Production Python tests and a one-worker/four-worker equality comparison
-  on the AMD host are still required before considering the parallel path
-  operationally verified.
+  A real two-process Graph WaveNet comparison against sequential inference
+  has been added to the test suite, but still needs to run on the AMD host.
+  A one-worker/four-worker throughput benchmark remains advisable.
 
 ## Verification commands
 
@@ -125,3 +129,37 @@ bash dscpuscripts/analyze_standard.sh electricity check
 No training-state deletion, renaming, or retraining is performed by this
 reporting change. The full 350-run Electricity audit must succeed with the
 current scoped scientific identity before touching the test split.
+
+
+## A–F code audit and fixes
+
+- **A:** v2 test cache keys bind the exact `_point_metrics` AST plus
+  `fulltd/metrics.py`, the test dataset identity, preprocessing loader
+  code and checkpoint SHA-256.
+- **B:** All analysis modes that read model/test data (`check`,
+  `endpoints`, `run`, `evaluate`) call `verify_dataset()` once per
+  invocation before selecting or testing checkpoints. This validates
+  actual processed `.npy` bytes against metadata SHA-256 records.
+- **C:** A versioned v3 application hash scopes mixed functions/classes to
+  their actually reachable dataset and objective branches, rather than
+  hashing the entire `application_train.py`. Shared optimizer/metrics
+  code remains a shared dependency. This **changes future per-run
+  application hashes once**; active scoped-v2 workers cannot be upgraded
+  in place. Historical monolithic-hash Electricity results remain
+  readable in the analysis-only compatibility path.
+- **D:** Real two-process `spawn` regression exercise with independent
+  Graph WaveNet inference jobs on synthetic processed METR-LA data,
+  compared to the original serial path.
+- **E:** Existing checkpoints are read using PyTorch memory mapping,
+  avoiding eager optimizer-tensor loading; a previously validated
+  cached snapshot can be reused without re-deserializing its Adam/RNG
+  state when the file and audit evidence hashes still agree.
+- **F:** v2 cached RMSE/MAE values have their own canonical payload
+  SHA-256; modified values are rejected even when the cache identity
+  and checkpoint SHA-256 still match. V1 historical entries have no
+  retroactively verifiable metric checksum and are marked accordingly.
+
+The result directory structure and output tables/curves have not changed.
+G (a complete 10%-sampling train-to-plot integration test) is not part
+of this revision; the stored training result schema was never changed.
+The existing analysis determines the budget and source stream from config.

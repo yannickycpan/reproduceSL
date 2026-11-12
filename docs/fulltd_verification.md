@@ -82,3 +82,13 @@ run, that the AMD host was benchmarked, or that unseen server checkpoints
 have been inspected. On the server, prepare/verify data, inspect the dry-run,
 then launch the current scripts. The selection check verifies the complete
 candidate campaign before reporting tests.
+
+
+## A–F maintenance verification
+
+Added real two-process Graph WaveNet inference tests, numeric point-cache
+integrity/corruption tests, on-disk processed npy tamper detection, and
+dataset/method dependency-scoping tests. Actual end-to-end tests must still
+be executed on the AMD server with
+`$HOME/scratch/fulltd/.venv-fulltd/bin/python -m pytest -q tests dscpuscripts`.
+This section does not claim that the server tests already passed.
