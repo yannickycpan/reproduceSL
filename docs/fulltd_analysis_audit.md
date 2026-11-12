@@ -73,6 +73,20 @@ is reused only after the checkpoint's config, cursor and validation history
 are checked; the previous aggregate-hash cache layout is migrated when
 all other evidence hashes agree.
 
+Completed historical Electricity experiments are read with their exact
+original scientific identity and unchanged validation-only selection lock.
+The 350 Electricity manifest configurations were checked byte-for-byte
+equivalent after JSON parsing against the pre-refactor experiment, and the
+pinned scientific hash was independently reconstructed from the original
+15 files. There is **no checkpoint conversion, selection-lock migration,
+or compulsory re-training**. Existing per-step metric caches retain the same
+key, so they are reused without re-evaluation.
+
+The standard Electricity command remains:
+`bash dscpuscripts/analyze_standard.sh electricity run --workers 4`.
+Omitting `--workers` gives the original sequential execution. Full tables
+and learning curves remain unchanged.
+
 The existing `plots` command uses full completed cached tables; it does
 not fabricate curves after endpoint-only evaluation. Source code changes
 in these analysis files do **not** change the training checkpoint code hash.
