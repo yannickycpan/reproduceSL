@@ -1,3 +1,15 @@
+# reproduceSL — METR-LA sampling experiment
+
+**Do not replace the original `fullTD` working tree with this branch.** The
+source-fraction experiment has a new scientific identity and writes to a
+separate results directory. [Reproducible setup](docs/metr_la_fraction_sampling.md).
+
+This branch defaults to **10% METR-LA source draws per round, for 100 rounds**;
+25% and 100% are configurable. Other datasets' original experiments must be
+run/analyzed from the original `fullTD` branch.
+
+## Historical fullTD instructions (for reference)
+
 # reproduceSL — fullTD
 
 The current FD001 experiment has **one** four-method protocol:

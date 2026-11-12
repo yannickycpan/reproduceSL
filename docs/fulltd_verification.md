@@ -28,7 +28,12 @@ after all four validation-based choices are locked.
 
 ## Electricity and METR-LA
 
-The current application manifests have 350 Electricity and 525 METR-LA
+This experimental branch preserves the 350/525 manifest counts but uses
+10% source sampling by default for METR-LA; all prior completion and test
+claims belong to the parent fullTD branch. Full pytest and dry-run checks
+must be rerun before using the experimental campaign.
+
+The parent-branch application manifests have 350 Electricity and 525 METR-LA
 candidates. The common model/data utilities are unchanged; application
 protocol, objectives, training and reporting live in `dscpuscripts/application_*.py`.
 The replaced application campaign's analysis/refit/Slurm entrypoints and its

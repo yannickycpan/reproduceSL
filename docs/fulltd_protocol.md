@@ -57,7 +57,15 @@ unequal final microbatches.
 
 ## Data exposure and justified dataset exceptions
 
-METR-LA uses 100 complete reshuffled passes, as FD001 does. Electricity
+On the separate experimental METR-LA sampling branch, the default is 100
+independent stochastic rounds of ceil(0.10*N) uniformly-with-replacement
+source draws. The 100%-fraction option reuses the original full
+random-reshuffling source stream exactly; both retain the full eligible
+training-partner universe. This is a compute-budget experiment, not a
+10%-label-data experiment. See [sampling variant](metr_la_fraction_sampling.md).
+
+On the original fullTD branch, METR-LA uses 100 complete reshuffled passes,
+as FD001 does. Electricity
 uses 240 independent stochastic rounds, each drawing ceil(N/24) sources
 uniformly with replacement. This equals approximately 10 full training-set
 passes in total source draws (not 10 independent full permutations). The

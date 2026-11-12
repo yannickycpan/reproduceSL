@@ -1,3 +1,14 @@
+# METR-LA 10%-source-sampling research variant
+
+Use **separate Git worktree** and the wrappers
+`dscpuscripts/run_metr_la_sampled.sh` and
+`dscpuscripts/analyze_metr_la_sampled.sh`; see
+[the sampling protocol](../docs/metr_la_fraction_sampling.md).
+Do not use this variant's application code to validate or resume existing
+Electricity/METR-LA checkpoint identities on the original fullTD branch.
+
+## Parent fullTD direct-CPU experiment instructions
+
 # Direct CPU experiments — FD001, Electricity and METR-LA
 
 **There is one FD001 scientific protocol:** `dscpuscripts/fd001_protocol.py`.
