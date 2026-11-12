@@ -97,7 +97,8 @@ def _lookup_constant(node, config):
     if isinstance(node, ast.Name) and node.id == "method":
         return config["method"]
     if (isinstance(node, ast.Attribute) and node.attr == "dataset"
-            and isinstance(node.value, ast.Name) and node.value.id == "self"):
+            and isinstance(node.value, ast.Name)
+            and node.value.id in ("self", "dataset")):
         return config["dataset"]
     if (isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name)
             and node.value.id == "config" and isinstance(node.slice, ast.Constant)):
