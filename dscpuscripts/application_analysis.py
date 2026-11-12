@@ -3,7 +3,7 @@
 Each application method at B256 selects one rate setting across five seeds
 by the mean validation MSE over the final ceil(25%) of positive-update
 measurements. Only final-iterate metrics are reported; test labels never
-select hyperparameters or checkpoints. FD001 remains untouched.
+select hyperparameters or checkpoints. FD001 has its own independent lag-sweep analysis.
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from .application_protocol import (PROTOCOL_ID, SEEDS, digest, evaluation_steps,
                                      make_manifest, update_budgets,
                                      sources_for_application_round)
 
-ANALYSIS_VERSION = "application-comparison-v1"
+ANALYSIS_VERSION = "application-comparison-lag-sweep-v2"
 EVALUATION_VERSION = "application-point-metrics-v2"
 # Pre-instrumentation evaluator AST fingerprint, from the exact original
 # implementation. Unchecksummed v1 cache entries are explicitly identified
@@ -39,7 +39,11 @@ LABELS = {"mse": "MSE", "gaussian_nll": "Gaussian NLL", "td_typed": "TD typed",
           "td_pairwise_mae": "TD pairwise (MAE)"}
 BACKBONES = {"tcn": "TCN", "patchtst": "PatchTST", "graph_wavenet": "Graph WaveNet"}
 DATASET_LABELS = {"electricity": "Electricity", "metr_la": "METR-LA"}
-ROW_KEYS = ("backbone", "regime", "method", "batch_size", "split", "metric", "units")
+ROW_KEYS = ("backbone", "regime", "method", "lag_set", "batch_size", "split", "metric", "units")
+
+
+def lag_key(config):
+    return "-".join(map(str, config["lags"])) if config["method"].startswith("td_") else "none"
 
 
 def training_code_hash(config):
@@ -197,9 +201,10 @@ def _audit_candidate(config, results, expected_code, shared, source_hashes):
             raise ValueError(f"Empty masks or inconsistent actual update counts: {run_id}; "
                              "the declared matched-update comparison cannot be used")
         if td:
-            _match(shared, ("partner", config["seed"], epoch), record.get("partner_sha256"))
+            _match(shared, ("partner", tuple(config["lags"]), config["seed"], epoch),
+                   record.get("partner_sha256"))
             counts = record.get("type_counts", [])
-            if len(counts) != 2 or sum(counts) != budgets["draws_per_round"]:
+            if len(counts) != len(config["lags"]) or sum(counts) != budgets["draws_per_round"]:
                 raise ValueError(f"Incorrect temporal-pair accounting: {run_id}")
     if state == "complete":
         if (status.get("epochs_completed") != config["epochs"] or status.get("next_epoch") != config["epochs"] + 1
@@ -233,7 +238,8 @@ def _candidate_score(candidate, endpoint, regime):
 def _choice_order(choice):
     return (list(BACKBONES).index(choice["backbone"]),
             0 if choice["regime"] == "full_budget" else 1,
-            list(LABELS).index(choice["method"]), choice["batch_size"])
+            list(LABELS).index(choice["method"]), len(choice["lag_set"].split("-")),
+            choice["lag_set"], choice["batch_size"])
 
 
 def compute_plan(campaign, results):
@@ -248,7 +254,7 @@ def compute_plan(campaign, results):
         endpoint = candidate["budgets"]["total_updates"]
         score, window = _candidate_score(candidate, endpoint, regime)
         key = (config["backbone"], regime, config["method"],
-               config["batch_size"], config["configuration"])
+               lag_key(config), config["batch_size"], config["configuration"])
         by_hp[key].append(dict(candidate=candidate, score=score,
                               optimizer_steps=endpoint, selection_steps=window))
     scores = []
@@ -262,7 +268,7 @@ def compute_plan(campaign, results):
         if len(endpoints) != 1 or len(windows) > 1:
             raise ValueError(f"Inconsistent measurement/update budgets across seeds: {key}")
         valid = all(math.isfinite(row["score"]) for row in members)
-        scores.append(dict(zip(("backbone", "regime", "method", "batch_size", "configuration"), key),
+        scores.append(dict(zip(("backbone", "regime", "method", "lag_set", "batch_size", "configuration"), key),
                            alpha=configs[0]["alpha"], beta=configs[0]["beta"],
                            score=statistics.mean(row["score"] for row in members) if valid else math.inf,
                            unavailable_seeds=[config["seed"] for config, row in zip(configs, members)
@@ -272,7 +278,7 @@ def compute_plan(campaign, results):
                            run_ids=[config["run_id"] for config in configs]))
     groups = defaultdict(list)
     for score in scores:
-        groups[tuple(score[k] for k in ("backbone", "regime", "method", "batch_size"))].append(score)
+        groups[tuple(score[k] for k in ("backbone", "regime", "method", "lag_set", "batch_size"))].append(score)
     choices = []
     by_id = {row["config"]["run_id"]: row for row in candidates}
     for key, options in groups.items():
@@ -299,7 +305,7 @@ def compute_plan(campaign, results):
                 evidence_sha256=digest([[r["config"]["run_id"], r["evidence_sha256"]] for r in candidates]),
                 criterion="Five-seed mean standardized validation MSE over the final ceil(25%) "
                           "of positive-update measurements, after truncation to the reported endpoint; "
-                          "select separately within each backbone/method/batch and report that endpoint.",
+                          "select separately within each backbone/method/lag-set/batch and report that endpoint.",
                 counts=dict(Counter(row["state"] for row in candidates)), choices=choices)
     return plan, scores
 
@@ -533,7 +539,7 @@ def _evaluate_one_run(task, train, test, batch_size):
                          else _curve_value(record, task["campaign"], metric))
                 row = dict(dataset=task["campaign"], backbone=task["backbone"],
                            regime=task["regime"], method=task["method"],
-                           batch_size=config["batch_size"], seed=config["seed"],
+                           lag_set=task["lag_set"], batch_size=config["batch_size"], seed=config["seed"],
                            run_id=run_id, optimizer_steps=step,
                            split=split, metric=metric, units=units, value=value)
                 learning.append(row)
@@ -631,7 +637,7 @@ def evaluate_selected(plan, results, data_dir, output, batch_size=128,
                 manifest_code_sha256=plan["code_sha256"],
                 batch_size=batch_size, backbone=choice["backbone"],
                 regime=choice["regime"], method=choice["method"],
-                endpoints_only=endpoints_only))
+                lag_set=choice["lag_set"], endpoints_only=endpoints_only))
 
     per_seed, learning = [], []
     if workers == 1:
@@ -677,7 +683,8 @@ def summarize(rows, keys):
 
 
 def _row_label(choice):
-    return f"{LABELS[choice['method']]} B{choice['batch_size']}"
+    suffix = f" · lags {{{choice['lag_set'].replace('-', ',')}}}" if choice["lag_set"] != "none" else ""
+    return f"{LABELS[choice['method']]} B{choice['batch_size']}{suffix}"
 
 
 def _format_metric(mean, se):
@@ -705,7 +712,8 @@ def write_tables(plan, summary, output):
                 row = {"algorithm": _row_label(choice)}
                 formatted = []
                 for split in ("test", "validation"):
-                    key = (backbone, choice["regime"], choice["method"], choice["batch_size"], split, metric, units)
+                    key = (backbone, choice["regime"], choice["method"], choice["lag_set"],
+                           choice["batch_size"], split, metric, units)
                     measurement = indexed[key]
                     row[f"{split}_mean"] = measurement["mean"]
                     row[f"{split}_standard_error"] = measurement["standard_error"]
@@ -750,19 +758,20 @@ def plot_curves(plan, summary, output):
         for metric in METRICS:
             fig, axes = plt.subplots(1, 2, figsize=(13, 4.6), sharex=True)
             for ax, split in zip(axes, ("test", "validation")):
-                for choice in choices:
+                for choice_index, choice in enumerate(choices):
                     records = [r for r in summary
                                if r["backbone"] == backbone and r["metric"] == metric
                                and r["split"] == split and r["regime"] == "full_budget"
-                               and r["method"] == choice["method"] and int(r["batch_size"]) == 256]
+                               and r["method"] == choice["method"] and r["lag_set"] == choice["lag_set"]
+                               and int(r["batch_size"]) == 256]
                     records.sort(key=lambda r: int(r["optimizer_steps"]))
                     x = np.asarray([int(r["optimizer_steps"]) for r in records])
                     y = np.asarray([float(r["mean"]) for r in records])
                     se = np.asarray([float(r["standard_error"]) for r in records])
                     finite = np.isfinite(y)
-                    color = f"C{list(LABELS).index(choice['method'])}"
+                    color = f"C{choice_index % 10}"
                     ax.plot(x, np.where(finite, y, np.nan), color=color,
-                            label=LABELS[choice["method"]])
+                            label=_row_label(choice))
                     ax.fill_between(x, np.maximum(0., y-se), y+se,
                                     where=finite & np.isfinite(se), color=color, alpha=.12)
                 ax.grid(alpha=.2)
