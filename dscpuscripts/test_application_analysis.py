@@ -261,6 +261,117 @@ def test_metr_la_point_metrics_still_include_mph(monkeypatch):
     assert "include_raw" not in calls[0]
 
 
+def test_cache_evaluator_hash_changes_with_implementation(monkeypatch):
+    original = analysis._point_metric_implementation_hash()
+
+    def replacement(model, dataset, batch_size):
+        return {"rmse": 5., "mae": 4.}
+
+    with monkeypatch.context() as patch:
+        patch.setattr(analysis, "_point_metrics", replacement)
+        assert analysis._point_metric_implementation_hash() != original
+
+
+def test_real_spawn_workers_match_serial_with_actual_graph_wavenet(tmp_path):
+    """Real OS spawn, model inference, mmap load, metric caches and shared data.
+
+    Separate synthetic processed METR-LA data; no production training and no
+    monkeypatched functions are needed inside spawned workers.
+    """
+    from concurrent.futures import ProcessPoolExecutor
+    from multiprocessing import get_context
+    from pathlib import Path
+    import pandas as pd
+    import torch
+    from dscpuscripts.application_train import build_objective, evaluation_validation_view
+    from dscpuscripts.common import file_hash, data_identity
+    from fulltd.data import prepare_metr_la, load_dataset
+    from fulltd.train import state_hash
+
+    ids = ["101", "102", "103"]
+    rng = np.random.default_rng(405)
+    frame = pd.DataFrame(
+        40 + 2 * rng.normal(size=(180, 3)),
+        index=pd.date_range("2024-02-01", periods=180, freq="5min"),
+        columns=ids)
+    prepare_metr_la(tmp_path, frame=frame,
+                    graph=(ids, np.eye(3, dtype=np.float32)))
+    assert analysis._verify_processed_data("metr_la", tmp_path)
+
+    train = load_dataset("metr_la", tmp_path, "train")
+    validation = load_dataset("metr_la", tmp_path, "val")
+    test = load_dataset("metr_la", tmp_path, "test")
+    _, subset = evaluation_validation_view(validation)
+    root = Path(__file__).resolve().parents[1]
+    configs = [copy.deepcopy(c) for c in make_manifest()
+               if c["dataset"] == "metr_la" and c["method"] == "mse"
+               and c["configuration"] == 0 and c["seed"] in (0, 1)]
+    assert len(configs) == 2
+    tasks = []
+    result_root = tmp_path / "results"
+    for config in configs:
+        folder = result_root / config["run_id"]
+        (folder / "checkpoints").mkdir(parents=True)
+        objective = build_objective(config, train).cpu()
+        mean_hash = state_hash(objective.model.state_dict())
+        identity = dict(
+            protocol_id=config["protocol_id"],
+            code_sha256="synthetic-scoped-source",
+            config_sha256=digest(config), data_sha256=data_identity(train),
+            validation_sha256=data_identity(validation),
+            validation_subset_sha256=digest(subset))
+        record = dict(optimizer_steps=0, validation_subset=subset,
+                      mse_standardized=1., rmse_standardized=1.,
+                      mae_standardized=1., rmse_raw=1., mae_raw=1.)
+        atomic_json(folder / "status.json", dict(
+            config=config, identity=identity,
+            initial_mean_sha256=mean_hash))
+        atomic_json(folder / "update_curve.json", [record])
+        checkpoint = folder / "checkpoints" / "step_0000000.pt"
+        torch.save(dict(config=config, identity=identity,
+                        initial_mean_sha256=mean_hash,
+                        objective=objective.state_dict(),
+                        progress=dict(optimizer_steps=0, curve=[record])),
+                   checkpoint)
+        tasks.append(dict(
+            campaign="metr_la", config=config, results=str(result_root),
+            output=str(tmp_path / "serial_output"), data_dir=str(tmp_path),
+            endpoint=0, total=1, expected_code="synthetic-scoped-source",
+            endpoint_sha256=file_hash(checkpoint),
+            subset=subset, data_sha256=data_identity(train),
+            validation_sha256=data_identity(validation),
+            test_sha256=data_identity(test),
+            metric_code_sha256=file_hash(root / "fulltd/metrics.py"),
+            data_loader_code_sha256=file_hash(root / "fulltd/data.py"),
+            point_metric_code_sha256=analysis._point_metric_implementation_hash(),
+            manifest_code_sha256="synthetic-manifest",
+            batch_size=8, backbone="graph_wavenet", regime="full_budget",
+            method="mse", endpoints_only=True))
+    torch.set_num_threads(1)
+    serial = [analysis._evaluate_one_run_worker(task) for task in tasks]
+    parallel_tasks = [dict(task, output=str(tmp_path / "parallel_output"))
+                      for task in tasks]
+    with ProcessPoolExecutor(max_workers=2, mp_context=get_context("spawn")) as pool:
+        parallel = list(pool.map(
+            analysis._evaluate_one_run_worker, parallel_tasks, chunksize=1))
+    assert serial == parallel
+    assert len(list((tmp_path / "parallel_output" / ".cache").rglob("*.json"))) == 2
+    for path in (tmp_path / "parallel_output" / ".cache").rglob("*.json"):
+        stored = read_json(path)
+        assert stored["metrics_sha256"] == digest(stored["metrics"])
+        assert stored["snapshot_audit_sha256"]
+
+    # Analysis must detect a modified npy file despite unmodified metadata.
+    array_file = tmp_path / "processed" / "metr_la" / "test" / "values.npy"
+    with array_file.open("r+b") as stream:
+        stream.seek(-1, 2)
+        old_byte = stream.read(1)
+        stream.seek(-1, 2)
+        stream.write(bytes([old_byte[0] ^ 1]))
+    with pytest.raises(ValueError, match="Processed data missing or modified"):
+        analysis._verify_processed_data("metr_la", tmp_path)
+
+
 def test_analysis_workers_must_be_positive(tmp_path):
     with pytest.raises(ValueError, match="workers"):
         analysis.evaluate_selected(
