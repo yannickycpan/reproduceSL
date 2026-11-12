@@ -425,6 +425,10 @@ def evaluate_selected(plan, results, data_dir, output, batch_size=128,
     from fulltd.sampling import training_universe
     from .application_train import evaluation_validation_view
 
+    if type(workers) is not int or workers < 1:
+        raise ValueError("Analysis workers must be a positive integer")
+    if batch_size < 1:
+        raise ValueError("Evaluation batch size must be positive")
     campaign = plan["dataset"]
     candidate_manifest = manifest_for(campaign)
     cached_hashes, codes = {}, []
@@ -436,10 +440,6 @@ def evaluate_selected(plan, results, data_dir, output, batch_size=128,
     if (plan.get("code_sha256") != digest(codes)
             or plan.get("manifest_sha256") != digest(candidate_manifest)):
         raise ValueError("Selection belongs to a different scientific implementation")
-    if type(workers) is not int or workers < 1:
-        raise ValueError("Analysis workers must be a positive integer")
-    if batch_size < 1:
-        raise ValueError("Evaluation batch size must be positive")
     torch.set_num_threads(1)
     try:
         torch.set_num_interop_threads(1)
