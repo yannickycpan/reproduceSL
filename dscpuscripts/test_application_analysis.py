@@ -14,6 +14,37 @@ from dscpuscripts.common import atomic_json, read_json
 from fulltd.sampling import sequence_hash, sources_for_round
 
 
+def test_historical_electricity_identity_is_read_only_pinned_and_never_guessed(
+        tmp_path, monkeypatch):
+    """Full old Electricity sweep can be checked with the new scoped analyzer."""
+    manifest = [copy.deepcopy(c) for c in make_manifest()
+                if c["dataset"] == "electricity" and c["method"] == "mse"
+                and c["configuration"] == 0]
+    assert len(manifest) == 5
+    monkeypatch.setattr(analysis, "training_code_hash",
+                        lambda c: "new-scoped-scientific-identity")
+    old_hash = analysis.LEGACY_ELECTRICITY_CODE_SHA256
+    for config in manifest:
+        directory = tmp_path / config["run_id"]
+        directory.mkdir()
+        atomic_json(directory / "status.json",
+                    dict(identity=dict(code_sha256=old_hash), config=config))
+    selected = analysis._expected_codes(manifest, tmp_path)
+    assert set(selected.values()) == {old_hash}
+    # A newly recomputed scoped identity is NOT the old hash and must never
+    # be silently substituted into pre-refactor checkpoint validation.
+    assert old_hash != "new-scoped-scientific-identity"
+    assert digest([[c["run_id"], selected[c["run_id"]]] for c in manifest]) != old_hash
+
+    # If the first candidate is not the known pinned historical code,
+    # the analyzer reverts to current per-candidate scoped identity.
+    first = tmp_path / manifest[0]["run_id"] / "status.json"
+    atomic_json(first, dict(config=manifest[0],
+                            identity=dict(code_sha256="unrecognized-old-code")))
+    current = analysis._expected_codes(manifest, tmp_path)
+    assert set(current.values()) == {"new-scoped-scientific-identity"}
+
+
 def test_final_quarter_counts_only_positive_measurements_before_endpoint():
     steps = (0, 70, 140, 200, 210, 280, 300)
     assert analysis.selection_update_steps(steps, 200) == (200,)
