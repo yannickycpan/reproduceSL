@@ -311,7 +311,8 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
             return checkpoint("checkpointed")
         while progress["epoch"] <= config["epochs"]:
             epoch = progress["epoch"]
-            sources = sources_for_application_round(config["dataset"], n, config["seed"], epoch)
+            sources = sources_for_application_round(config["dataset"], n, config["seed"], epoch,
+                                                    config.get("source_fraction", 1.0))
             if len(sources) != draws:
                 raise ValueError("Source sampler differs from the frozen draw budget")
             partners, types = law.sample(sources, rng_for(config["dataset"], config["seed"], epoch, 22)) if td else (None, None)
