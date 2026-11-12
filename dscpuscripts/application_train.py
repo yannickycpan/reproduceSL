@@ -1,8 +1,8 @@
 """Train the current Electricity/METR-LA methods with resumable update records.
 
 Only validation data are read here. Test evaluation is a separate operation,
-after validation-only hyperparameter selection. The FD001 training files and
-their checkpoint identity remain unchanged.
+after validation-only hyperparameter selection. FD001 now has a separate,
+explicit lag-sweep protocol and a new checkpoint identity.
 """
 from __future__ import annotations
 
