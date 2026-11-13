@@ -154,9 +154,9 @@ def test_application_manifest_matches_fd001_grids_without_legacy_methods():
         counts = Counter(c["method"] for c in selected)
         assert counts == {method: 375 if method.startswith("td_") else 50 for method in methods}
     bad = dict(manifest[0], learning_curve_updates=500)
-    with pytest.raises(ValueError, match="current"):
+    with pytest.raises(ValueError, match="prescribed application sweep"):
         protocol.validate_config(bad)
-    with pytest.raises(ValueError, match="current"):
+    with pytest.raises(ValueError, match="prescribed application sweep"):
         protocol.validate_config(dict(manifest[0], method="td_full"))
 
 

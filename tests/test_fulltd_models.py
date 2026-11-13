@@ -325,7 +325,7 @@ def test_typed_and_pairwise_operator_dimensions_follow_lags(num_types):
     source, partner, _ = examples()
     types = torch.tensor([0, num_types - 1, 1])
     for method in ("td_typed", "td_pairwise"):
-        objective = make_objective(method, tiny(), num_types=num_types)
+        objective = make_objective(method, tiny(), num_types=num_types).double()
         if method == "td_typed":
             assert objective.operator.numel() == num_types
         else:
