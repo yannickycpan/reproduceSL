@@ -14,8 +14,6 @@ LAG_SETS = {
     ),
     "electricity": (
         (1, 12, 24, 36, 48),
-        (1, 12, 24, 36, 48, 72, 96),
-        (1, 12, 24, 36, 48, 72, 96, 120, 168),
     ),
 }
 
@@ -50,7 +48,7 @@ def make_manifest(dataset):
         prefix, marker, _ = original["run_id"].rpartition("_lags")
         if not marker or "_td_typed_" not in prefix:
             raise AssertionError("Unexpected reference run identifier")
-        for lags in LAG_SETS[dataset][1:]:
+        for lags in (LAG_SETS[dataset][1:] if dataset == "fd001" else LAG_SETS[dataset]):
             for method in METHODS:
                 config = dict(original)
                 config["method"] = method
@@ -62,8 +60,9 @@ def make_manifest(dataset):
                     + "_lag579v1"
                 )
                 result.append(config)
-    if len(result) != 750 or len({c["run_id"] for c in result}) != 750:
-        raise AssertionError("Expected 750 unique new candidates per dataset")
+    expected_count = 750 if dataset == "fd001" else 375
+    if len(result) != expected_count or len({c["run_id"] for c in result}) != expected_count:
+        raise AssertionError(f"Expected {expected_count} distinct candidates for {dataset}")
     return result
 
 

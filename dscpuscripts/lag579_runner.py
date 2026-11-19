@@ -74,8 +74,9 @@ def dispatch(args):
     pending = [c for c in configs if states[c["run_id"]] in ("missing", "resume")]
     if args.max_runs:
         pending = pending[:args.max_runs]
-    print(f"{args.dataset}: 5-lag reuses existing models; "
-          f"{len(configs)} new 7/9-lag runs; states={dict(Counter(states.values()))}; "
+    scan = "7/9-lag additions (5-lag reused)" if args.dataset == "fd001" else "5-lag only"
+    print(f"{args.dataset}: {scan}; "
+          f"{len(configs)} configurations; states={dict(Counter(states.values()))}; "
           f"pending={len(pending)}", flush=True)
     print(f"Data: {data}\nNEW output: {root}", flush=True)
     if args.mode in ("dry-run", "status") or not pending:

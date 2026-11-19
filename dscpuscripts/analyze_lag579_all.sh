@@ -39,10 +39,15 @@ if ! flock -n 9; then
 fi
 
 echo "Dataset: $DATASET"
-echo "Reusing original five-lag training and selected outputs from: $ABL_ROOT"
-echo "Reading new seven/nine-lag results from: $NEW_ROOT"
+if [[ "$DATASET" == "fd001" ]]; then
+  echo "Reusing original five-lag training and selected outputs from: $ABL_ROOT"
+else
+  echo "Electricity: evaluating the new five-lag-only TD sweep with the original MSE reference"
+fi
+echo "Reading new TD results from: $NEW_ROOT"
 
-# Reconstruct only missing reporting artifacts, never retrain or relocate checkpoints.
+# Reconstruct old FD001 five-lag artifacts only where the current plan reuses them.
+if [[ "$DATASET" == "fd001" ]]; then
 if [[ ! -f "$ABL_OUTPUT/selection.json" ]]; then
   echo "Restoring missing five-lag validation selection..."
   bash dscpuscripts/analyze_typed_ablation.sh "$DATASET" --select
@@ -59,10 +64,11 @@ if [[ ! -f "$ABL_OUTPUT/four_method_per_seed.csv" ]]; then
   echo "Restoring missing four-method report from saved models..."
   bash dscpuscripts/analyze_typed_ablation.sh "$DATASET" --compare-evaluate
 fi
+fi
 
-echo "Auditing and selecting seven/nine-lag candidates..."
+echo "Auditing and selecting the prescribed TD lag candidates..."
 bash dscpuscripts/analyze_lag579.sh "$DATASET" --select
-echo "Evaluating selected endpoints and merging five/seven/nine lags..."
+echo "Evaluating selected TD endpoints and the validation-selected MSE reference..."
 bash dscpuscripts/analyze_lag579.sh "$DATASET" --evaluate
 
 # Validate the actual finished reports before producing any distributable archive.
@@ -120,7 +126,7 @@ for row in summary:
 paired = read("paired.csv")
 if len(paired) != len(lag_keys)*len(metrics)*3:
     raise ValueError("Paired-comparison report incomplete")
-if len(read("candidate_validation_scores.csv")) != 150:
+if len(read("candidate_validation_scores.csv")) != (150 if dataset=="fd001" else 75):
     raise ValueError("Seven/nine-lag validation search is incomplete")
 print(f"Validated {len(per)} per-seed records, {len(summary)} summaries, {len(paired)} comparisons.")
 PY
@@ -128,7 +134,11 @@ PY
 ARCHIVE="$HOME/${DATASET^^}_lag579_final.tar.gz"
 TMP="$(mktemp "$HOME/.${DATASET}_lag579_final.XXXXXX.tar.gz")"
 trap 'rm -f "$TMP"' EXIT
-tar -czf "$TMP" -C "$NEW_ROOT" lag579_outputs -C "$ABL_ROOT" typed_ablation_outputs
+if [[ "$DATASET" == "fd001" ]]; then
+  tar -czf "$TMP" -C "$NEW_ROOT" lag579_outputs -C "$ABL_ROOT" typed_ablation_outputs
+else
+  tar -czf "$TMP" -C "$NEW_ROOT" lag579_outputs
+fi
 if [[ ! -s "$TMP" ]]; then
   echo "Failed to create archive" >&2
   exit 1

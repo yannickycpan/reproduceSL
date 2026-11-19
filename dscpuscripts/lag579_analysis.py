@@ -134,11 +134,51 @@ def _audit_fd001_candidate(config, folder, status, shared, source_hashes):
         shared[partner_key] = partner_hash
 
 
+def _select_electricity_mse():
+    """Validation-only selection of the already trained original MSE B256 grid."""
+    from .application_analysis import (
+        manifest_for, _expected_codes, _audit_candidate, _candidate_score
+    )
+
+    _, old_root, _ = old_paths("electricity")
+    candidates = [c for c in manifest_for("electricity")
+                  if c["method"] == "mse" and c["batch_size"] == 256]
+    if len(candidates) != 50:
+        raise ValueError("Expected 50 original Electricity MSE candidates")
+    expected = _expected_codes(candidates, old_root)
+    shared, sources, by_setting = {}, {}, defaultdict(list)
+    for config in candidates:
+        checked = _audit_candidate(config, old_root, expected[config["run_id"]],
+                                   shared, sources)
+        score, _ = _candidate_score(
+            checked, checked["budgets"]["total_updates"], "full_budget")
+        by_setting[config["configuration"]].append((config, score))
+    choices = []
+    for setting, rows in by_setting.items():
+        rows.sort(key=lambda row: row[0]["seed"])
+        if [c["seed"] for c, _ in rows] != list(range(5)):
+            raise ValueError("Original MSE five-seed grid is incomplete")
+        config = rows[0][0]
+        scores = [v for _, v in rows]
+        pooled = mean(scores) if all(math.isfinite(x) for x in scores) else math.inf
+        choices.append((pooled, config["alpha"], setting, rows))
+    if len(choices) != 10:
+        raise ValueError("Original Electricity MSE learning-rate grid incomplete")
+    score, alpha, setting, rows = min(choices, key=lambda x: x[:3])
+    if not math.isfinite(score):
+        raise ValueError("No valid five-seed original Electricity MSE setting")
+    return dict(method="mse", lag_set="none", configuration=setting,
+                alpha=alpha, beta=None, score=score, 
+                run_ids=[c["run_id"] for c, _ in rows],
+                endpoint_sha256={c["run_id"]: file_hash(old_root / c["run_id"] / "final.pt")
+                                 for c, _ in rows})
+
+
 def select(dataset):
     from .standard_runner import classify
     if dataset not in DATASETS:
         raise ValueError("Unsupported dataset")
-    frozen = _locked_five(dataset)
+    frozen = _locked_five(dataset) if dataset == "fd001" else ()
     configs = make_manifest(dataset)
     _, root = paths(dataset)
     hashes = {m: code_hash(next(c for c in configs if c["method"] == m)) for m in METHODS}
@@ -163,7 +203,7 @@ def select(dataset):
         grouped[(c["method"], key_of(c), c["configuration"])].append((c, score))
     settings, winners = [], []
     for method in METHODS:
-        for lags in LAG_SETS[dataset][1:]:
+        for lags in (LAG_SETS[dataset][1:] if dataset == "fd001" else LAG_SETS[dataset]):
             lag = "-".join(map(str, lags))
             choices = []
             for (m, lag_key, setting), rows in grouped.items():
@@ -188,13 +228,25 @@ def select(dataset):
                                 run_ids=run_ids,
                                 endpoint_sha256={rid: file_hash(root / rid / "final.pt")
                                                  for rid in run_ids}))
-    if len(winners) != 6 or len(settings) != 150:
-        raise ValueError("Unexpected 7/9-lag validation grid size")
+    expected_winners = 6 if dataset == "fd001" else 3
+    expected_settings = 150 if dataset == "fd001" else 75
+    if len(winners) != expected_winners or len(settings) != expected_settings:
+        raise ValueError("Unexpected lag validation grid size")
     plan = dict(version=VERSION, dataset=dataset, batch_size=256,
                 five_lag_lock_hashes=list(frozen),
                 manifest_sha256=digest(configs), code_hashes=hashes,
                 criterion="five-seed pooled mean validation MSE over the final quarter",
                 selected=winners)
+    if dataset == "electricity":
+        plan["mse_reference"] = _select_electricity_mse()
+        _, old_root, _ = old_paths(dataset)
+        reference_status = read_json(
+            old_root / plan["mse_reference"]["run_ids"][0] / "status.json")
+        for identity_key in ("data_sha256", "validation_sha256"):
+            if (reference_status.get("identity", {}).get(identity_key)
+                    != shared.get(identity_key)):
+                raise ValueError(
+                    f"Old MSE and new TD use different {identity_key} data identities")
     output = root / "lag579_outputs"
     output.mkdir(parents=True, exist_ok=True)
     target = output / "selection.json"
@@ -202,7 +254,7 @@ def select(dataset):
         raise RuntimeError("Selection changed; refusing to overwrite old validation lock")
     atomic_json(target, plan)
     write_csv(output / "candidate_validation_scores.csv", settings)
-    print(f"Locked {len(winners)} new 7/9-lag configurations: {target}")
+    print(f"Locked {len(winners)} method/lag configurations: {target}")
     return plan
 
 
@@ -217,48 +269,86 @@ def evaluate(dataset):
     plan = read_json(output / "selection.json")
     if (plan.get("version") != VERSION or plan.get("dataset") != dataset
             or plan.get("manifest_sha256") != digest(list(configs.values()))
-            or plan.get("five_lag_lock_hashes") != list(_locked_five(dataset))
+            or plan.get("five_lag_lock_hashes") != list(_locked_five(dataset) if dataset == "fd001" else ())
             or plan.get("code_hashes") != {
                 m: code_hash(next(c for c in configs.values() if c["method"] == m))
                 for m in METHODS}):
         raise ValueError("Saved validation selection is no longer compatible")
-    _, old_ablation_root = old_ablation_paths(dataset)
-    previous_file = (old_ablation_root / "typed_ablation_outputs" /
-                     "four_method_per_seed.csv")
-    if not previous_file.is_file():
-        raise FileNotFoundError(
-            f"Five-lag test summary missing: {previous_file}. "
-            "Complete the earlier four-method comparison first.")
-    five = "-".join(map(str, LAG_SETS[dataset][0]))
     keys = _metric_keys(dataset)
     prior = []
-    for r in _read_csv(previous_file):
-        method, lag = r["method"], r["lag_set"]
-        if not (method == "mse" and lag == "none" or
-                method in METHODS and lag == five):
-            continue
-        if (int(r["batch_size"]) != 256 or (r["units"], r["metric"]) not in keys):
-            continue
-        prior.append(dict(dataset=dataset, method=method, lag_set=lag,
-                          batch_size=256, seed=int(r["seed"]),
-                          units=r["units"], metric=r["metric"],
-                          value=float(r["value"]), source="reused_5_lag"))
-    previous_groups = defaultdict(list)
-    for row in prior:
-        previous_groups[(row["method"],row["lag_set"],row["units"],row["metric"])].append(row)
-    if (len(previous_groups) != 4 * len(keys) or
-            any(sorted(r["seed"] for r in rows) != list(range(5))
-                for rows in previous_groups.values())):
-        raise ValueError("Previous five-lag test summary is incomplete")
-    if any(not math.isfinite(r["value"]) for r in prior):
-        raise ValueError("Previous test summary has nonfinite metrics")
+    if dataset == "fd001":
+        _, old_ablation_root = old_ablation_paths(dataset)
+        previous_file = (old_ablation_root / "typed_ablation_outputs" /
+                         "four_method_per_seed.csv")
+        if not previous_file.is_file():
+            raise FileNotFoundError(
+                f"Five-lag test summary missing: {previous_file}. "
+                "Complete the earlier four-method comparison first.")
+        five = "-".join(map(str, LAG_SETS[dataset][0]))
+        for r in _read_csv(previous_file):
+            method, lag = r["method"], r["lag_set"]
+            if not (method == "mse" and lag == "none" or
+                    method in METHODS and lag == five):
+                continue
+            if (int(r["batch_size"]) != 256 or (r["units"], r["metric"]) not in keys):
+                continue
+            prior.append(dict(dataset=dataset, method=method, lag_set=lag,
+                              batch_size=256, seed=int(r["seed"]),
+                              units=r["units"], metric=r["metric"],
+                              value=float(r["value"]), source="reused_5_lag"))
+        previous_groups = defaultdict(list)
+        for row in prior:
+            previous_groups[(row["method"], row["lag_set"],
+                             row["units"], row["metric"])].append(row)
+        if (len(previous_groups) != 4 * len(keys)
+                or any(sorted(r["seed"] for r in rows) != list(range(5))
+                       for rows in previous_groups.values())):
+            raise ValueError("Previous FD001 five-lag test summary is incomplete")
+        if any(not math.isfinite(r["value"]) for r in prior):
+            raise ValueError("Previous FD001 test summary contains nonfinite metrics")
+    else:
+        if plan.get("mse_reference") != _select_electricity_mse():
+            raise ValueError("Original MSE validation selection/checkpoint evidence changed")
 
     verify_dataset(dataset, data)
     torch.set_num_threads(1)
     test = load_dataset(dataset, data, "test")
+    if dataset == "electricity":
+        from .application_protocol import make_manifest as original_manifest
+        from .typed_ablation_comparison import _existing_old_metrics, _fresh_old_metrics
+        old_data, old_root, old_output = old_paths(dataset)
+        if old_data != data:
+            raise ValueError("Historical MSE and new TD use different prepared-data paths")
+        originals = {c["run_id"]: c for c in original_manifest()
+                     if c["dataset"] == dataset and c["method"] == "mse"}
+        old_choice = plan["mse_reference"]
+        if old_choice is None or len(old_choice["run_ids"]) != 5:
+            raise ValueError("Missing locked original MSE reference")
+        for run_id in old_choice["run_ids"]:
+            c = originals[run_id]
+            endpoint = old_root / run_id / "final.pt"
+            if file_hash(endpoint) != old_choice["endpoint_sha256"][run_id]:
+                raise ValueError(f"Original MSE checkpoint changed: {run_id}")
+            values = _existing_old_metrics(old_output, run_id, c, keys)
+            origin = "original_mse_saved_test"
+            if values is None:
+                checkpoint = torch.load(endpoint, map_location="cpu", weights_only=False)
+                if (checkpoint["config"] != c
+                        or checkpoint["identity"] !=
+                        read_json(old_root / run_id / "status.json")["identity"]):
+                    raise ValueError(f"Original MSE checkpoint identity mismatch: {run_id}")
+                values = _fresh_old_metrics(dataset, c, checkpoint, test, keys)
+                origin = "original_mse_checkpoint_inference"
+            for (unit, metric), value in values.items():
+                if not math.isfinite(value):
+                    raise ValueError(f"Nonfinite original MSE metric: {run_id}")
+                prior.append(dict(dataset=dataset, method="mse", lag_set="none",
+                                  batch_size=256, seed=c["seed"], units=unit,
+                                  metric=metric, value=value, source=origin))
     fresh = []
-    if len(plan["selected"]) != 6:
-        raise ValueError("Expected six validation-locked 7/9-lag settings")
+    expected_selections = 6 if dataset == "fd001" else 3
+    if len(plan["selected"]) != expected_selections:
+        raise ValueError("Unexpected number of validation-locked TD selections")
     for choice in plan["selected"]:
         method, lag = choice["method"], choice["lag_set"]
         if method not in METHODS or len(choice["run_ids"]) != 5:
@@ -288,15 +378,16 @@ def evaluate(dataset):
             for (unit, metric), value in found.items():
                 fresh.append(dict(dataset=dataset, method=method, lag_set=lag,
                                   batch_size=256, seed=c["seed"], units=unit,
-                                  metric=metric, value=value, source="new_7_9_lag"))
+                                  metric=metric, value=value, source="new_7_9_lag" if dataset == "fd001" else "new_5_lag"))
     combined = prior + fresh
     grouped = defaultdict(list)
     for row in combined:
         grouped[(row["method"],row["lag_set"],row["units"],row["metric"])].append(row)
-    if (len(grouped) != 10 * len(keys)
+    expected_groups = 10 if dataset == "fd001" else 4
+    if (len(grouped) != expected_groups * len(keys)
             or any(sorted(r["seed"] for r in rows) != list(range(5))
                    for rows in grouped.values())):
-        raise ValueError("Incomplete 5/7/9 summary")
+        raise ValueError("Incomplete TD/MSE comparison summary")
     summary = []
     for (method, lag, unit, metric), rows in sorted(grouped.items()):
         values = [r["value"] for r in sorted(rows,key=lambda r:r["seed"])]
