@@ -1,0 +1,10 @@
+# Generated campaign artifacts and local Python caches.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv-fulltd/
+data/fulltd/
+results/fulltd/
+outputs/fulltd/
+logs/fulltd/
+*.tmp
