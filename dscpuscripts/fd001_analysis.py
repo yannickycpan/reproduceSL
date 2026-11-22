@@ -20,7 +20,8 @@ from .fd001_protocol import (make_manifest, METHODS, SEEDS,
 from .fd001_train import code_hash, build_objective, json_safe
 
 LABELS = dict(mse="MSE", gaussian_nll="Gaussian NLL",
-              td_typed="TD typed", td_pairwise="TD pairwise")
+              td_typed="TD typed", td_pairwise="TD pairwise",
+              td_mse_combo="TD-MSE combo")
 
 
 def lag_key(config):
@@ -93,16 +94,58 @@ def audit_and_select(results):
         if state == "complete":
             if not (directory / "final.pt").is_file():
                 raise ValueError(f"Missing final checkpoint: {run_id}")
-            if int(status["epochs_completed"]) != EPOCHS or int(status["next_epoch"]) != EPOCHS+1:
-                raise ValueError(f"Incomplete final epoch: {run_id}")
+            combo = config["method"] == "td_mse_combo"
             n = status["n_sources"]
             if type(n) is not int or n < 1:
                 raise ValueError("Invalid source universe size")
-            total = expected_steps(n, config["batch_size"])
+            per_epoch = math.ceil(n / config["batch_size"])
+            if combo:
+                phase_epochs = status.get("phase_epochs", {})
+                stage3_epochs = phase_epochs.get("predictor")
+                stage2_epochs = phase_epochs.get("gamma")
+                if (status.get("phase") != "complete"
+                        or type(stage2_epochs) is not int
+                        or not 1 <= stage2_epochs <= config["gamma_max_epochs"]
+                        or type(stage3_epochs) is not int
+                        or not 1 <= stage3_epochs <= config["predictor_max_epochs"]
+                        or status["epochs_completed"] != stage3_epochs
+                        or status["next_epoch"] != stage3_epochs + 1
+                        or status.get("stop_reasons", {}).get("gamma") not in (
+                            "training_loss_plateau", "max_epochs")
+                        or status.get("stop_reasons", {}).get("predictor") not in (
+                            "training_loss_plateau", "max_epochs")):
+                    raise ValueError(f"Invalid sequential early-stopping evidence: {run_id}")
+                ref = status.get("mse_reference", {})
+                original = directory.parent / ref.get("run_id", "")
+                if (not (original / "final.pt").is_file()
+                        or file_hash(original / "final.pt") != ref.get("sha256")
+                        or identity.get("mse_reference_sha256") != ref.get("sha256")):
+                    raise ValueError(f"Stage-1 MSE reference has changed: {run_id}")
+                gamma_records = read_json(directory / "gamma_rounds.json")
+                if [x["epoch"] for x in gamma_records] != list(range(1, stage2_epochs + 1)):
+                    raise ValueError(f"Incomplete Gamma-training epochs: {run_id}")
+                if any(x["optimizer_steps"] != x["epoch"] * per_epoch
+                       for x in gamma_records):
+                    raise ValueError(f"Gamma stage optimizer budget mismatch: {run_id}")
+                timing = status["timing"]
+                if (not all(math.isfinite(float(timing[k])) and float(timing[k]) >= 0
+                            for k in ("gamma_update_seconds", "predictor_update_seconds",
+                                      "mse_runtime_seconds", "attributed_total_seconds"))
+                        or status.get("phase_steps", {}).get("gamma") != per_epoch * stage2_epochs
+                        or status.get("phase_steps", {}).get("predictor") != per_epoch * stage3_epochs):
+                    raise ValueError(f"Missing stage timing or steps: {run_id}")
+                total = per_epoch * stage3_epochs
+            else:
+                if (int(status["epochs_completed"]) != EPOCHS
+                        or int(status["next_epoch"]) != EPOCHS + 1):
+                    raise ValueError(f"Incomplete final epoch: {run_id}")
+                total = per_epoch * EPOCHS
             if status["optimizer_steps"] != total or status["update_opportunities"] != total:
                 raise ValueError(f"Incorrect optimizer budget: {run_id}")
             curve = read_json(directory / "update_curve.json")
-            checkpoints = list(range(0, total+1, EVAL_UPDATE_PERIOD))
+            checkpoints = list(range(0, total + 1, EVAL_UPDATE_PERIOD))
+            if combo and checkpoints[-1] != total:
+                checkpoints.append(total)
             if [r["optimizer_steps"] for r in curve] != checkpoints:
                 raise ValueError(f"Missing update-zero or periodic validation measurements: {run_id}")
             for record in curve:
@@ -113,20 +156,31 @@ def audit_and_select(results):
                 if not (directory / "checkpoints" / f"step_{step:07d}.pt").is_file():
                     raise ValueError(f"Missing retained step-{step} checkpoint: {run_id}")
             rounds = read_json(directory / "rounds.json")
-            if [r["epoch"] for r in rounds] != list(range(1,EPOCHS+1)):
+            epoch_count = stage3_epochs if combo else EPOCHS
+            if [r["epoch"] for r in rounds] != list(range(1, epoch_count + 1)):
                 raise ValueError(f"Incomplete training epoch records: {run_id}")
-            for round_record in rounds:
-                key = (config["seed"], round_record["epoch"])
+            for record in rounds:
+                epoch = record["epoch"]
+                key = (config["seed"], epoch)
                 if key not in checked_sources:
-                    checked_sources[key] = sequence_hash(sources_for_round("fd001", n, *key))
-                if round_record["source_sha256"] != checked_sources[key] or round_record["source_draws"] != n:
-                    raise ValueError(f"Training source hash/budget mismatch: {run_id}")
-                if round_record["optimizer_steps_cumulative"] != round_record["epoch"]*math.ceil(n/config["batch_size"]):
-                    raise ValueError(f"Training optimizer count mismatch: {run_id}")
-            eligible_updates = selection_update_steps(total)
+                    checked_sources[key] = sequence_hash(
+                        sources_for_round("fd001", n, *key))
+                if record["source_sha256"] != checked_sources[key]:
+                    raise ValueError(f"Source stream changed: {run_id}")
+                if combo:
+                    if record["optimizer_steps"] != epoch * per_epoch:
+                        raise ValueError(f"Sequential third-stage optimizer mismatch: {run_id}")
+                elif (record["source_draws"] != n or
+                      record["optimizer_steps_cumulative"] != epoch * per_epoch):
+                    raise ValueError(f"Original source or optimizer count mismatch: {run_id}")
+            if combo:
+                measured = [r["optimizer_steps"] for r in curve if r["optimizer_steps"] > 0]
+                eligible_updates = tuple(measured[-math.ceil(SELECTION_FRACTION * len(measured)):])
+            else:
+                eligible_updates = selection_update_steps(total)
             score_lookup = {r["optimizer_steps"]: float(r["mse_standardized"])
                             for r in curve}
-            if any(step not in score_lookup for step in eligible_updates):
+            if not eligible_updates or any(step not in score_lookup for step in eligible_updates):
                 raise ValueError(f"Missing final-quarter validation evidence: {run_id}")
             score = statistics.mean(score_lookup[step] for step in eligible_updates)
         by_hp[(config["method"], lag_key(config), config["batch_size"], config["configuration"])].append(
@@ -140,6 +194,7 @@ def audit_and_select(results):
             math.isfinite(m["score"]) for m in members) else math.inf
         scores.append(dict(method=method, lag_set=lag_set, batch_size=batch_size, configuration=setting,
                            alpha=chosen_config["alpha"], beta=chosen_config["beta"],
+                           mse_alpha=chosen_config.get("mse_alpha"),
                            score=pooled, failed_seeds=[m["config"]["seed"] for m in members
                                                       if m["state"] == "numerical_failure"],
                            run_ids=[m["config"]["run_id"] for m in members]))
@@ -156,7 +211,8 @@ def audit_and_select(results):
             choices.append(winning)
     selected = dict(protocol_id=PROTOCOL_ID, selection_fraction=SELECTION_FRACTION,
                     criterion="five-seed mean standardized validation MSE over the final "
-                              f"ceil(25%) of post-start {EVAL_UPDATE_PERIOD}-update evaluations; "
+                              "ceil(25%) of measured positive-update validations; "
+                              "combo includes its final early-stopped measurement; "
                               "batch selected jointly within each method and lag set",
                     code_sha256=expected_code, manifest_sha256=digest(candidates),
                     data_sha256=seen_data["data_sha256"],
@@ -189,7 +245,9 @@ def evaluate_selected(selection, root, data_dir, output):
             status = read_json(directory / "status.json")
             if (ckpt["identity"] != status["identity"]
                     or ckpt["config"] != config or status["state"] != "complete"
-                    or ckpt["progress"]["epoch"] != EPOCHS+1
+                    or (ckpt["progress"].get("phase") != "complete"
+                        if config["method"] == "td_mse_combo"
+                        else ckpt["progress"]["epoch"] != EPOCHS+1)
                     or json_safe(ckpt["progress"]["curve"]) != read_json(directory / "update_curve.json")):
                 raise ValueError(f"Selected checkpoint sidecars disagree: {run_id}")
             for record in ckpt["progress"]["curve"]:
@@ -396,6 +454,37 @@ def plot(output):
         plt.close(fig)
 
 
+def selected_timing(selection, results):
+    """Per-seed wall and optimizer-update time; no test labels or new fits."""
+    output = []
+    for choice in selection["selected"]:
+        for run_id in choice["run_ids"]:
+            config = next(c for c in make_manifest() if c["run_id"] == run_id)
+            status = read_json(Path(results) / run_id / "status.json")
+            common = dict(method=config["method"], lag_set=lag_key(config),
+                          batch_size=config["batch_size"], seed=config["seed"])
+            if config["method"] == "td_mse_combo":
+                timing = status["timing"]
+                values = [
+                    ("mse", "wall_seconds", timing["mse_runtime_seconds"]),
+                    ("mse", "mean_update_seconds", timing["mse_mean_update_seconds"]),
+                    ("gamma", "wall_seconds", timing["gamma_training_wall_seconds"]),
+                    ("gamma", "mean_update_seconds", timing["gamma_mean_update_seconds"]),
+                    ("predictor", "wall_seconds", timing["predictor_training_wall_seconds"]),
+                    ("predictor", "mean_update_seconds", timing["predictor_mean_update_seconds"]),
+                    ("total", "attributed_wall_seconds", timing["attributed_total_seconds"]),
+                    ("total", "additional_wall_seconds", timing["sequential_runtime_seconds"]),
+                ]
+            else:
+                values = [("training", "wall_seconds", status["runtime_seconds"]),
+                          ("training", "mean_update_seconds", status.get("mean_update_seconds"))]
+            for stage, metric, value in values:
+                if value is not None and not math.isfinite(float(value)):
+                    raise ValueError(f"Nonfinite timing: {run_id}/{stage}/{metric}")
+                output.append(dict(**common, phase=stage, metric=metric, value=value))
+    return output
+
+
 def run(mode):
     data,root,out=dataset_paths("fd001")
     if mode=="plots":
@@ -414,9 +503,16 @@ def run(mode):
         write_csv(out/"paired_comparisons.csv",paired_differences(rows))
         write_csv(out/"validation_curve_per_seed.csv",curve)
         write_csv(out/"validation_learning_curves.csv",summarize(curve,("method","lag_set","metric","optimizer_steps")))
+        times = selected_timing(selected, root)
+        write_csv(out/"timing_per_seed.csv", times)
+        comparable = [r for r in times if r["value"] is not None]
+        write_csv(out/"timing_summary.csv",
+                  summarize(comparable, ("method", "lag_set", "batch_size",
+                                         "phase", "metric")))
         write_csv(out/"selected_hyperparameters.csv",[
            dict(method=r["method"],lag_set=r["lag_set"],alpha=r["alpha"],beta=r["beta"],
-                batch_size=r["batch_size"], selection_mse=r["score"],
+                batch_size=r["batch_size"], mse_alpha=r.get("mse_alpha"),
+                selection_mse=r["score"],
                 run_ids=r["run_ids"])
            for r in selected["selected"]])
         write_csv(out/"td_diagnostics"/"gamma_per_seed.csv",td)
@@ -426,13 +522,14 @@ def run(mode):
             selection=f"last 25% of actual positive {EVAL_UPDATE_PERIOD}-update validation "
                       "evaluations, five-seed pooled standardized MSE; "
                       "batch selected jointly, no test tuning",
-            trained_models="epoch-100 final checkpoints, no refit",
+            trained_models="100 epochs for original methods; combo uses 100-epoch MSE plus up to 100 Gamma and up to 100 predictor epochs, training-loss early stop",
             metrics="RMSE/MAE cycles and summed RUL score on validation/test",
             curves="measured before training and every 500 Adam updates; no interpolation",
+            timing="wall-clock times include validation/checkpoints; update timings measure training-step compute; combo MSE stage is reused per seed and its wall time is attributed, not repeated",
             caveat="TD batch 128/256 selected using validation; 128 receives more optimizer "
                    "updates in 100 epochs than baseline B256"))
         plot(out)
-    print("FD001 four-method, three-lag-set analysis complete:",out)
+    print("FD001 five-method fixed-lag combo analysis complete:",out)
 
 
 def main():

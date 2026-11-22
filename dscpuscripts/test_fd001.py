@@ -1,4 +1,4 @@
-"""Regression tests for fresh 1600-run FD001 lag sweep and 500-update recovery."""
+"""Regression tests for fixed-lag FD001 and 500-update recovery."""
 from __future__ import annotations
 
 from collections import Counter
@@ -47,14 +47,16 @@ class ToyPredictor(nn.Module):
 
 def test_fd001_canonical_manifest_and_hp_grids():
     configs = protocol.make_manifest()
-    assert len(configs) == 1600
+    assert len(configs) == 850
     assert Counter(c["method"] for c in configs) == {
-        "mse": 50, "gaussian_nll": 50, "td_typed": 750, "td_pairwise": 750}
+        "mse": 50, "gaussian_nll": 50, "td_typed": 250, "td_pairwise": 250,
+        "td_mse_combo": 250}
     assert Counter((c["method"], c["batch_size"]) for c in configs) == {
         ("mse", 256): 50, ("gaussian_nll", 256): 50,
-        ("td_typed", 128): 375, ("td_typed", 256): 375,
-        ("td_pairwise", 128): 375, ("td_pairwise", 256): 375}
-    assert set(protocol.METHODS) == {"mse","gaussian_nll","td_typed","td_pairwise"}
+        ("td_typed", 128): 125, ("td_typed", 256): 125,
+        ("td_pairwise", 128): 125, ("td_pairwise", 256): 125,
+        ("td_mse_combo", 128): 125, ("td_mse_combo", 256): 125}
+    assert set(protocol.METHODS) == {"mse","gaussian_nll","td_typed","td_pairwise","td_mse_combo"}
     assert protocol.BASELINE_ALPHAS == (
         .0001, .0003, .0005, .0007, .0009, .001, .003, .005, .007, .01)
     assert protocol.TD_ALPHAS == (.00003, .0001, .0003, .001, .003)
@@ -116,13 +118,15 @@ def test_fd001_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch
     from dscpuscripts.common import atomic_json
     from fulltd.sampling import sources_for_round, sequence_hash
     monkeypatch.setattr(analysis, "code_hash", lambda: "synthetic-current")
+    monkeypatch.setattr(analysis, "make_manifest", lambda: [
+        c for c in protocol.make_manifest() if c["method"] != "td_mse_combo"])
     n = 1300
     root = tmp_path / "fd001_results"
     shas = {
         (seed, epoch): sequence_hash(sources_for_round("fd001", n, seed, epoch))
         for seed in range(5) for epoch in range(1, 101)
     }
-    for config in protocol.make_manifest():
+    for config in analysis.make_manifest():
         directory = root / config["run_id"]
         directory.mkdir(parents=True)
         per_epoch = (n + config["batch_size"] - 1) // config["batch_size"]
@@ -165,9 +169,9 @@ def test_fd001_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch
         for step in milestones:
             (snapshot_dir / f"step_{step:07d}.pt").touch()
     selected, scores = analysis.audit_and_select(root)
-    assert len(scores) == 320
-    assert len(selected["selected"]) == 8
-    assert selected["counts"] == {"complete":1599, "numerical_failure":1}
+    assert len(scores) == 120
+    assert len(selected["selected"]) == 4
+    assert selected["counts"] == {"complete":599, "numerical_failure":1}
     excluded = next(r for r in scores if
                     r["method"]=="td_pairwise" and r["lag_set"] == "1-5"
                     and r["configuration"] == 0 and r["batch_size"] == 128)
@@ -267,7 +271,7 @@ def test_matched_seed_comparison_does_not_omit_any_seed():
                                 metric="rmse",units="cycles",
                                 value=10.+method_index+seed*.1))
     paired=analysis.paired_differences(records)
-    assert len(paired)==6
+    assert len(paired)==10
     first=next(r for r in paired
                if r["first"]=="mse" and r["second"]=="gaussian_nll")
     assert first["n"]==5

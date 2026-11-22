@@ -27,6 +27,8 @@ from dscpuscripts.result_paths import paths as result_paths
 from fulltd.protocol import digest
 
 TD_METHODS = ("td_typed", "td_pairwise")
+# The old fixed-horizon batch study is not defined for the early-stopped combo.
+FIXED_HORIZON_METHODS = tuple(m for m in METHODS if m != "td_mse_combo")
 ANALYSIS_REVISION = "fd001-batch-comparison-v1"
 
 
@@ -90,7 +92,7 @@ def compute_plan(results):
         raise ValueError("Cannot identify exact measured matched-update boundary")
     candidates = []
     # Full 100-epoch comparison: same HP selection rule, separately for B128/B256.
-    for method in METHODS:
+    for method in FIXED_HORIZON_METHODS:
         for batch in ((128, 256) if method in TD_METHODS else (256,)):
             limit = expected_steps(sources, batch)
             candidates.append(_choose(scores, method, batch, "full_100_epochs", limit))

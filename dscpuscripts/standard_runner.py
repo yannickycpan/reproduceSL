@@ -1,7 +1,7 @@
 """Direct CPU dispatcher for FD001, Electricity and METR-LA.
 
-FD001, Electricity and METR-LA now each use an explicit 2/3/5-lag TD
-sweep with update-based checkpoints and typed/pairwise TD.
+FD001 uses a fixed-lag TD comparison, with a resumable three-stage combo;
+Electricity and METR-LA retain their separate application manifests.
 The existing launchers read these manifests dynamically from Python.
 """
 from __future__ import annotations
@@ -170,7 +170,19 @@ def classify(config, results, expected_code):
     if status.get('state') == 'numerical_failure':
         return 'numerical_failure'
     required = ('final.pt', 'update_curve.json', 'rounds.json')
-    if (status.get('state') == 'complete' and status.get('epochs_completed') == config['epochs']
+    combo = config['method'] == 'td_mse_combo'
+    completed_epochs = status.get('epochs_completed')
+    allowed_early_stop = (
+        combo and type(completed_epochs) is int
+        and 1 <= completed_epochs <= config['predictor_max_epochs']
+        and status.get('phase') == 'complete'
+        and status.get('stop_reasons', {}).get('gamma')
+        in ('max_epochs', 'training_loss_plateau')
+        and status.get('stop_reasons', {}).get('predictor')
+        in ('max_epochs', 'training_loss_plateau')
+        and (directory / 'gamma_rounds.json').is_file())
+    if (status.get('state') == 'complete'
+            and (completed_epochs == config['epochs'] or allowed_early_stop)
             and all((directory / f).is_file() for f in required)):
         return 'complete'
     return 'resume'
@@ -365,7 +377,7 @@ def main():
     parser.add_argument('--microbatch', type=int, default=None)
     parser.add_argument('--adaptive', action='store_true')
     parser.add_argument('--check-seconds', type=float, default=600.)
-    parser.add_argument('--method', choices=('mse', 'gaussian_nll', 'td_typed', 'td_pairwise'),
+    parser.add_argument('--method', choices=('mse', 'gaussian_nll', 'td_typed', 'td_pairwise', 'td_mse_combo'),
                         help='Limit dispatch/status to this method; preserves the original science.')
     parser.add_argument('--max-runs', type=int, default=0)
     parser.add_argument('--run-id')

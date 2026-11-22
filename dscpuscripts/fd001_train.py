@@ -29,6 +29,7 @@ from .fd001_protocol import (PROTOCOL_ID, EPOCHS, EVAL_UPDATE_PERIOD, LAG_SETS,
 
 SCIENTIFIC_SOURCES = (
     "dscpuscripts/fd001_protocol.py", "dscpuscripts/fd001_train.py",
+    "dscpuscripts/fd001_combo.py",
     "dscpuscripts/fd001_objectives.py", "dscpuscripts/common.py",
     "agents/fulltd_objectives.py", "agents/fulltd_mse.py",
     "agents/fulltd_gaussian_nll.py", "fulltd/protocol.py", "fulltd/train.py",
@@ -51,6 +52,9 @@ def build_objective(config):
     if config["method"] == "td_typed":
         from dscpuscripts.fd001_objectives import TypedGammaTD
         return TypedGammaTD(model, num_types=len(config["lags"]))
+    if config["method"] == "td_mse_combo":
+        from dscpuscripts.fd001_combo import build_objective as combo_objective
+        return combo_objective(config)
     if config["method"] == "td_pairwise":
         from dscpuscripts.fd001_objectives import PairwiseGammaTD
         return PairwiseGammaTD(model, num_types=len(config["lags"]))
@@ -179,6 +183,12 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
                     microbatch=128, stop_requested=None, stop_after_updates=None):
     """Produce canonical update/epoch evidence; test hook stops after an update."""
     validate_config(config)
+    if config["method"] == "td_mse_combo":
+        from dscpuscripts.fd001_combo import train_candidate as combo_train
+        return combo_train(config, train_data, val_data, results_dir,
+                           device=device, microbatch=microbatch,
+                           stop_requested=stop_requested,
+                           stop_after_updates=stop_after_updates)
     if device != "cpu":
         raise ValueError("The direct fresh FD001 sweep uses CPU only")
     stop_requested = stop_requested or (lambda: False)
@@ -210,9 +220,10 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
                                  betas=(.9, .999), eps=1e-8, weight_decay=0, amsgrad=False)
     expected_updates = math.ceil(n / batch_size) * EPOCHS
     initial = dict(epoch=1, cursor=0, count=0, optimizer_steps=0, epoch_loss=0.,
-                   epoch_valid=0, curve=[], rounds=[])
+                   epoch_valid=0, curve=[], rounds=[], update_compute_seconds=0.)
     progress = initial
     checkpoint_file = final if final.exists() else recovery
+    elapsed = 0.
     if checkpoint_file.exists():
         ckpt = torch.load(checkpoint_file, map_location="cpu", weights_only=False)
         if ckpt["identity"] != identity or ckpt["config"] != config or ckpt["initial_mean_sha256"] != mean_hash:
@@ -221,6 +232,7 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
         optimizer.load_state_dict(ckpt["optimizer"])
         rng_restore(ckpt["rng"])
         progress = ckpt["progress"]
+        elapsed = float(ckpt.get("runtime_seconds", 0.))
         physical = min(physical, int(ckpt["physical_microbatch"]))
         if progress["count"] != progress["optimizer_steps"]:
             raise ValueError("FD001 expected one actual Adam update per logical batch")
@@ -242,7 +254,8 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
     def checkpoint(state, *, retain_step=False):
         value = dict(config=config, identity=identity, initial_mean_sha256=mean_hash,
                      objective=objective.state_dict(), optimizer=optimizer.state_dict(),
-                     progress=progress, rng=rng_snapshot(), physical_microbatch=physical)
+                     progress=progress, rng=rng_snapshot(), physical_microbatch=physical,
+                     runtime_seconds=elapsed + time.perf_counter() - started)
         # Preserve every scheduled full state, including the actual initial state.
         if retain_step:
             path = root / "checkpoints" / f"step_{progress['optimizer_steps']:07d}.pt"
@@ -257,7 +270,11 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
                       update_opportunities=progress["count"], n_sources=n,
                       initial_mean_sha256=mean_hash,
                       source_draws=(progress["epoch"]-1)*n+progress["cursor"],
-                      runtime_seconds=time.perf_counter()-started,
+                      runtime_seconds=elapsed + time.perf_counter() - started,
+                      update_compute_seconds=progress["update_compute_seconds"],
+                      mean_update_seconds=(progress["update_compute_seconds"] /
+                                           progress["optimizer_steps"]
+                                           if progress["optimizer_steps"] else None),
                       error=None)
         atomic_json(status_file, report)
         return report
@@ -283,6 +300,7 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
                 batch = train.get_batch(sources[cursor:end])
                 other = train.get_batch(partners[cursor:end]) if td else None
                 kinds = types[cursor:end] if td else None
+                update_started = time.perf_counter()
                 optimizer.zero_grad(set_to_none=True)
                 loss, valid = logical_backward(objective, batch, other, kinds, "cpu", physical)
                 if not math.isfinite(loss) or not all(
@@ -292,6 +310,7 @@ def train_candidate(config, train_data, val_data, results_dir, *, device="cpu",
                 if valid == 0:
                     raise ValueError("FD001 must have nonempty training masks")
                 optimizer.step()
+                progress["update_compute_seconds"] += time.perf_counter() - update_started
                 if any(not bool(torch.isfinite(p).all()) for p in objective.parameters()):
                     raise FloatingPointError("Nonfinite parameter")
                 progress["count"] += 1

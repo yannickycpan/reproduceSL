@@ -18,6 +18,8 @@ def test_equal_epoch_source_count_and_relative_budget():
     assert relative_compute("td_pairwise", n, 128, 5500) == 1
     with pytest.raises(ValueError):
         relative_compute("invalid", n, 256, 100)
+    with pytest.raises(ValueError):
+        relative_compute("td_mse_combo", n, 256, 100)
 
 
 def test_test_curve_plot_names_and_both_views(tmp_path):
@@ -25,7 +27,7 @@ def test_test_curve_plot_names_and_both_views(tmp_path):
     from dscpuscripts.fd001_protocol import METHODS
     from dscpuscripts.fd001_compute_curves import plot
     summary = []
-    for idx, method in enumerate(METHODS):
+    for idx, method in enumerate(m for m in METHODS if m != "td_mse_combo"):
         for metric in ("rmse_cycles", "rul_score_sum"):
             for step in (0, 500, 5500):
                 x = relative_compute(method, 13989, 256, step)

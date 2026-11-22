@@ -33,6 +33,9 @@ from dscpuscripts.result_paths import paths as dataset_paths
 from fulltd.protocol import digest
 
 REVISION = "fd001-test-compute-proxy-v1"
+# This legacy plot assumes fixed 100-epoch endpoints; the combo has its own
+# measured-time report and may legitimately stop earlier.
+FIXED_HORIZON_METHODS = tuple(m for m in METHODS if m != "td_mse_combo")
 METRICS = (("rmse_cycles", "cycles", "rmse"),
            ("rul_score_sum", "score", "rul_score_sum"))
 
@@ -48,8 +51,8 @@ def processed_sources(n_sources: int, batch: int, optimizer_steps: int) -> int:
 
 def relative_compute(method: str, n_sources: int, batch: int, steps: int) -> float:
     """MSE B256 for 100 complete passes has normalized budget 1."""
-    if method not in METHODS:
-        raise ValueError("Unknown FD001 method")
+    if method not in FIXED_HORIZON_METHODS:
+        raise ValueError("Only original fixed-horizon FD001 methods have this proxy")
     multiplier = 2 if method.startswith("td_") else 1
     return multiplier * processed_sources(n_sources, batch, steps) / (100 * n_sources)
 
@@ -60,7 +63,7 @@ def validation_only_plan(results: Path):
     if canonical["counts"].get("complete") != len(make_manifest()):
         raise ValueError("Test curves require all prescribed FD001 candidates complete")
     chosen = []
-    for method in METHODS:
+    for method in FIXED_HORIZON_METHODS:
         choices = [row for row in scores
                    if row["method"] == method and row["lag_set"] == ("1-5" if method.startswith("td_") else "none")
                     and row["batch_size"] == 256]
@@ -202,7 +205,7 @@ def plot(summary, output):
                            ("rul_score_sum", "TEST RUL score (sum)")):
         for view in ("zoom", "full"):
             fig, ax = plt.subplots(figsize=(9.4,5.2))
-            for method in METHODS:
+            for method in FIXED_HORIZON_METHODS:
                 seq = sorted(grouped[(method,metric)],
                              key=lambda x:int(x["optimizer_steps"]))
                 if not seq:
