@@ -174,6 +174,35 @@ def _select_electricity_mse():
                                  for c, _ in rows})
 
 
+
+def _available_electricity_mse():
+    """Select the historical MSE only when its original 50-run evidence exists.
+
+    A missing historical campaign must never block validation/test of the
+    375 completed new TD candidates. Missing MSE is explicitly represented by
+    None, not replaced by a made-up score or an unverified historical table.
+    """
+    from .application_analysis import manifest_for
+
+    _, old_root, _ = old_paths("electricity")
+    originals = [c for c in manifest_for("electricity")
+                 if c["method"] == "mse" and c["batch_size"] == 256]
+    if len(originals) != 50:
+        raise ValueError("Expected 50 original Electricity MSE candidates")
+    missing = [c["run_id"] for c in originals
+               if not (old_root / c["run_id"] / "status.json").is_file()]
+    if missing:
+        print(f"NOTICE: historical MSE reference unavailable: {len(missing)}/50 "
+              f"candidate status files absent from {old_root}. "
+              "Continuing with three TD methods only; no MSE test values "
+              "will be manufactured. Set FULLTD_ELECTRICITY_ROOT to the "
+              "actual original MSE run directory to include that baseline.",
+              flush=True)
+        return None
+    return _select_electricity_mse()
+
+
+
 def select(dataset):
     from .standard_runner import classify
     if dataset not in DATASETS:
@@ -238,15 +267,16 @@ def select(dataset):
                 criterion="five-seed pooled mean validation MSE over the final quarter",
                 selected=winners)
     if dataset == "electricity":
-        plan["mse_reference"] = _select_electricity_mse()
-        _, old_root, _ = old_paths(dataset)
-        reference_status = read_json(
-            old_root / plan["mse_reference"]["run_ids"][0] / "status.json")
-        for identity_key in ("data_sha256", "validation_sha256"):
-            if (reference_status.get("identity", {}).get(identity_key)
-                    != shared.get(identity_key)):
-                raise ValueError(
-                    f"Old MSE and new TD use different {identity_key} data identities")
+        plan["mse_reference"] = _available_electricity_mse()
+        if plan["mse_reference"] is not None:
+            _, old_root, _ = old_paths(dataset)
+            reference_status = read_json(
+                old_root / plan["mse_reference"]["run_ids"][0] / "status.json")
+            for identity_key in ("data_sha256", "validation_sha256"):
+                if (reference_status.get("identity", {}).get(identity_key)
+                        != shared.get(identity_key)):
+                    raise ValueError(
+                        f"Old MSE and new TD use different {identity_key} data identities")
     output = root / "lag579_outputs"
     output.mkdir(parents=True, exist_ok=True)
     target = output / "selection.json"
@@ -307,13 +337,18 @@ def evaluate(dataset):
         if any(not math.isfinite(r["value"]) for r in prior):
             raise ValueError("Previous FD001 test summary contains nonfinite metrics")
     else:
-        if plan.get("mse_reference") != _select_electricity_mse():
-            raise ValueError("Original MSE validation selection/checkpoint evidence changed")
+        if plan.get("mse_reference") is not None:
+            if plan["mse_reference"] != _select_electricity_mse():
+                raise ValueError("Original MSE selection/checkpoint evidence changed")
+        else:
+            print("NOTICE: MSE is absent from the locked comparison. "
+                  "Testing only the three new Electricity TD methods.",
+                  flush=True)
 
     verify_dataset(dataset, data)
     torch.set_num_threads(1)
     test = load_dataset(dataset, data, "test")
-    if dataset == "electricity":
+    if dataset == "electricity" and plan.get("mse_reference") is not None:
         from .application_protocol import make_manifest as original_manifest
         from .typed_ablation_comparison import _existing_old_metrics, _fresh_old_metrics
         old_data, old_root, old_output = old_paths(dataset)
@@ -383,7 +418,8 @@ def evaluate(dataset):
     grouped = defaultdict(list)
     for row in combined:
         grouped[(row["method"],row["lag_set"],row["units"],row["metric"])].append(row)
-    expected_groups = 10 if dataset == "fd001" else 4
+    expected_groups = (10 if dataset == "fd001" else
+                       4 if plan.get("mse_reference") is not None else 3)
     if (len(grouped) != expected_groups * len(keys)
             or any(sorted(r["seed"] for r in rows) != list(range(5))
                    for rows in grouped.values())):
@@ -400,6 +436,8 @@ def evaluate(dataset):
         for unit, metric in sorted(keys):
             full = sorted(grouped[("td_typed",lag,unit,metric)],key=lambda r:r["seed"])
             for comparator in ("mse","td_semi_typed","td_nonnegative_typed"):
+                if comparator == "mse" and dataset == "electricity" and plan.get("mse_reference") is None:
+                    continue
                 other_lag = "none" if comparator=="mse" else lag
                 other = sorted(grouped[(comparator,other_lag,unit,metric)],key=lambda r:r["seed"])
                 differences = [a["value"]-b["value"] for a,b in zip(full,other)]

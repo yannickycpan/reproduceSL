@@ -148,3 +148,33 @@ def test_electricity_five_lag_only_uses_three_typed_methods():
         assert tuple(objective.operator.shape) == (5,)
         assert not torch.count_nonzero(objective.operator)
         assert code_hash(cfg) != old_ablation_hash(cfg)
+
+
+def test_missing_original_mse_is_not_a_blocker(tmp_path, monkeypatch, capsys):
+    from . import lag579_analysis as analysis
+    import pytest
+    data, old_root, output = tmp_path / "data", tmp_path / "old", tmp_path / "out"
+    monkeypatch.setattr(analysis, "old_paths", lambda dataset: (data, old_root, output))
+    monkeypatch.setattr(analysis, "_select_electricity_mse",
+                        lambda: pytest.fail("Must not audit absent historical models"))
+    assert analysis._available_electricity_mse() is None
+    assert "three TD methods only" in capsys.readouterr().out
+    assert not old_root.exists()
+
+
+def test_original_mse_included_only_when_all_statuses_exist(tmp_path, monkeypatch):
+    from . import lag579_analysis as analysis
+    from .application_analysis import manifest_for
+    data, old_root, output = tmp_path / "data", tmp_path / "old", tmp_path / "out"
+    monkeypatch.setattr(analysis, "old_paths", lambda dataset: (data, old_root, output))
+    original = [c for c in manifest_for("electricity") if c["method"] == "mse"]
+    assert len(original) == 50
+    for c in original:
+        directory = old_root / c["run_id"]
+        directory.mkdir(parents=True)
+        (directory / "status.json").write_text("{}", encoding="utf-8")
+    marker = object()
+    monkeypatch.setattr(analysis, "_select_electricity_mse", lambda: marker)
+    assert analysis._available_electricity_mse() is marker
+    (old_root / original[0]["run_id"] / "status.json").unlink()
+    assert analysis._available_electricity_mse() is None

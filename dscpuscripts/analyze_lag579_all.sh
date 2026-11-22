@@ -80,11 +80,19 @@ from collections import defaultdict
 from pathlib import Path
 from statistics import mean, stdev
 from dscpuscripts.lag579_protocol import LAG_SETS, METHODS
+import json
 
 dataset, output = sys.argv[1], Path(sys.argv[2])
+with (output/"selection.json").open(encoding="utf-8") as f:
+    selection = json.load(f)
+has_mse = dataset=="fd001" or selection.get("mse_reference") is not None
 metrics = {("cycles","rmse"), ("cycles","mae"), ("score","rul_score_sum")} if dataset=="fd001" else {("kW","rmse"), ("kW","mae")}
 lag_keys = ["-".join(str(n) for n in lags) for lags in LAG_SETS[dataset]]
-groups_expected = {("mse","none")} | {(m,lag) for lag in lag_keys for m in METHODS}
+groups_expected = {(m,lag) for lag in lag_keys for m in METHODS}
+if has_mse:
+    groups_expected.add(("mse","none"))
+else:
+    print("NOTICE: Historical MSE is missing; verifying the three TD methods only.")
 keys_expected = {(m,lag,u,k) for m,lag in groups_expected for u,k in metrics}
 
 def read(name):
@@ -124,7 +132,7 @@ for row in summary:
         raise ValueError("Summary standard error does not match the five saved seeds")
 
 paired = read("paired.csv")
-if len(paired) != len(lag_keys)*len(metrics)*3:
+if len(paired) != len(lag_keys)*len(metrics)*(3 if has_mse else 2):
     raise ValueError("Paired-comparison report incomplete")
 if len(read("candidate_validation_scores.csv")) != (150 if dataset=="fd001" else 75):
     raise ValueError("Seven/nine-lag validation search is incomplete")
