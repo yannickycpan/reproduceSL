@@ -1,4 +1,4 @@
-"""Regression tests for fixed-lag FD001 and 500-update recovery."""
+"""Regression tests for nested-lag FD001 and 500-update recovery."""
 from __future__ import annotations
 
 from collections import Counter
@@ -47,15 +47,19 @@ class ToyPredictor(nn.Module):
 
 def test_fd001_canonical_manifest_and_hp_grids():
     configs = protocol.make_manifest()
-    assert len(configs) == 600
+    assert len(configs) == 1600
     assert Counter(c["method"] for c in configs) == {
-        "mse": 50, "gaussian_nll": 50, "td_pairwise": 250,
-        "td_mse_combo": 250}
+        "mse": 50, "gaussian_nll": 50, "td_pairwise": 750,
+        "td_mse_combo": 750}
     assert Counter((c["method"], c["batch_size"]) for c in configs) == {
         ("mse", 256): 50, ("gaussian_nll", 256): 50,
-        ("td_pairwise", 128): 125, ("td_pairwise", 256): 125,
-        ("td_mse_combo", 128): 125, ("td_mse_combo", 256): 125}
+        ("td_pairwise", 128): 375, ("td_pairwise", 256): 375,
+        ("td_mse_combo", 128): 375, ("td_mse_combo", 256): 375}
     assert set(protocol.METHODS) == {"mse","gaussian_nll","td_pairwise","td_mse_combo"}
+    assert protocol.LAG_SETS == ((1, 5), (1, 3, 5), (1, 3, 5, 10, 15))
+    for method in ("td_pairwise", "td_mse_combo"):
+        assert Counter(tuple(c["lags"]) for c in configs if c["method"] == method) == {
+            lags: 250 for lags in protocol.LAG_SETS}
     assert protocol.BASELINE_ALPHAS == (
         .0001, .0003, .0005, .0007, .0009, .001, .003, .005, .007, .01)
     assert protocol.TD_ALPHAS == (.00003, .0001, .0003, .001, .003)
@@ -69,7 +73,8 @@ def test_fd001_canonical_manifest_and_hp_grids():
                and c["snapshot_updates"] == protocol.EVAL_UPDATE_PERIOD
                and "selection_fraction" not in c and "selection" not in c
                for c in configs)
-    assert all(c["run_id"].startswith("fd001_") for c in configs)
+    assert all(c["run_id"].startswith("fd001_") and
+               c["run_id"].endswith("_lagscanv3") for c in configs)
     assert len(set(c["run_id"] for c in configs)) == len(configs)
 
 
@@ -167,9 +172,9 @@ def test_fd001_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch
         for step in milestones:
             (snapshot_dir / f"step_{step:07d}.pt").touch()
     selected, scores = analysis.audit_and_select(root)
-    assert len(scores) == 70
-    assert len(selected["selected"]) == 3
-    assert selected["counts"] == {"complete":349, "numerical_failure":1}
+    assert len(scores) == 170
+    assert len(selected["selected"]) == 5
+    assert selected["counts"] == {"complete":849, "numerical_failure":1}
     excluded = next(r for r in scores if
                     r["method"]=="td_pairwise" and r["lag_set"] == "1-3-5"
                     and r["configuration"] == 0 and r["batch_size"] == 128)

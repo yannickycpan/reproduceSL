@@ -1,6 +1,7 @@
 """FD001 B256 *test* learning curves versus normalized training-compute proxy.
 
-Only the fixed Pairwise TD lag setting enters the legacy B256 compute proxy comparison.
+This auxiliary B256 compute-proxy comparison uses only the first lag set {1,5};
+the primary FD001 analysis includes all three nested TD lag sets.
 The primary HP selection remains FIVE-SEED, FINAL-QUARTER VALIDATION MSE,
 separately within the fixed batch-256 group. We lock these choices BEFORE
 loading test data. The selected models' saved step snapshots at 0, 500, ...

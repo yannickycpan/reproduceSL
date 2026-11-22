@@ -6,7 +6,8 @@ Equal updates: only for TD batch-128, truncate the *selection timeline* to the
 batch-256 100-epoch update count. Select with the same final-quarter rule and
 evaluate the saved checkpoint at that matched update, not the epoch-100 model.
 
-Use the sole fixed-lag Pairwise TD setting declared by the FD001 protocol.
+This auxiliary equal-update comparison uses only the first lag set {1,5};
+the primary FD001 comparison reports all three nested TD lag sets.
 All outputs live separately in fd001_outputs/batch_comparison/.
 """
 from __future__ import annotations

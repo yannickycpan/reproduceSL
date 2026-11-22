@@ -1,7 +1,7 @@
-"""FD001 fixed-lag four-method protocol, including sequential TD-MSE combo.
+"""FD001 nested-lag four-method protocol, including sequential TD-MSE combo.
 
 All methods use the same predictor architecture, data preparation, validation
-selection, and training split. The Pairwise lag is fixed before re-running.
+selection, and training split. The three Pairwise/Combo lag sets are prespecified and scanned separately.
 """
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import os
 
 from fulltd.protocol import digest
 
-PROTOCOL_ID = "fd001-fixed-pairwise-combo-v2"
+PROTOCOL_ID = "fd001-nested-pairwise-combo-v3"
 SEEDS = tuple(range(5))
 EPOCHS = 100
 # This is an immutable per-run scientific setting. Do not change it after
@@ -23,7 +23,11 @@ BASELINE_ALPHAS = (0.0001, 0.0003, 0.0005, 0.0007, 0.0009,
                    0.001, 0.003, 0.005, 0.007, 0.01)
 TD_ALPHAS = (0.00003, 0.0001, 0.0003, 0.001, 0.003)
 METHODS = ("mse", "gaussian_nll", "td_pairwise", "td_mse_combo")
-LAG_SETS = ((1, 3, 5),)
+LAG_SETS = (
+    (1, 5),
+    (1, 3, 5),
+    (1, 3, 5, 10, 15),
+)
 # The stage-1 LR is a configurable scan dimension, initially fixed to the
 # prior best MSE value. Each value must also appear in BASELINE_ALPHAS.
 MSE_STAGE_ALPHAS = (0.001,)
@@ -57,7 +61,7 @@ def make_manifest():
                             suffix = (f"_mseh{BASELINE_ALPHAS.index(mse_alpha)}"
                                       if method == "td_mse_combo" else "")
                             config = dict(
-                                run_id=f"fd001_{method}_b{batch_size}_h{setting}_s{seed}{lag_id}{suffix}",
+                                run_id=f"fd001_{method}_b{batch_size}_h{setting}_s{seed}{lag_id}{suffix}_lagscanv3",
                                 protocol_id=PROTOCOL_ID, dataset="fd001", backbone="tcn",
                                 method=method, alpha=alpha, beta=beta,
                                 batch_size=batch_size,
@@ -80,9 +84,9 @@ def make_manifest():
                                     gamma_representation="frozen_stage1_encoder",
                                     stage3_gradient="both_current_predictor_residuals")
                             runs.append(config)
-    expected = 350 + 250 * len(MSE_STAGE_ALPHAS)
+    expected = 100 + 250 * len(LAG_SETS) * (1 + len(MSE_STAGE_ALPHAS))
     if len(runs) != expected or len({c["run_id"] for c in runs}) != expected:
-        raise AssertionError("Unexpected fixed-lag FD001 candidate count")
+        raise AssertionError("Unexpected nested-lag FD001 candidate count")
     return runs
 
 
@@ -90,5 +94,5 @@ def validate_config(config):
     expected = {c["run_id"]: c for c in make_manifest()}
     if (not isinstance(config, dict) or config.get("run_id") not in expected
             or expected[config["run_id"]] != config):
-        raise ValueError("Configuration is not in the frozen FD001 fixed-lag combo sweep")
+        raise ValueError("Configuration is not in the frozen FD001 nested-lag combo sweep")
     return config

@@ -1,4 +1,4 @@
-"""Unified FD001 comparison and TD diagnostics, using the sole current protocol.
+"""Unified FD001 comparison and TD diagnostics over three nested TD lag sets.
 
 Select each method by five-seed mean standardized validation MSE over the last
 25% of actual positive-update evaluations. The zero-update baseline is plotted
@@ -538,7 +538,7 @@ def run(mode):
             caveat="TD batch 128/256 selected using validation; 128 receives more optimizer "
                    "updates in 100 epochs than baseline B256"))
         plot(out)
-    print("FD001 four-method fixed-lag combo analysis complete:",out)
+    print("FD001 four-method nested-lag combo analysis complete:",out)
 
 
 def main():

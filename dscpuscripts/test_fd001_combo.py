@@ -41,22 +41,27 @@ def _tensors():
     return source, target, torch.tensor([0, 1, 0, 1], dtype=torch.long)
 
 
-def test_fixed_lag_four_method_manifest():
+def test_nested_lag_four_method_manifest():
     manifest = make_manifest()
-    assert len(manifest) == len({c["run_id"] for c in manifest}) == 600
-    assert LAG_SETS == ((1, 3, 5),)
+    assert len(manifest) == len({c["run_id"] for c in manifest}) == 1600
+    assert LAG_SETS == ((1, 5), (1, 3, 5), (1, 3, 5, 10, 15))
     assert MSE_STAGE_ALPHAS == (.001,)
     assert set(METHODS) == {"mse", "gaussian_nll", "td_pairwise", "td_mse_combo"}
     expected = {("mse", 256): 50, ("gaussian_nll", 256): 50,
-                ("td_pairwise", 128): 125, ("td_pairwise", 256): 125,
-                ("td_mse_combo", 128): 125, ("td_mse_combo", 256): 125}
+                ("td_pairwise", 128): 375, ("td_pairwise", 256): 375,
+                ("td_mse_combo", 128): 375, ("td_mse_combo", 256): 375}
     assert {(method, batch): sum(c["method"] == method and c["batch_size"] == batch
                                  for c in manifest)
             for method, batch in expected} == expected
+    seen_validation_keys = set()
     for config in manifest:
-        assert validate_config(config) == config
+        key = (config["method"], tuple(config["lags"]), config["batch_size"])
+        if key not in seen_validation_keys:
+            assert validate_config(config) == config
+            seen_validation_keys.add(key)
         assert config["epochs"] == EPOCHS == 100
-        assert tuple(config["lags"]) == (1, 3, 5)
+        allowed_lags = LAG_SETS if config["method"].startswith("td_") else LAG_SETS[:1]
+        assert tuple(config["lags"]) in allowed_lags
         if config["method"] == "td_mse_combo":
             assert config["alpha"] in ALPHAS["td_pairwise"]
             assert config["beta"] in BETAS

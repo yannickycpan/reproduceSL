@@ -1,6 +1,6 @@
 """Direct CPU dispatcher for FD001, Electricity and METR-LA.
 
-FD001 uses a fixed-lag TD comparison, with a resumable three-stage combo;
+FD001 scans three nested TD lag sets with a resumable three-stage combo;
 Electricity and METR-LA retain their separate application manifests.
 The existing launchers read these manifests dynamically from Python.
 """

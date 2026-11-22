@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Reproduce FD001 selected tables + validation plots + held-out TEST compute curves.
 # Run from any directory: bash ~/reproduceSL/fd001analysis.sh
-# READS new fixed-lag FD001 runs (including combo); never trains or modifies checkpoints.
+# READS new nested-lag FD001 runs (including combo); never trains or modifies checkpoints.
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 cd "$ROOT"
@@ -19,7 +19,7 @@ echo "== 1/7 Regression tests (no training) =="
   dscpuscripts/test_fd001_compute_curves.py \
   dscpuscripts/test_fd001_combo.py
 
-echo "== 2/7 Analyze fixed-lag four-method results and stage timing =="
+echo "== 2/7 Analyze nested-lag four-method results and stage timing =="
 bash dscpuscripts/analyze_standard.sh fd001 run
 
 echo "== 3/7 Audit and lock validation-only batch and matched-update selections =="
@@ -37,7 +37,7 @@ bash dscpuscripts/analyze_standard.sh fd001 plots
 echo "== 7/7 Evaluate TEST checkpoints at every saved step and plot vs compute proxy =="
 "$FULLTD_ENV/bin/python" -m dscpuscripts.fd001_compute_curves
 
-echo "Done. Fixed-lag method tables/figures: $FULLTD_RESULTS_ROOT/fd001_outputs/"
+echo "Done. Nested-lag method tables/figures: $FULLTD_RESULTS_ROOT/fd001_outputs/"
 echo "Batch/matched-update comparisons: $FULLTD_RESULTS_ROOT/fd001_outputs/batch_comparison/"
 echo "Held-out test curves: $FULLTD_RESULTS_ROOT/fd001_outputs/figures/compute_proxy/"
 echo "Held-out step-by-step metrics: $FULLTD_RESULTS_ROOT/fd001_outputs/test_compute/"
