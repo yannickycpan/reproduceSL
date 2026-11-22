@@ -13,7 +13,8 @@ def test_equal_epoch_source_count_and_relative_budget():
     assert processed_sources(n, 256, 5500) == 100*n
     assert relative_compute("mse", n, 256, 5500) == 1
     assert relative_compute("gaussian_nll", n, 256, 5500) == 1
-    assert relative_compute("td_typed", n, 256, 5500) == 2
+    with pytest.raises(ValueError):
+        relative_compute("td_typed", n, 256, 5500)
     assert relative_compute("td_pairwise", n, 256, 5500) == 2
     assert relative_compute("td_pairwise", n, 128, 5500) == 1
     with pytest.raises(ValueError):

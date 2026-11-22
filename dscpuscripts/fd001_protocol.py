@@ -1,4 +1,4 @@
-"""FD001 fixed-lag five-method protocol, including sequential TD-MSE combo.
+"""FD001 fixed-lag four-method protocol, including sequential TD-MSE combo.
 
 All methods use the same predictor architecture, data preparation, validation
 selection, and training split. The Pairwise lag is fixed before re-running.
@@ -9,7 +9,7 @@ import os
 
 from fulltd.protocol import digest
 
-PROTOCOL_ID = "fd001-fixed-pairwise-combo-v1"
+PROTOCOL_ID = "fd001-fixed-pairwise-combo-v2"
 SEEDS = tuple(range(5))
 EPOCHS = 100
 # This is an immutable per-run scientific setting. Do not change it after
@@ -22,20 +22,20 @@ BETAS = (0.00003, 0.0001, 0.0003, 0.001, 0.003)
 BASELINE_ALPHAS = (0.0001, 0.0003, 0.0005, 0.0007, 0.0009,
                    0.001, 0.003, 0.005, 0.007, 0.01)
 TD_ALPHAS = (0.00003, 0.0001, 0.0003, 0.001, 0.003)
-METHODS = ("mse", "gaussian_nll", "td_typed", "td_pairwise", "td_mse_combo")
-LAG_SETS = ((1, 5),)
+METHODS = ("mse", "gaussian_nll", "td_pairwise", "td_mse_combo")
+LAG_SETS = ((1, 3, 5),)
 # The stage-1 LR is a configurable scan dimension, initially fixed to the
 # prior best MSE value. Each value must also appear in BASELINE_ALPHAS.
-MSE_STAGE_ALPHAS = (0.01,)
+MSE_STAGE_ALPHAS = (0.001,)
 COMBO_GAMMA_MAX_EPOCHS = 100
 COMBO_PREDICTOR_MAX_EPOCHS = 100
 COMBO_PATIENCE = 5
 COMBO_RELATIVE_MIN_DECREASE = 1e-4
 ALPHAS = dict(mse=BASELINE_ALPHAS, gaussian_nll=BASELINE_ALPHAS,
-              td_typed=TD_ALPHAS, td_pairwise=TD_ALPHAS,
+              td_pairwise=TD_ALPHAS,
               td_mse_combo=TD_ALPHAS)
 BATCH_SIZES = dict(mse=(256,), gaussian_nll=(256,),
-                   td_typed=(128, 256), td_pairwise=(128, 256),
+                   td_pairwise=(128, 256),
                    td_mse_combo=(128, 256))
 
 
@@ -80,7 +80,7 @@ def make_manifest():
                                     gamma_representation="frozen_stage1_encoder",
                                     stage3_gradient="both_current_predictor_residuals")
                             runs.append(config)
-    expected = 600 + 250 * len(MSE_STAGE_ALPHAS)
+    expected = 350 + 250 * len(MSE_STAGE_ALPHAS)
     if len(runs) != expected or len({c["run_id"] for c in runs}) != expected:
         raise AssertionError("Unexpected fixed-lag FD001 candidate count")
     return runs

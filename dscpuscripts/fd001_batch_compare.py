@@ -6,7 +6,7 @@ Equal updates: only for TD batch-128, truncate the *selection timeline* to the
 batch-256 100-epoch update count. Select with the same final-quarter rule and
 evaluate the saved checkpoint at that matched update, not the epoch-100 model.
 
-Use the original {1,5} TD lag set for the existing batch comparison.
+Use the sole fixed-lag Pairwise TD setting declared by the FD001 protocol.
 All outputs live separately in fd001_outputs/batch_comparison/.
 """
 from __future__ import annotations
@@ -21,15 +21,16 @@ from dscpuscripts.fd001_analysis import (OUT_METRICS, audit_and_select,
                                          expected_steps, selection_update_steps,
                                          summarize)
 from dscpuscripts.fd001_protocol import (EVAL_UPDATE_PERIOD, METHODS,
-                                         PROTOCOL_ID, SEEDS, make_manifest)
+                                         PROTOCOL_ID, SEEDS, LAG_SETS, make_manifest)
 from dscpuscripts.fd001_train import build_objective, code_hash, json_safe
 from dscpuscripts.result_paths import paths as result_paths
 from fulltd.protocol import digest
 
-TD_METHODS = ("td_typed", "td_pairwise")
-# The old fixed-horizon batch study is not defined for the early-stopped combo.
+TD_METHODS = ("td_pairwise",)
+LAG_KEY = "-".join(map(str, LAG_SETS[0]))
+# The independent three-stage combo is reported in the main analysis and measured-time tables.
 FIXED_HORIZON_METHODS = tuple(m for m in METHODS if m != "td_mse_combo")
-ANALYSIS_REVISION = "fd001-batch-comparison-v1"
+ANALYSIS_REVISION = "fd001-batch-comparison-v2-no-typed"
 
 
 def _rank(item):
@@ -38,7 +39,7 @@ def _rank(item):
 
 
 def _choose(rows, method, batch, regime, final_update):
-    lag = "1-5" if method.startswith("td_") else "none"
+    lag = LAG_KEY if method.startswith("td_") else "none"
     pool = [r for r in rows if r["method"] == method and r.get("lag_set", lag) == lag
             and r["batch_size"] == batch]
     if not pool:
@@ -101,14 +102,14 @@ def compute_plan(results):
     matched_scores = []
     for method in TD_METHODS:
         for row in scores:
-            if row["method"] == method and row["lag_set"] == "1-5" and row["batch_size"] == 128:
+            if row["method"] == method and row["lag_set"] == LAG_KEY and row["batch_size"] == 128:
                 matched_scores.append({**row, "score": _matched_score(results, row, matched_updates)})
         candidates.append(_choose(matched_scores, method, 128,
                                   "matched_updates", matched_updates))
     choices = [item for item in candidates]
     plan = dict(analysis_revision=ANALYSIS_REVISION, protocol_id=PROTOCOL_ID,
                 original_joint_selection=[row for row in original["selected"]
-                                           if row["lag_set"] in ("none", "1-5")],
+                                           if row["lag_set"] in ("none", LAG_KEY) and row["method"] in FIXED_HORIZON_METHODS],
                 original_criterion=original["criterion"],
                 matched_update_budget=matched_updates,
                 matched_selection_steps=list(selection_update_steps(matched_updates, EVAL_UPDATE_PERIOD)),
@@ -283,7 +284,7 @@ def main():
         from fulltd.sampling import training_universe
         torch.set_num_threads(1)
         torch.set_num_interop_threads(1)
-        train, _, _ = training_universe(load_dataset("fd001", data_dir, "train"), (1,5))
+        train, _, _ = training_universe(load_dataset("fd001", data_dir, "train"), LAG_SETS[0])
         val = load_dataset("fd001", data_dir, "val")
         if (data_identity(train) != plan["data_sha256"] or
                 data_identity(val) != plan["validation_sha256"]):

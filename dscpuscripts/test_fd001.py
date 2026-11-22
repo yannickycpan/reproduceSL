@@ -47,20 +47,18 @@ class ToyPredictor(nn.Module):
 
 def test_fd001_canonical_manifest_and_hp_grids():
     configs = protocol.make_manifest()
-    assert len(configs) == 850
+    assert len(configs) == 600
     assert Counter(c["method"] for c in configs) == {
-        "mse": 50, "gaussian_nll": 50, "td_typed": 250, "td_pairwise": 250,
+        "mse": 50, "gaussian_nll": 50, "td_pairwise": 250,
         "td_mse_combo": 250}
     assert Counter((c["method"], c["batch_size"]) for c in configs) == {
         ("mse", 256): 50, ("gaussian_nll", 256): 50,
-        ("td_typed", 128): 125, ("td_typed", 256): 125,
         ("td_pairwise", 128): 125, ("td_pairwise", 256): 125,
         ("td_mse_combo", 128): 125, ("td_mse_combo", 256): 125}
-    assert set(protocol.METHODS) == {"mse","gaussian_nll","td_typed","td_pairwise","td_mse_combo"}
+    assert set(protocol.METHODS) == {"mse","gaussian_nll","td_pairwise","td_mse_combo"}
     assert protocol.BASELINE_ALPHAS == (
         .0001, .0003, .0005, .0007, .0009, .001, .003, .005, .007, .01)
     assert protocol.TD_ALPHAS == (.00003, .0001, .0003, .001, .003)
-    assert protocol.BATCH_SIZES["td_typed"] == (128, 256)
     assert protocol.BATCH_SIZES["td_pairwise"] == (128, 256)
     assert analysis.SELECTION_FRACTION == .25
     assert analysis.selection_update_steps(5500) == (4500, 5000, 5500)
@@ -135,7 +133,7 @@ def test_fd001_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch
         # its remaining seeds are excellent it must receive infinite score.
         fail = (config["method"] == "td_pairwise" and config["batch_size"] == 128
                 and config["configuration"] == 0 and config["seed"] == 0
-                and config["lags"] == [1, 5])
+                and config["lags"] == [1, 3, 5])
         state = "numerical_failure" if fail else "complete"
         atomic_json(directory / "status.json", dict(
             config=config, state=state, epochs_completed=100,
@@ -169,11 +167,11 @@ def test_fd001_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch
         for step in milestones:
             (snapshot_dir / f"step_{step:07d}.pt").touch()
     selected, scores = analysis.audit_and_select(root)
-    assert len(scores) == 120
-    assert len(selected["selected"]) == 4
-    assert selected["counts"] == {"complete":599, "numerical_failure":1}
+    assert len(scores) == 70
+    assert len(selected["selected"]) == 3
+    assert selected["counts"] == {"complete":349, "numerical_failure":1}
     excluded = next(r for r in scores if
-                    r["method"]=="td_pairwise" and r["lag_set"] == "1-5"
+                    r["method"]=="td_pairwise" and r["lag_set"] == "1-3-5"
                     and r["configuration"] == 0 and r["batch_size"] == 128)
     assert math.isinf(excluded["score"])
     assert excluded["failed_seeds"] == [0]
@@ -181,7 +179,7 @@ def test_fd001_late_mse_selection_excludes_any_failed_seed(tmp_path, monkeypatch
                   and r["configuration"] == 0)
     assert viable["score"] == pytest.approx(0.1)  # NOT ~0.025 from early evaluations
     choice = next(r for r in selected["selected"] if r["method"]=="td_pairwise"
-                  and r["lag_set"] == "1-5")
+                  and r["lag_set"] == "1-3-5")
     assert choice["batch_size"] == 256
     assert choice["configuration"] == 0  # Same rate pair at B256 remains valid
 
@@ -216,7 +214,7 @@ def test_pairwise_td_uses_same_update_checkpoint_and_selection_protocol(
                   if c["method"] == "td_pairwise" and c["seed"] == 0)
     monkeypatch.setattr(train, "code_hash", lambda: "pairwise-v2-test-code")
     monkeypatch.setattr(train, "build_objective",
-                        lambda _: PairwiseGammaTD(TinyPairwiseMean()))
+                        lambda _: PairwiseGammaTD(TinyPairwiseMean(), num_types=len(config["lags"])))
     root = tmp_path / "pairwise"
     result = train.train_candidate(
         config, PairwiseData("train", 600), PairwiseData("val", 15),
@@ -240,7 +238,7 @@ def test_fresh_campaign_status_requires_update_curve_not_old_epoch_validation(
     from fulltd.protocol import digest
 
     config = next(c for c in protocol.make_manifest()
-                  if c["method"] == "td_typed" and c["batch_size"] == 256)
+                  if c["method"] == "td_pairwise" and c["batch_size"] == 256)
     folder = tmp_path / config["run_id"]
     folder.mkdir()
     atomic_json(folder / "status.json", dict(
@@ -271,7 +269,7 @@ def test_matched_seed_comparison_does_not_omit_any_seed():
                                 metric="rmse",units="cycles",
                                 value=10.+method_index+seed*.1))
     paired=analysis.paired_differences(records)
-    assert len(paired)==10
+    assert len(paired)==6
     first=next(r for r in paired
                if r["first"]=="mse" and r["second"]=="gaussian_nll")
     assert first["n"]==5

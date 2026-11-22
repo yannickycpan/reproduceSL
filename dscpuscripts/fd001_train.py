@@ -48,13 +48,10 @@ def code_hash():
 
 
 def build_objective(config):
-    model = build_model("fd001", "tcn", config["seed"])
-    if config["method"] == "td_typed":
-        from dscpuscripts.fd001_objectives import TypedGammaTD
-        return TypedGammaTD(model, num_types=len(config["lags"]))
     if config["method"] == "td_mse_combo":
         from dscpuscripts.fd001_combo import build_objective as combo_objective
         return combo_objective(config)
+    model = build_model("fd001", "tcn", config["seed"])
     if config["method"] == "td_pairwise":
         from dscpuscripts.fd001_objectives import PairwiseGammaTD
         return PairwiseGammaTD(model, num_types=len(config["lags"]))

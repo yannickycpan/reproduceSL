@@ -1,6 +1,6 @@
 """FD001 B256 *test* learning curves versus normalized training-compute proxy.
 
-Only the original {1,5} TD lags enter this existing B256 compute comparison.
+Only the fixed Pairwise TD lag setting enters the legacy B256 compute proxy comparison.
 The primary HP selection remains FIVE-SEED, FINAL-QUARTER VALIDATION MSE,
 separately within the fixed batch-256 group. We lock these choices BEFORE
 loading test data. The selected models' saved step snapshots at 0, 500, ...
@@ -27,12 +27,13 @@ from dscpuscripts.common import (atomic_json, cpu_environment, data_identity,
                                   file_hash, file_lock, read_json, write_csv)
 from dscpuscripts.fd001_analysis import audit_and_select, summarize
 from dscpuscripts.fd001_protocol import (EVAL_UPDATE_PERIOD, METHODS, SEEDS,
-                                          make_manifest)
+                                          LAG_SETS, make_manifest)
 from dscpuscripts.fd001_train import build_objective, code_hash, json_safe
 from dscpuscripts.result_paths import paths as dataset_paths
 from fulltd.protocol import digest
 
-REVISION = "fd001-test-compute-proxy-v1"
+REVISION = "fd001-test-compute-proxy-v2-no-typed"
+LAG_KEY = "-".join(map(str, LAG_SETS[0]))
 # This legacy plot assumes fixed 100-epoch endpoints; the combo has its own
 # measured-time report and may legitimately stop earlier.
 FIXED_HORIZON_METHODS = tuple(m for m in METHODS if m != "td_mse_combo")
@@ -65,7 +66,7 @@ def validation_only_plan(results: Path):
     chosen = []
     for method in FIXED_HORIZON_METHODS:
         choices = [row for row in scores
-                   if row["method"] == method and row["lag_set"] == ("1-5" if method.startswith("td_") else "none")
+                   if row["method"] == method and row["lag_set"] == (LAG_KEY if method.startswith("td_") else "none")
                     and row["batch_size"] == 256]
         if not choices:
             raise ValueError(f"Missing B256 HP grid for {method}")
@@ -195,7 +196,7 @@ def plot(summary, output):
     import matplotlib.pyplot as plt
     import numpy as np
     labels = {"mse":"MSE B256", "gaussian_nll":"Gaussian NLL B256",
-              "td_typed":"TD typed B256", "td_pairwise":"TD pairwise B256"}
+              "td_pairwise":"TD pairwise B256"}
     grouped = defaultdict(list)
     for row in summary:
         grouped[(row["method"], row["metric"])].append(row)

@@ -172,19 +172,25 @@ def classify(config, results, expected_code):
     required = ('final.pt', 'update_curve.json', 'rounds.json')
     combo = config['method'] == 'td_mse_combo'
     completed_epochs = status.get('epochs_completed')
-    allowed_early_stop = (
-        combo and type(completed_epochs) is int
-        and 1 <= completed_epochs <= config['predictor_max_epochs']
-        and status.get('phase') == 'complete'
-        and status.get('stop_reasons', {}).get('gamma')
-        in ('max_epochs', 'training_loss_plateau')
-        and status.get('stop_reasons', {}).get('predictor')
-        in ('max_epochs', 'training_loss_plateau')
-        and (directory / 'gamma_rounds.json').is_file())
-    if (status.get('state') == 'complete'
-            and (completed_epochs == config['epochs'] or allowed_early_stop)
-            and all((directory / f).is_file() for f in required)):
-        return 'complete'
+    if combo:
+        phases = status.get('phase_epochs', {})
+        stops = status.get('stop_reasons', {})
+        completed = (
+            status.get('phase') == 'complete'
+            and completed_epochs == config['predictor_max_epochs']
+            and phases.get('mse') == config['mse_epochs']
+            and phases.get('predictor') == config['predictor_max_epochs']
+            and type(phases.get('gamma')) is int
+            and 1 <= phases['gamma'] <= config['gamma_max_epochs']
+            and stops.get('gamma') in ('max_epochs', 'training_loss_plateau')
+            and stops.get('predictor') == 'max_epochs'
+            and all((directory / f).is_file() for f in (
+                'mse_rounds.json', 'gamma_rounds.json', *required)))
+    else:
+        completed = completed_epochs == config['epochs']
+    if status.get('state') == 'complete' and completed:
+        if all((directory / f).is_file() for f in required):
+            return 'complete'
     return 'resume'
 
 

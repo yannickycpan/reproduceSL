@@ -13,12 +13,13 @@ fi
 
 echo "== 1/7 Regression tests (no training) =="
 "$FULLTD_ENV/bin/python" -m pytest -q \
+  dscpuscripts/test_fd001.py \
   dscpuscripts/test_fd001_batch_compare.py \
   dscpuscripts/test_fd001_plotting.py \
   dscpuscripts/test_fd001_compute_curves.py \
   dscpuscripts/test_fd001_combo.py
 
-echo "== 2/7 Analyze fixed-lag five-method results and stage timing =="
+echo "== 2/7 Analyze fixed-lag four-method results and stage timing =="
 bash dscpuscripts/analyze_standard.sh fd001 run
 
 echo "== 3/7 Audit and lock validation-only batch and matched-update selections =="
@@ -27,7 +28,7 @@ bash dscpuscripts/analyze_fd001_batches.sh check
 echo "== 4/7 Evaluate selected full and matched-update endpoints =="
 bash dscpuscripts/analyze_fd001_batches.sh run
 
-echo "== 5/7 Display eight-row comparison table (mean +/- SE) =="
+echo "== 5/7 Display batch/matched-update comparison table (mean +/- SE) =="
 cat "$FULLTD_RESULTS_ROOT/fd001_outputs/batch_comparison/comparison_table.md"
 
 echo "== 6/7 Regenerate lag-aware validation plots (full x, zoomed y) =="
@@ -37,7 +38,7 @@ echo "== 7/7 Evaluate TEST checkpoints at every saved step and plot vs compute p
 "$FULLTD_ENV/bin/python" -m dscpuscripts.fd001_compute_curves
 
 echo "Done. Fixed-lag method tables/figures: $FULLTD_RESULTS_ROOT/fd001_outputs/"
-echo "Eight-row comparisons: $FULLTD_RESULTS_ROOT/fd001_outputs/batch_comparison/"
+echo "Batch/matched-update comparisons: $FULLTD_RESULTS_ROOT/fd001_outputs/batch_comparison/"
 echo "Held-out test curves: $FULLTD_RESULTS_ROOT/fd001_outputs/figures/compute_proxy/"
 echo "Held-out step-by-step metrics: $FULLTD_RESULTS_ROOT/fd001_outputs/test_compute/"
-echo "NOTE: legacy four-method compute curves use a proxy. The early-stopped TD-MSE combo has measured stage times in fd001_outputs/timing_summary.csv."
+echo "NOTE: the legacy fixed-horizon three-method compute curves use a proxy; Combo uses measured stage times, with Gamma early stopping but 100 predictor epochs."
