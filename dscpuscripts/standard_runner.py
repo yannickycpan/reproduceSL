@@ -33,6 +33,19 @@ def configurations(campaign):
     return [c for c in make_manifest() if c['dataset'] == campaign]
 
 
+
+def filtered_configurations(campaign, method=None):
+    """Dispatch only the explicitly requested method, without changing its config."""
+    configs = configurations(campaign)
+    if method is None:
+        return configs
+    selected = [c for c in configs if c["method"] == method]
+    if not selected:
+        raise ValueError(f"No {method} candidate exists for {campaign}")
+    return selected
+
+
+
 def paths(campaign):
     from dscpuscripts.result_paths import paths as dataset_paths
     if campaign not in CAMPAIGNS:
@@ -222,7 +235,7 @@ def dispatch(args):
     else:
         from dscpuscripts.application_train import code_hash
     data, results, _ = paths(args.campaign)
-    configs = configurations(args.campaign)
+    configs = filtered_configurations(args.campaign, args.method)
     from fulltd.protocol import digest
     scoped_hashes, code_by_id = {}, {}
     for c in configs:
@@ -352,6 +365,8 @@ def main():
     parser.add_argument('--microbatch', type=int, default=None)
     parser.add_argument('--adaptive', action='store_true')
     parser.add_argument('--check-seconds', type=float, default=600.)
+    parser.add_argument('--method', choices=('mse', 'gaussian_nll', 'td_typed', 'td_pairwise'),
+                        help='Limit dispatch/status to this method; preserves the original science.')
     parser.add_argument('--max-runs', type=int, default=0)
     parser.add_argument('--run-id')
     parser.add_argument('--expected-code')

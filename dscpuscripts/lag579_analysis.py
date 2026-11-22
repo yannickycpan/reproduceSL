@@ -280,15 +280,170 @@ def select(dataset):
     output = root / "lag579_outputs"
     output.mkdir(parents=True, exist_ok=True)
     target = output / "selection.json"
-    if target.exists() and read_json(target) != plan:
-        raise RuntimeError("Selection changed; refusing to overwrite old validation lock")
+    if target.exists():
+        old_plan = read_json(target)
+        if old_plan != plan:
+            promoted = (dataset == "electricity"
+                        and old_plan.get("mse_reference") is None
+                        and plan.get("mse_reference") is not None
+                        and dict(old_plan, mse_reference=plan["mse_reference"]) == plan)
+            if not promoted:
+                raise RuntimeError(
+                    "Validation selection changed; refusing to overwrite old TD locks")
+            print("Added independently validation-selected MSE reference "
+                  "without changing any locked TD choice.", flush=True)
     atomic_json(target, plan)
     write_csv(output / "candidate_validation_scores.csv", settings)
     print(f"Locked {len(winners)} method/lag configurations: {target}")
     return plan
 
 
-def evaluate(dataset):
+
+class _TestProgress:
+    """Print streaming progress without changing samples, metrics, or model."""
+    def __init__(self, dataset, run_id):
+        self.parent, self.run_id = dataset, run_id
+        self.done, self.next_report = 0, 256000
+
+    def __len__(self):
+        return len(self.parent)
+
+    def __getattr__(self, name):
+        return getattr(self.parent, name)
+
+    def get_batch(self, indices):
+        data = self.parent.get_batch(indices)
+        self.done += len(indices)
+        if self.done >= self.next_report or self.done == len(self.parent):
+            print(f"TEST {self.run_id}: {self.done}/{len(self.parent)} samples",
+                  flush=True)
+            self.next_report = self.done + 256000
+        return data
+
+
+def _electricity_test_worker(task):
+    """One selected held-out endpoint, with independent CPU-only model inference."""
+    import torch
+    from fulltd.data import load_dataset
+    from fulltd.metrics import evaluate as evaluate_model
+    from .common import data_identity
+
+    torch.set_num_threads(1)
+    config = task["config"]
+    run_id = config["run_id"]
+    checkpoint = Path(task["root"]) / run_id / "final.pt"
+    identity = task["identity"]
+    if file_hash(checkpoint) != identity["endpoint_sha256"]:
+        raise ValueError(f"Selected checkpoint changed: {run_id}")
+    saved = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    if (saved["config"] != config or
+            saved["identity"]["code_sha256"] != identity["code_sha256"] or
+            saved["identity"]["config_sha256"] != identity["config_sha256"]):
+        raise ValueError(f"Checkpoint identity differs from validation selection: {run_id}")
+    dataset = load_dataset("electricity", Path(task["data"]), "test")
+    if data_identity(dataset) != identity["test_sha256"]:
+        raise ValueError(f"Test dataset identity changed: {run_id}")
+    if config["method"] == "mse":
+        from .application_train import build_objective as build_mse
+        objective = build_mse(config, dataset)
+    else:
+        objective = build_objective(config, dataset)
+    objective.load_state_dict(saved["objective"])
+    objective.eval()
+    measured, _ = evaluate_model(objective.model, _TestProgress(dataset, run_id),
+                                 batch_size=128, device="cpu")
+    keys = {tuple(pair) for pair in task["metric_keys"]}
+    found = {(r["units"], r["metric"]): float(r["value"]) for r in measured
+             if str(r["horizon"]) == "all" and (r["units"], r["metric"]) in keys}
+    if set(found) != keys or any(not math.isfinite(v) for v in found.values()):
+        raise ValueError(f"Incomplete/nonfinite selected test metrics: {run_id}")
+    return sorted((dict(units=unit, metric=metric, value=value)
+                   for (unit, metric), value in found.items()),
+                  key=lambda r: (r["units"], r["metric"]))
+
+
+def _electricity_test_tasks(tasks, output, workers):
+    """Parallel full-test inference with checkpoint+test-identity-bound resume cache."""
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+    from multiprocessing import get_context
+
+    if not 1 <= workers <= 32:
+        raise ValueError("Electricity evaluation --workers must be between 1 and 32")
+    cached, pending = {}, []
+    cache_root = output / "test_cache"
+    for task in tasks:
+        run_id = task["config"]["run_id"]
+        path = cache_root / f"{run_id}.json"
+        if path.is_file():
+            record = read_json(path)
+            if record.get("identity") != task["identity"]:
+                raise ValueError(f"Old test cache identity differs: {path}")
+            rows = record.get("metrics")
+            expected = set(map(tuple, task["metric_keys"]))
+            if (not isinstance(rows, list)
+                    or {(r["units"], r["metric"]) for r in rows} != expected
+                    or len(rows) != len(expected)
+                    or any(not math.isfinite(float(r["value"])) for r in rows)):
+                raise ValueError(f"Malformed test cache: {path}")
+            cached[run_id] = rows
+        else:
+            pending.append(task)
+    print(f"Electricity full-test endpoints: {len(tasks)} selected models; "
+          f"{len(cached)} cached; {len(pending)} to evaluate; workers={workers}.",
+          flush=True)
+    if pending:
+        # spawn avoids forking after PyTorch has initialized runtime threads.
+        with ProcessPoolExecutor(max_workers=min(workers, len(pending)),
+                                 mp_context=get_context("spawn")) as pool:
+            futures = {pool.submit(_electricity_test_worker, task): task
+                       for task in pending}
+            for future in as_completed(futures):
+                task = futures[future]
+                run_id = task["config"]["run_id"]
+                rows = future.result()
+                atomic_json(cache_root / f"{run_id}.json",
+                            dict(identity=task["identity"], metrics=rows))
+                cached[run_id] = rows
+                print(f"Completed held-out test {len(cached)}/{len(tasks)}: {run_id}",
+                      flush=True)
+    return cached
+
+
+def _complete_saved_electricity_td(output, selected, keys):
+    """Reuse an already completed TD report, never infer missing seed metrics."""
+    file = output / "per_seed.csv"
+    if not file.is_file():
+        return None
+    existing = _read_csv(file)
+    five = "-".join(map(str, LAG_SETS["electricity"][0]))
+    desired = {(method, five, seed, unit, metric)
+               for method in METHODS for seed in range(5) for unit, metric in keys}
+    actual = {}
+    for row in existing:
+        if row["method"] not in METHODS:
+            continue
+        key = (row["method"], row["lag_set"], int(row["seed"]),
+               row["units"], row["metric"])
+        if (key in actual or row["dataset"] != "electricity"
+                or int(row["batch_size"]) != 256 or row["source"] != "new_5_lag"
+                or not math.isfinite(float(row["value"]))):
+            raise ValueError("Existing TD test report cannot be safely reused")
+        actual[key] = float(row["value"])
+    if set(actual) != desired:
+        return None
+    for choice in selected:
+        if (choice["method"] not in METHODS or choice["lag_set"] != five
+                or len(choice["run_ids"]) != 5):
+            raise ValueError("Saved TD selections changed")
+    print("Reusing complete previously generated Electricity TD per-seed test report.",
+          flush=True)
+    return [dict(dataset="electricity", method=m, lag_set=lag, batch_size=256,
+                 seed=seed, units=u, metric=k, value=value, source="new_5_lag")
+            for (m, lag, seed, u, k), value in sorted(actual.items())]
+
+
+
+def evaluate(dataset, workers=4):
     """Held-out evaluation is performed only after validation selection is locked."""
     import torch
     from fulltd.data import load_dataset, verify_dataset
@@ -348,72 +503,108 @@ def evaluate(dataset):
     verify_dataset(dataset, data)
     torch.set_num_threads(1)
     test = load_dataset(dataset, data, "test")
-    if dataset == "electricity" and plan.get("mse_reference") is not None:
-        from .application_protocol import make_manifest as original_manifest
-        from .typed_ablation_comparison import _existing_old_metrics, _fresh_old_metrics
-        old_data, old_root, old_output = old_paths(dataset)
-        if old_data != data:
-            raise ValueError("Historical MSE and new TD use different prepared-data paths")
-        originals = {c["run_id"]: c for c in original_manifest()
-                     if c["dataset"] == dataset and c["method"] == "mse"}
-        old_choice = plan["mse_reference"]
-        if old_choice is None or len(old_choice["run_ids"]) != 5:
-            raise ValueError("Missing locked original MSE reference")
-        for run_id in old_choice["run_ids"]:
-            c = originals[run_id]
-            endpoint = old_root / run_id / "final.pt"
-            if file_hash(endpoint) != old_choice["endpoint_sha256"][run_id]:
-                raise ValueError(f"Original MSE checkpoint changed: {run_id}")
-            values = _existing_old_metrics(old_output, run_id, c, keys)
-            origin = "original_mse_saved_test"
-            if values is None:
-                checkpoint = torch.load(endpoint, map_location="cpu", weights_only=False)
-                if (checkpoint["config"] != c
-                        or checkpoint["identity"] !=
-                        read_json(old_root / run_id / "status.json")["identity"]):
-                    raise ValueError(f"Original MSE checkpoint identity mismatch: {run_id}")
-                values = _fresh_old_metrics(dataset, c, checkpoint, test, keys)
-                origin = "original_mse_checkpoint_inference"
-            for (unit, metric), value in values.items():
-                if not math.isfinite(value):
-                    raise ValueError(f"Nonfinite original MSE metric: {run_id}")
-                prior.append(dict(dataset=dataset, method="mse", lag_set="none",
-                                  batch_size=256, seed=c["seed"], units=unit,
-                                  metric=metric, value=value, source=origin))
     fresh = []
     expected_selections = 6 if dataset == "fd001" else 3
     if len(plan["selected"]) != expected_selections:
         raise ValueError("Unexpected number of validation-locked TD selections")
-    for choice in plan["selected"]:
-        method, lag = choice["method"], choice["lag_set"]
-        if method not in METHODS or len(choice["run_ids"]) != 5:
-            raise ValueError("Unexpected selected method or seed count")
-        seen = set()
-        for run_id in choice["run_ids"]:
-            c = configs[run_id]
-            if c["method"] != method or key_of(c) != lag or c["seed"] in seen:
-                raise ValueError("Selected run identity does not match lag/method/seed")
-            seen.add(c["seed"])
-            ckpt_path = root / run_id / "final.pt"
-            if file_hash(ckpt_path) != choice["endpoint_sha256"][run_id]:
-                raise ValueError(f"Selected checkpoint changed: {run_id}")
-            saved = torch.load(ckpt_path, map_location="cpu", weights_only=False)
-            if (saved["config"] != c or
-                    saved["identity"]["code_sha256"] != plan["code_hashes"][method]):
-                raise ValueError(f"Selected checkpoint does not match lock: {run_id}")
-            objective = build_objective(c, test)
-            objective.load_state_dict(saved["objective"])
-            objective.eval()
-            measured, _ = evaluate_model(objective.model, test, batch_size=128, device="cpu")
-            found = {(r["units"],r["metric"]): float(r["value"]) for r in measured
-                     if str(r["horizon"]) == "all" and
-                     (r["units"],r["metric"]) in keys}
-            if set(found) != keys or any(not math.isfinite(v) for v in found.values()):
-                raise ValueError(f"Missing/nonfinite test endpoint metrics: {run_id}")
-            for (unit, metric), value in found.items():
-                fresh.append(dict(dataset=dataset, method=method, lag_set=lag,
-                                  batch_size=256, seed=c["seed"], units=unit,
-                                  metric=metric, value=value, source="new_7_9_lag" if dataset == "fd001" else "new_5_lag"))
+    if dataset == "fd001":
+        # Preserve the original FD001 scientific endpoint and comparison protocol.
+        for choice in plan["selected"]:
+            method, lag = choice["method"], choice["lag_set"]
+            if method not in METHODS or len(choice["run_ids"]) != 5:
+                raise ValueError("Unexpected selected method or seed count")
+            seen = set()
+            for run_id in choice["run_ids"]:
+                c = configs[run_id]
+                if c["method"] != method or key_of(c) != lag or c["seed"] in seen:
+                    raise ValueError("Selected run identity does not match lag/method/seed")
+                seen.add(c["seed"])
+                ckpt_path = root / run_id / "final.pt"
+                if file_hash(ckpt_path) != choice["endpoint_sha256"][run_id]:
+                    raise ValueError(f"Selected checkpoint changed: {run_id}")
+                saved = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+                if (saved["config"] != c or
+                        saved["identity"]["code_sha256"] != plan["code_hashes"][method]):
+                    raise ValueError(f"Selected checkpoint does not match lock: {run_id}")
+                objective = build_objective(c, test)
+                objective.load_state_dict(saved["objective"])
+                objective.eval()
+                measured, _ = evaluate_model(objective.model, test, batch_size=128, device="cpu")
+                found = {(r["units"], r["metric"]): float(r["value"]) for r in measured
+                         if str(r["horizon"]) == "all" and
+                         (r["units"], r["metric"]) in keys}
+                if set(found) != keys or any(not math.isfinite(v) for v in found.values()):
+                    raise ValueError(f"Missing/nonfinite test metrics: {run_id}")
+                for (unit, metric), value in found.items():
+                    fresh.append(dict(dataset=dataset, method=method, lag_set=lag,
+                                      batch_size=256, seed=c["seed"], units=unit,
+                                      metric=metric, value=value, source="new_7_9_lag"))
+    else:
+        from .common import data_identity
+        existing_td = _complete_saved_electricity_td(output, plan["selected"], keys)
+        test_sha = data_identity(test)
+        metrics_sha = file_hash(Path(__file__).resolve().parents[1] / "fulltd/metrics.py")
+        tasks = []
+
+        def register(config, directory, code_sha, endpoint_sha, source, lag):
+            record = dict(
+                run_id=config["run_id"], config_sha256=digest(config),
+                endpoint_sha256=endpoint_sha, code_sha256=code_sha,
+                test_sha256=test_sha, metrics_code_sha256=metrics_sha,
+                evaluation_batch_size=128)
+            tasks.append(dict(config=config, data=str(data), root=str(directory),
+                              identity=record, source=source, lag_set=lag,
+                              metric_keys=sorted(keys)))
+
+        # MSE is independently retrained and selected by validation; no TD
+        # checkpoint or test result is reused to choose its hyperparameters.
+        if plan.get("mse_reference") is not None:
+            from .application_protocol import make_manifest as original_manifest
+            _, mse_root, _ = old_paths(dataset)
+            originals = {c["run_id"]: c for c in original_manifest()
+                         if c["dataset"] == dataset and c["method"] == "mse"
+                         and c["batch_size"] == 256}
+            choice = plan["mse_reference"]
+            if len(choice["run_ids"]) != 5:
+                raise ValueError("Incomplete original MSE five-seed selection")
+            for run_id in choice["run_ids"]:
+                config = originals[run_id]
+                status = read_json(mse_root / run_id / "status.json")
+                register(config, mse_root, status["identity"]["code_sha256"],
+                         choice["endpoint_sha256"][run_id], "fresh_mse", "none")
+
+        if existing_td is not None:
+            fresh.extend(existing_td)
+        else:
+            for choice in plan["selected"]:
+                method, lag = choice["method"], choice["lag_set"]
+                if method not in METHODS or len(choice["run_ids"]) != 5:
+                    raise ValueError("Unexpected selected TD method or seed count")
+                seen = set()
+                for run_id in choice["run_ids"]:
+                    config = configs[run_id]
+                    if (config["method"] != method or key_of(config) != lag
+                            or config["seed"] in seen):
+                        raise ValueError(f"Selected TD configuration mismatch: {run_id}")
+                    seen.add(config["seed"])
+                    register(config, root, plan["code_hashes"][method],
+                             choice["endpoint_sha256"][run_id], "new_5_lag", lag)
+
+        # A recorded cache survives interruption, and a fully completed old TD
+        # report avoids repeating the expensive 15 full-test inferences.
+        results = _electricity_test_tasks(tasks, output, workers)
+        for task in tasks:
+            c = task["config"]
+            for record in results[c["run_id"]]:
+                row = dict(dataset=dataset, method=c["method"],
+                           lag_set=task["lag_set"], batch_size=256,
+                           seed=c["seed"], units=record["units"],
+                           metric=record["metric"], value=float(record["value"]),
+                           source=task["source"])
+                if c["method"] == "mse":
+                    prior.append(row)
+                else:
+                    fresh.append(row)
     combined = prior + fresh
     grouped = defaultdict(list)
     for row in combined:
@@ -456,9 +647,35 @@ def evaluate(dataset):
             existing = _read_csv(target)
             expected = [{k:str(v) for k,v in row.items()} for row in rows]
             if existing != expected:
-                raise RuntimeError(f"Existing analysis differs; refusing overwrite: {target}")
+                if dataset != "electricity":
+                    raise RuntimeError(f"Existing analysis differs; refusing overwrite: {target}")
+                def canonical(row):
+                    return tuple(sorted(row.items()))
+                old_rows = [canonical(row) for row in existing]
+                new_rows = [canonical(row) for row in expected]
+                if len(set(old_rows)) != len(old_rows) or len(set(new_rows)) != len(new_rows):
+                    raise RuntimeError(f"Duplicate analysis rows: {target}")
+                if set(old_rows) == set(new_rows):
+                    continue
+                old_set = set(old_rows)
+                new_set = set(new_rows)
+                added = [row for row in expected if canonical(row) not in old_set]
+                if (plan.get("mse_reference") is None
+                        or not old_set.issubset(new_set) or not added):
+                    raise RuntimeError(f"Non-append-only test report change: {target}")
+                # Only the independently selected newly trained MSE may be
+                # appended to the old TD-only report, never reselect TD.
+                valid_append = all(
+                    (row.get("method") == "mse" if filename != "paired.csv"
+                     else row.get("method_b") == "mse")
+                    for row in added)
+                if not valid_append:
+                    raise RuntimeError(f"Existing TD outcome changed: {target}")
+                write_csv(target, rows)
+                print(f"Added {len(added)} independently trained MSE rows: {target}",
+                      flush=True)
         else:
-            write_csv(target,rows)
+            write_csv(target, rows)
     print(f"Results saved: {output}")
     return summary
 
@@ -466,11 +683,13 @@ def evaluate(dataset):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("dataset", choices=DATASETS)
+    parser.add_argument("--workers", type=int, default=4,
+                        help="Electricity held-out test inference processes (1..32)")
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--select",action="store_true")
     action.add_argument("--evaluate",action="store_true")
     args = parser.parse_args()
-    select(args.dataset) if args.select else evaluate(args.dataset)
+    select(args.dataset) if args.select else evaluate(args.dataset, workers=args.workers)
 
 
 if __name__=="__main__":

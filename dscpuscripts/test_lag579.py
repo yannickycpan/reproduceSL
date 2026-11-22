@@ -178,3 +178,54 @@ def test_original_mse_included_only_when_all_statuses_exist(tmp_path, monkeypatc
     assert analysis._available_electricity_mse() is marker
     (old_root / original[0]["run_id"] / "status.json").unlink()
     assert analysis._available_electricity_mse() is None
+
+
+def test_electricity_mse_only_original_sweep_is_50_candidates():
+    from .standard_runner import filtered_configurations
+    mse = filtered_configurations("electricity", "mse")
+    assert len(mse) == 50
+    assert {c["method"] for c in mse} == {"mse"}
+    assert {c["batch_size"] for c in mse} == {256}
+    assert {c["seed"] for c in mse} == {0, 1, 2, 3, 4}
+    assert len({c["configuration"] for c in mse}) == 10
+    assert all(c["backbone"] == "patchtst" and c["dataset"] == "electricity"
+               for c in mse)
+
+
+def test_completed_parallel_test_cache_can_be_reused(tmp_path):
+    from .common import atomic_json
+    from .lag579_analysis import _electricity_test_tasks
+    run_id = "electricity_test_model_s0"
+    identity = dict(run_id=run_id, test_sha256="test-identity",
+                    endpoint_sha256="checkpoint-identity")
+    metrics = [dict(units="kW", metric="mae", value=0.23),
+               dict(units="kW", metric="rmse", value=0.48)]
+    cache = tmp_path / "test_cache" / (run_id + ".json")
+    atomic_json(cache, dict(identity=identity, metrics=metrics))
+    task = dict(config=dict(run_id=run_id), identity=identity,
+                metric_keys=[("kW", "mae"), ("kW", "rmse")])
+    actual = _electricity_test_tasks([task], tmp_path, 8)
+    assert actual[run_id] == metrics
+    import pytest
+    stale = dict(task, identity=dict(identity, test_sha256="different"))
+    with pytest.raises(ValueError, match="cache identity"):
+        _electricity_test_tasks([stale], tmp_path, 8)
+
+
+def test_completed_td_only_per_seed_can_be_reused_after_mse_is_trained(tmp_path):
+    from .common import write_csv
+    from .lag579_analysis import _complete_saved_electricity_td
+    lag = "-".join(map(str, LAG_SETS["electricity"][0]))
+    keys = {("kW", "rmse"), ("kW", "mae")}
+    choices = [dict(method=method, lag_set=lag, run_ids=[f"{method}-s{s}" for s in range(5)])
+               for method in METHODS]
+    rows = [dict(dataset="electricity", method=method, lag_set=lag,
+                 batch_size=256, seed=seed, units=unit, metric=metric,
+                 value=0.2 + seed / 100, source="new_5_lag")
+            for method in METHODS for seed in range(5) for unit, metric in sorted(keys)]
+    write_csv(tmp_path / "per_seed.csv", rows)
+    reused = _complete_saved_electricity_td(tmp_path, choices, keys)
+    assert len(reused) == 30
+    assert sorted((r["method"], r["seed"], r["units"], r["metric"])
+                  for r in reused) == sorted((r["method"], r["seed"], r["units"], r["metric"])
+                                            for r in rows)

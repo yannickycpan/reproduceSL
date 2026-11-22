@@ -5,8 +5,10 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/dscpuscripts/env.sh"
 cd "$ROOT"
 DATASET="${1:-fd001}"
-if [[ $# -gt 1 || ( "$DATASET" != "fd001" && "$DATASET" != "electricity" ) ]]; then
-  echo "Usage: bash dscpuscripts/analyze_lag579_all.sh [fd001|electricity]" >&2
+EVAL_WORKERS="${2:-8}"
+if [[ $# -gt 2 || ( "$DATASET" != "fd001" && "$DATASET" != "electricity" ) ||
+      ! "$EVAL_WORKERS" =~ ^[0-9]+$ ]] || (( EVAL_WORKERS < 1 || EVAL_WORKERS > 32 )); then
+  echo "Usage: bash dscpuscripts/analyze_lag579_all.sh [fd001|electricity] [EVAL_WORKERS=8 (1..32)]" >&2
   exit 2
 fi
 if [[ ! -x "$FULLTD_ENV/bin/python" ]]; then
@@ -46,6 +48,34 @@ else
 fi
 echo "Reading new TD results from: $NEW_ROOT"
 
+# The full Electricity report requires the baseline explicitly requested by
+# the experiment protocol. Never silently discard MSE from the final output.
+if [[ "$DATASET" == "electricity" ]]; then
+  "$FULLTD_ENV/bin/python" - <<'PY'
+import sys
+from collections import Counter
+from dscpuscripts.application_protocol import make_manifest
+from dscpuscripts.application_train import code_hash
+from dscpuscripts.result_paths import paths
+from dscpuscripts.standard_runner import classify
+
+configs = [c for c in make_manifest()
+           if c["dataset"] == "electricity" and c["method"] == "mse"
+           and c["batch_size"] == 256]
+if len(configs) != 50:
+    raise RuntimeError("Expected exactly 50 Electricity MSE training candidates")
+root = paths("electricity")[1]
+expected = code_hash(configs[0])
+states = Counter(classify(c, root, expected) for c in configs)
+print(f"Fresh MSE baseline status: {dict(states)} (50 expected).", flush=True)
+if any(s not in ("complete", "numerical_failure") for s in states):
+    print("MSE baseline not finished. Run:\n"
+          "  bash dscpuscripts/run_electricity.sh --run --method mse --workers 64",
+          file=sys.stderr)
+    raise SystemExit(1)
+PY
+fi
+
 # Reconstruct old FD001 five-lag artifacts only where the current plan reuses them.
 if [[ "$DATASET" == "fd001" ]]; then
 if [[ ! -f "$ABL_OUTPUT/selection.json" ]]; then
@@ -69,7 +99,7 @@ fi
 echo "Auditing and selecting the prescribed TD lag candidates..."
 bash dscpuscripts/analyze_lag579.sh "$DATASET" --select
 echo "Evaluating selected TD endpoints and the validation-selected MSE reference..."
-bash dscpuscripts/analyze_lag579.sh "$DATASET" --evaluate
+bash dscpuscripts/analyze_lag579.sh "$DATASET" --evaluate --workers "$EVAL_WORKERS"
 
 # Validate the actual finished reports before producing any distributable archive.
 "$FULLTD_ENV/bin/python" - "$DATASET" "$NEW_OUTPUT" <<'PY'
