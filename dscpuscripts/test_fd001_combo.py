@@ -41,15 +41,13 @@ def _tensors():
     return source, target, torch.tensor([0, 1, 0, 1], dtype=torch.long)
 
 
-def test_nested_lag_four_method_manifest():
+def test_stage1_msealpha0p01_combo_manifest():
     manifest = make_manifest()
-    assert len(manifest) == len({c["run_id"] for c in manifest}) == 1600
+    assert len(manifest) == len({c["run_id"] for c in manifest}) == 750
     assert LAG_SETS == ((1, 5), (1, 3, 5), (1, 3, 5, 10, 15))
-    assert MSE_STAGE_ALPHAS == (.001,)
-    assert set(METHODS) == {"mse", "gaussian_nll", "td_pairwise", "td_mse_combo"}
-    expected = {("mse", 256): 50, ("gaussian_nll", 256): 50,
-                ("td_pairwise", 128): 375, ("td_pairwise", 256): 375,
-                ("td_mse_combo", 128): 375, ("td_mse_combo", 256): 375}
+    assert MSE_STAGE_ALPHAS == (.01,)
+    assert set(METHODS) == {"td_mse_combo"}
+    expected = {("td_mse_combo", 128): 375, ("td_mse_combo", 256): 375}
     assert {(method, batch): sum(c["method"] == method and c["batch_size"] == batch
                                  for c in manifest)
             for method, batch in expected} == expected
@@ -65,11 +63,12 @@ def test_nested_lag_four_method_manifest():
         if config["method"] == "td_mse_combo":
             assert config["alpha"] in ALPHAS["td_pairwise"]
             assert config["beta"] in BETAS
-            assert config["mse_alpha"] == .001
+            assert config["mse_alpha"] == .01
             assert config["mse_epochs"] == 100
             assert config["gamma_max_epochs"] == 100
             assert config["predictor_max_epochs"] == 100
     assert MSE_STAGE_ALPHAS[0] in BASELINE_ALPHAS
+    assert all(c["run_id"].endswith("_stage1msealpha0p01v1") for c in manifest)
     assert BATCH_SIZES["td_mse_combo"] == (128, 256)
 
 

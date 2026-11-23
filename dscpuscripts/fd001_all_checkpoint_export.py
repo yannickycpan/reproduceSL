@@ -1,7 +1,7 @@
-"""Export every saved FD001 lagscanv3 checkpoint's test metrics and predictions.
+"""Export every saved FD001 Stage-1-MSE-alpha0.01 Combo checkpoint and prediction.
 
 Read-only postprocessing. Does not train, select hyperparameters, or modify runs.
-Outputs CSV + per-run compressed numpy arrays under fd001_outputs/all_checkpoints.
+Outputs CSV + per-run compressed numpy arrays under fd001_outputs/combo_stage1opt_all_checkpoints.
 Run-level atomic cache makes it safe to interrupt/restart. The TEST export must
 NOT be used to choose the paper's hyperparameters, lags, or stopping times.
 """
@@ -23,8 +23,8 @@ from dscpuscripts.fd001_protocol import EPOCHS, PROTOCOL_ID, make_manifest
 from dscpuscripts.result_paths import paths
 from fulltd.protocol import digest
 
-REVISION = 'fd001-all-checkpoints-test-export-v1'
-N_RUNS = 1600
+REVISION = 'fd001-combo-stage1opt-all-checkpoints-test-export-v1'
+N_RUNS = 750
 _WORKER_TEST = None
 _WORKER_TEST_DIR = None
 
@@ -213,7 +213,7 @@ def finalize(out, root, manifest, scientific_sha, val_sha, test_sha, n_test):
         run = c['run_id']
         record = out / 'records' / (run + '.json')
         if not record.is_file() or not (out / 'predictions' / (run + '.npz')).is_file():
-            raise RuntimeError(f'Not all 1600 run outputs are complete: {run}')
+            raise RuntimeError(f'Not all {N_RUNS} run outputs are complete: {run}')
         exported = read_json(record)
         signature = exported['signature']
         if (signature['revision'] != REVISION or signature['run_id'] != run
@@ -270,7 +270,7 @@ def main():
     from fulltd.data import load_dataset, verify_dataset
     cpu_environment()
     data_dir, root, outputs = paths('fd001')
-    out = outputs / 'all_checkpoints'
+    out = outputs / 'combo_stage1opt_all_checkpoints'
     manifest = make_manifest()
     if len(manifest) != N_RUNS:
         raise ValueError(f'Unexpected manifest length {len(manifest)}')
@@ -288,7 +288,7 @@ def main():
         return
     if args.mode == 'smoke':
         _worker_setup()
-        for method, batch in (('mse', 256), ('td_pairwise', 128), ('td_mse_combo', 256)):
+        for method, batch in (('td_mse_combo', 128), ('td_mse_combo', 256)):
             config = next(c for c in manifest if c['method'] == method
                           and c['batch_size'] == batch and c['seed'] == 0)
             result = export_one((config, str(root), str(out), str(data_dir),
