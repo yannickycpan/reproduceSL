@@ -206,6 +206,7 @@ def export_one(job):
 def finalize(out, root, manifest, scientific_sha, val_sha, test_sha, n_test):
     all_rows = []
     gamma_rows = []
+    stage_rows = []
     counters = Counter()
     if len({c['run_id'] for c in manifest}) != N_RUNS:
         raise ValueError('Duplicate run IDs or missing configurations')
@@ -223,6 +224,24 @@ def finalize(out, root, manifest, scientific_sha, val_sha, test_sha, n_test):
             raise ValueError(f'Export manifest identity mismatch: {run}')
         all_rows.extend(exported['rows'])
         counters[c['method']] += 1
+        status = read_json(root / run / 'status.json')
+        timings = status.get('timing', {})
+        stage_epochs = status.get('phase_epochs', {})
+        stage_steps = status.get('phase_steps', {})
+        stage_rows.append(dict(run_id=run, method=c['method'],
+            batch_size=c['batch_size'], lag_set='-'.join(map(str, c['lags'])),
+            seed=c['seed'], alpha=c['alpha'], beta=c['beta'],
+            mse_alpha=c['mse_alpha'], total_wall_seconds=status['runtime_seconds'],
+            stage1_mse_epochs=stage_epochs.get('mse'),
+            stage2_gamma_epochs=stage_epochs.get('gamma'),
+            stage3_td_epochs=stage_epochs.get('predictor'),
+            stage1_mse_updates=stage_steps.get('mse'),
+            stage2_gamma_updates=stage_steps.get('gamma'),
+            stage3_td_updates=stage_steps.get('predictor'),
+            stage1_mse_wall_seconds=timings.get('mse_wall_seconds'),
+            stage2_gamma_wall_seconds=timings.get('gamma_wall_seconds'),
+            stage3_td_wall_seconds=timings.get('predictor_wall_seconds'),
+            stage2_stop_reason=status.get('stop_reasons', {}).get('gamma')))
         # Source-side training gamma observations, if present, are exported for
         # optional mechanism analysis; no new fit or model selection is done.
         curve = read_json(root / run / 'update_curve.json')
@@ -233,6 +252,7 @@ def finalize(out, root, manifest, scientific_sha, val_sha, test_sha, n_test):
                     seed=c['seed'], optimizer_steps=v['optimizer_steps'], **typ))
     write_csv(out / 'checkpoint_metrics.csv', all_rows)
     write_csv(out / 'checkpoint_gamma.csv', gamma_rows)
+    write_csv(out / 'stage_training.csv', stage_rows)
     count = len(all_rows)
     atomic_json(out / 'export_manifest.json', dict(
         revision=REVISION, n_runs=len(manifest), n_checkpoints=count,
@@ -249,6 +269,7 @@ def finalize(out, root, manifest, scientific_sha, val_sha, test_sha, n_test):
         'checkpoint_metrics.csv: validation MSE, RMSE, RUL score; test RMSE and RUL score; '
         'elapsed checkpoint wall time, alpha/beta/lags/batch/seed.\n'
         'checkpoint_gamma.csv: saved training-probe Gamma diagnostics.\n'
+        'stage_training.csv: all stages epochs, optimizer updates, wall-clock times, and Gamma early-stopping reason.\n'
         'predictions/<run_id>.npz: numpy arrays steps, engine_ids, target_rul_cycles, '
         'predictions (checkpoint x engine). Raw signed error = predictions - target.\n'
         'RUL contribution = exp(error/10)-1 if error>=0, else exp(-error/13)-1.\n'
