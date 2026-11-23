@@ -275,7 +275,7 @@ def _markdown(plan, summary, minutes):
     lines = ['# FD001: three-method validation-locked comparison', '',
              'Test RMSE (cycles) and untruncated NASA RUL Score, five seeds. '
              'Lower is better. No test-based hyperparameter selection.', '',
-             '## Complete 100-epoch training', '',
+             '## Full prescribed training (Combo: Stage 1 MSE 100 epochs, Gamma early-stop, Stage 3 TD 100 epochs)', '',
              '| Method | Batch | Lags | Alpha | Beta | Test RMSE mean ± SE | Test RUL Score mean ± SE | Wall min |',
              '|---|---:|---|---:|---:|---:|---:|---:|']
     def cell(regime, method, batch):
@@ -302,8 +302,8 @@ def _markdown(plan, summary, minutes):
     lines += ['', f'MSE 100-epoch reference time: {plan["mse_budget_seconds"]/60:.3f} min.',
               'Combo original three-stage schedule cannot be extrapolated to this time '
               'budget; see combo_match_feasibility.csv for per-seed times.',
-              'Only the FULL results form a fair three-method comparison under '
-              'the same 100-epoch final predictor training rule.', '']
+              'Full results compare the original prescribed training protocols, but '
+              'Combo has substantially more total training stages and time than the others.', '']
     return '\n'.join(lines)
 
 
