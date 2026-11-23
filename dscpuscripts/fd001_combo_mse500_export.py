@@ -1,7 +1,9 @@
 """Export every saved FD001 Combo MSE-500 checkpoint and test prediction.
 
 Read-only postprocessing. Does not train, select hyperparameters, or modify runs.
-Outputs CSV + per-run compressed numpy arrays under fd001_outputs/combo_mse500_all_checkpoints.
+Stores the 750 new runs alongside the original 1600 runs in
+fd001_outputs/all_checkpoints/{records,predictions}. Retains separate per-
+protocol CSV/manifest files and creates jointly merged reporting CSVs.
 Run-level atomic cache makes it safe to interrupt/restart. The TEST export must
 NOT be used to choose the paper's hyperparameters, lags, or stopping times.
 """
@@ -248,11 +250,12 @@ def finalize(out, root, manifest, scientific_sha, val_sha, test_sha, n_test):
                 gamma_rows.append(dict(run_id=run, method=c['method'],
                     batch_size=c['batch_size'], lag_set='-'.join(map(str,c['lags'])),
                     seed=c['seed'], optimizer_steps=v['optimizer_steps'], **typ))
-    write_csv(out / 'checkpoint_metrics.csv', all_rows)
-    write_csv(out / 'checkpoint_gamma.csv', gamma_rows)
-    write_csv(out / 'stage_training.csv', stage_rows)
+    # Never overwrite the original 1600-run exports in the shared directory.
+    write_csv(out / 'combo_mse500_checkpoint_metrics.csv', all_rows)
+    write_csv(out / 'combo_mse500_checkpoint_gamma.csv', gamma_rows)
+    write_csv(out / 'combo_mse500_stage_training.csv', stage_rows)
     count = len(all_rows)
-    atomic_json(out / 'export_manifest.json', dict(
+    atomic_json(out / 'combo_mse500_export_manifest.json', dict(
         revision=REVISION, n_runs=len(manifest), n_checkpoints=count,
         n_engine_predictions=count * n_test, methods=dict(counters),
         protocol_id=PROTOCOL_ID, scientific_code_sha256=scientific_sha,
@@ -262,12 +265,12 @@ def finalize(out, root, manifest, scientific_sha, val_sha, test_sha, n_test):
         method='Read-only test inference at every checkpoint. '
                'Hyperparameters/stopping MUST be chosen using validation data only. '
                'Full model checkpoints are NOT in the export.'))
-    (out / 'README.txt').write_text(
+    (out / 'README_combo_mse500.txt').write_text(
         'FD001 all-checkpoint export. Every saved step includes step 0 and final.\n'
-        'checkpoint_metrics.csv: validation MSE, RMSE, RUL score; test RMSE and RUL score; '
+        'combo_mse500_checkpoint_metrics.csv: validation MSE, RMSE, RUL score; test RMSE and RUL score; '
         'elapsed checkpoint wall time, alpha/beta/lags/batch/seed.\n'
-        'checkpoint_gamma.csv: saved training-probe Gamma diagnostics.\n'
-        'stage_training.csv: all stage optimizer updates and wall-clock times.\n'
+        'combo_mse500_checkpoint_gamma.csv: saved training-probe Gamma diagnostics.\n'
+        'combo_mse500_stage_training.csv: all stage optimizer updates and wall-clock times.\n'
         'predictions/<run_id>.npz: numpy arrays steps, engine_ids, target_rul_cycles, '
         'predictions (checkpoint x engine). Raw signed error = predictions - target.\n'
         'RUL contribution = exp(error/10)-1 if error>=0, else exp(-error/13)-1.\n'
@@ -276,6 +279,92 @@ def finalize(out, root, manifest, scientific_sha, val_sha, test_sha, n_test):
         encoding='utf-8')
     return count
 
+
+
+def merge_original_and_combo_exports(out):
+    """Combine two immutable protocol exports without rewriting either original.
+
+    Shared records/ and predictions/ contain all distinct run IDs. Only the
+    combined CSVs and combined manifest are rewritten; original CSVs, per-run
+    prediction arrays, and scientific checkpoints are never modified.
+    """
+    import csv
+    from dscpuscripts.common import write_csv
+
+    out = Path(out)
+    manifests = [
+        ("original_lagscanv3", out / "export_manifest.json",
+         out / "checkpoint_metrics.csv", out / "checkpoint_gamma.csv", 1600),
+        ("combo_stage1_mse500", out / "combo_mse500_export_manifest.json",
+         out / "combo_mse500_checkpoint_metrics.csv",
+         out / "combo_mse500_checkpoint_gamma.csv", 750),
+    ]
+    identities = []
+    combined_metrics = []
+    combined_gamma = []
+    seen_ids = set()
+    for experiment, manifest_path, metrics_path, gamma_path, required in manifests:
+        if not manifest_path.is_file() or not metrics_path.is_file():
+            raise FileNotFoundError(
+                f"Missing {experiment} export: {manifest_path} or {metrics_path}. "
+                "Run both original and new checkpoint exporters first.")
+        manifest = read_json(manifest_path)
+        if manifest.get("n_runs") != required:
+            raise ValueError(f"{experiment}: expected {required} completed runs")
+        if manifest.get("n_checkpoints", 0) < required:
+            raise ValueError(f"{experiment}: invalid checkpoint count")
+        identities.append((experiment, manifest))
+        with metrics_path.open(encoding="utf-8", newline="") as stream:
+            records = list(csv.DictReader(stream))
+        if len(records) != manifest["n_checkpoints"]:
+            raise ValueError(f"{experiment}: checkpoint row count mismatch")
+        run_ids = {r["run_id"] for r in records}
+        if len(run_ids) != required or run_ids & seen_ids:
+            raise ValueError(f"{experiment}: missing/duplicate run IDs")
+        for run_id in run_ids:
+            if not (out / "records" / (run_id + ".json")).is_file():
+                raise FileNotFoundError(f"Missing exported record: {run_id}")
+            if not (out / "predictions" / (run_id + ".npz")).is_file():
+                raise FileNotFoundError(f"Missing exported predictions: {run_id}")
+        seen_ids.update(run_ids)
+        combined_metrics.extend(dict(experiment=experiment, **r) for r in records)
+        if gamma_path.is_file():
+            with gamma_path.open(encoding="utf-8", newline="") as stream:
+                combined_gamma.extend(dict(experiment=experiment, **r)
+                                      for r in csv.DictReader(stream))
+
+    old, new = (item[1] for item in identities)
+    if old["test_data_sha256"] != new["test_data_sha256"]:
+        raise ValueError("Test data identity differs between experiments")
+    if old["validation_data_sha256"] != new["validation_data_sha256"]:
+        raise ValueError("Validation identity differs between experiments")
+
+    n_runs = len(seen_ids)
+    n_checkpoints = len(combined_metrics)
+    if n_runs != 2350 or n_checkpoints != sum(m["n_checkpoints"] for _, m in identities):
+        raise ValueError("Combined checkpoint count is incomplete")
+    write_csv(out / "combined_checkpoint_metrics.csv", combined_metrics)
+    write_csv(out / "combined_checkpoint_gamma.csv", combined_gamma)
+    atomic_json(out / "combined_export_manifest.json", dict(
+        experiments=[dict(name=name, manifest=manifest) for name, manifest in identities],
+        n_runs=n_runs, n_checkpoints=n_checkpoints,
+        n_engine_predictions=sum(int(m["n_engine_predictions"]) for _, m in identities),
+        record_directory="records/", prediction_directory="predictions/",
+        test_data_sha256=old["test_data_sha256"],
+        validation_data_sha256=old["validation_data_sha256"],
+        selection_warning="Held-out TEST records are for evaluation only. "
+                          "Choose hyperparameters, lag sets, checkpoints, and "
+                          "stopping policies from validation data, never TEST."))
+    (out / "README_combined.txt").write_text(
+        "This directory contains ALL 2350 FD001 experiment runs.\n"
+        "Original 1600-run metrics: checkpoint_metrics.csv\n"
+        "New 750-run Combo metrics: combo_mse500_checkpoint_metrics.csv\n"
+        "All 2350 runs: combined_checkpoint_metrics.csv (experiment column).\n"
+        "All 2350 runs: records/<run_id>.json and predictions/<run_id>.npz.\n"
+        "New three-stage timing: combo_mse500_stage_training.csv.\n"
+        "Do not select hyperparameters/checkpoints by TEST results.\n",
+        encoding="utf-8")
+    return dict(n_runs=n_runs, n_checkpoints=n_checkpoints)
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -289,7 +378,7 @@ def main():
     from fulltd.data import load_dataset, verify_dataset
     cpu_environment()
     data_dir, root, outputs = paths('fd001')
-    out = outputs / 'combo_mse500_all_checkpoints'
+    out = outputs / 'all_checkpoints'
     manifest = make_manifest()
     if len(manifest) != N_RUNS:
         raise ValueError(f'Unexpected manifest length {len(manifest)}')
@@ -337,7 +426,9 @@ def main():
         # Avoid mixing results from different dataset roots even when users set
         # FULLTD_FD001_ROOT to a nondefault directory.
         count = finalize(out, root, manifest, scientific_sha, val_sha, test_sha, len(test_data))
-        print(f'COMPLETE: {N_RUNS} runs, {count} checkpoints; {out}',flush=True)
+        joint = merge_original_and_combo_exports(out)
+        print(f'COMPLETE: {N_RUNS} new runs, {count} checkpoints; '
+              f'{joint["n_runs"]} combined runs; output={out}', flush=True)
 
 
 if __name__ == '__main__':
