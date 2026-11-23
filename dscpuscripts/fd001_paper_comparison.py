@@ -353,8 +353,6 @@ def run(mode):
         locked_plan_sha = digest(plan)
         for item in plan['choices']:
             estimates = []
-            final_steps = EPOCHS * math.ceil(_status(root, item['run_ids'][0])['n_sources']
-                                               / item['batch_size'])
             for rid in item['run_ids']:
                 c = configs[rid]
                 status = _status(root, rid)
