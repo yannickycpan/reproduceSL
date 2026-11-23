@@ -281,6 +281,45 @@ def finalize(out, root, manifest, scientific_sha, val_sha, test_sha, n_test):
 
 
 
+
+def reuse_previous_separate_export(outputs, merged_dir):
+    """Copy/hard-link earlier split export into the common directory if present.
+
+    Older code wrote the new 750-run results into a separate output directory.
+    Reuse those files without touching either version or any training checkpoint.
+    """
+    import shutil
+
+    previous = Path(outputs) / "combo_mse500_all_checkpoints"
+    merged_dir = Path(merged_dir)
+    if not previous.is_dir() or previous.resolve() == merged_dir.resolve():
+        return 0
+    copied = 0
+    for kind, pattern in (("records", "*.json"), ("predictions", "*.npz")):
+        for source in (previous / kind).glob(pattern):
+            target = merged_dir / kind / source.name
+            if target.exists():
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                os.link(source, target)
+            except OSError:
+                shutil.copy2(source, target)
+            copied += 1
+    summaries = {
+        "checkpoint_metrics.csv": "combo_mse500_checkpoint_metrics.csv",
+        "checkpoint_gamma.csv": "combo_mse500_checkpoint_gamma.csv",
+        "stage_training.csv": "combo_mse500_stage_training.csv",
+        "export_manifest.json": "combo_mse500_export_manifest.json",
+        "README.txt": "README_combo_mse500.txt",
+    }
+    for old_name, new_name in summaries.items():
+        src, dest = previous / old_name, merged_dir / new_name
+        if src.is_file() and not dest.exists():
+            shutil.copy2(src, dest)
+            copied += 1
+    return copied
+
 def merge_original_and_combo_exports(out):
     """Combine two immutable protocol exports without rewriting either original.
 
@@ -368,7 +407,7 @@ def merge_original_and_combo_exports(out):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', nargs='?', default='run', choices=('run', 'status', 'smoke'))
+    parser.add_argument('mode', nargs='?', default='run', choices=('run', 'status', 'smoke', 'merge-only'))
     parser.add_argument('--workers', type=int, default=24)
     args = parser.parse_args()
     if not 1 <= args.workers <= 128:
@@ -394,6 +433,13 @@ def main():
                            else 'pending' for c in manifest)
         print(f'{N_RUNS} runs: {dict(statuses)}; output={out}', flush=True)
         return
+    if args.mode == 'merge-only':
+        with file_lock(out / '.all_checkpoints.lock'):
+            copied = reuse_previous_separate_export(outputs, out)
+            merged = merge_original_and_combo_exports(out)
+        print(f'MERGED: {merged["n_runs"]} runs, {merged["n_checkpoints"]} checkpoints; '
+              f'{copied} files reused from separate export; output={out}', flush=True)
+        return
     if args.mode == 'smoke':
         _worker_setup()
         for method, batch in (('td_mse_combo', 128), ('td_mse_combo', 256)):
@@ -404,6 +450,10 @@ def main():
             print('SMOKE:', result, flush=True)
         return
     with file_lock(out / '.all_checkpoints.lock'):
+        copied = reuse_previous_separate_export(outputs, out)
+        if copied:
+            print(f'Reused {copied} files from earlier separate Combo export',
+                  flush=True)
         for config in manifest:
             _validate_run(root, config, scientific_sha, val_sha)
         print(f'Exporting {N_RUNS} completed runs; {args.workers} workers; '
