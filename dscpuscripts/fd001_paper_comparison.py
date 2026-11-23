@@ -153,9 +153,9 @@ def _select_plan(root):
                           'alpha, beta and lags selected separately for B128/B256; '
                           'no test labels used',
                 matched_time='Average 100-epoch MSE wall-clock budget; fixed '
-                             'pairwise checkpoint per batch, using cohort mean '
-                             'full-run time and linear-in-updates approximation; '
-                             'individual estimated times may exceed budget',
+                             'pairwise step cutoff per batch chosen using cohort '
+                             'mean full-run time as approximation; report real '
+                             'checkpoint elapsed time, which can exceed budget',
                 mse_budget_seconds=budget,
                 calibration=calibrations, choices=chosen,
                 combo_matched_time_available=False,
@@ -198,7 +198,7 @@ def _load_one(root, c, item, dataset, cache_root, plan_id):
         saved = read_json(cache)
         if saved['identity'] != identity:
             raise ValueError('Checkpoint cache identity disagreement')
-        return saved['metrics'], saved['endpoints'], sha
+        return saved['metrics'], saved['endpoints'], sha, float(saved['checkpoint_runtime_seconds'])
     # Training-produced local checkpoints only. Do not load arbitrary PT files.
     ckpt = torch.load(path, map_location='cpu', weights_only=False)
     if (completed['state'] != 'complete' or ckpt.get('config') != c or
@@ -214,6 +214,7 @@ def _load_one(root, c, item, dataset, cache_root, plan_id):
     if (not snapshot_curve or snapshot_curve != observed[:len(snapshot_curve)]
             or snapshot_curve[-1]['optimizer_steps'] != step):
         raise ValueError(f'Saved checkpoint validation trajectory mismatch: {path}')
+    checkpoint_runtime = float(ckpt['runtime_seconds'])
     seed_runtime(c['seed'])
     objective = build_objective(c)
     objective.load_state_dict(ckpt['objective'])
@@ -224,9 +225,10 @@ def _load_one(root, c, item, dataset, cache_root, plan_id):
                         for p in endpoints)
     if not math.isclose(reconstructed, metrics['rul_score_sum'], rel_tol=1e-9, abs_tol=1e-5):
         raise ValueError(f'Endpoint RUL score does not match metric: {c["run_id"]}')
-    atomic_json(cache, dict(identity=identity, metrics=metrics, endpoints=endpoints))
+    atomic_json(cache, dict(identity=identity, metrics=metrics, endpoints=endpoints,
+                            checkpoint_runtime_seconds=checkpoint_runtime))
     print(f'TEST {item["regime"]}: {c["run_id"]} step={step}', flush=True)
-    return metrics, endpoints, sha
+    return metrics, endpoints, sha, checkpoint_runtime
 
 
 def _summary(rows, keys):
@@ -290,9 +292,9 @@ def _markdown(plan, summary, minutes):
     for m,b in SPEC:
         lines.append(cell('full_100_epochs',m,b))
     lines += ['', '## Approximately matched MSE wall-clock budget', '',
-              'Pairwise cutoffs from ALL candidate runs by cohort-average time; '
-              'not precise per-checkpoint walltime. Individual seeds can exceed budget.', '',
-              '| Method | Batch | Lags | Alpha | Beta | Test RMSE mean ± SE | Test RUL Score mean ± SE | Estimated wall min |',
+              'Pairwise step cutoff from cohort-average timing (approximate match); '
+              'table times measured in the saved checkpoints. Some seeds exceed budget.', '',
+              '| Method | Batch | Lags | Alpha | Beta | Test RMSE mean ± SE | Test RUL Score mean ± SE | Recorded wall min |',
               '|---|---:|---|---:|---:|---:|---:|---:|']
     for m,b in SPEC:
         if m=='td_mse_combo':
@@ -358,10 +360,10 @@ def run(mode):
                 status = _status(root, rid)
                 if c['method'] != item['method'] or c['batch_size'] != item['batch_size']:
                     raise ValueError('Wrong selected configuration')
-                metrics, endpoints, sha = _load_one(root, c, item, test, cache_dir,
-                                                   locked_plan_sha)
+                metrics, endpoints, sha, checkpoint_seconds = _load_one(
+                    root, c, item, test, cache_dir, locked_plan_sha)
                 measured = _full_seconds(status)
-                estimated = (measured * item['optimizer_steps']/final_steps
+                estimated = (checkpoint_seconds
                              if item['regime']=='matched_time_proxy' and c['method']!='mse'
                              else measured)
                 estimates.append(estimated)
@@ -369,9 +371,10 @@ def run(mode):
                                    batch_size=c['batch_size'], lag_set=item['lag_set'],
                                    seed=c['seed'], optimizer_steps=item['optimizer_steps'],
                                    full_training_wall_seconds=measured,
-                                   estimated_wall_seconds=estimated,
+                                   selected_checkpoint_elapsed_seconds=checkpoint_seconds,
+                                   reported_wall_seconds=estimated,
                                    MSE_budget_seconds=plan['mse_budget_seconds'],
-                                   estimated_over_budget=estimated > plan['mse_budget_seconds'],
+                                   over_budget=estimated > plan['mse_budget_seconds'],
                                    checkpoint_sha256=sha, run_id=rid))
                 for metric, value in metrics.items():
                     rows.append(dict(regime=item['regime'], method=c['method'],
